@@ -27,108 +27,91 @@ Core principles:
 Why this stack:
 
 - Rust + Tauri keeps the app lighter than Electron-based alternatives
-- SvelteKit gives a productive UI layer without pulling in more framework overhead than needed
+- SvelteKit gives a productive UI layer without browser-side request constraints
 - SQLite gives durable local persistence without introducing a separate service
-- `reqwest` keeps all HTTP execution in the native layer, which avoids browser CORS constraints and keeps behavior consistent
+- `reqwest` keeps request execution in the native layer, which avoids browser CORS behavior and makes TLS and redirect settings controllable
 
-## 3. High-Level Architecture
+## 3. Current Application State
 
-The app is split into two layers:
+This section reflects the code currently implemented in the repository.
+
+### Implemented
+
+- Tauri application shell with SvelteKit frontend
+- SQLite initialization on app startup
+- SQL migrations applied automatically at launch
+- Single request editor
+- Supported request methods: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`
+- Request editing for:
+  - URL
+  - query parameters
+  - headers
+  - auth: none, basic, bearer, API key
+  - body: none, JSON, raw, form-urlencoded, multipart placeholder
+- Native request execution through Rust
+- Response viewer with:
+  - status
+  - duration
+  - size
+  - headers
+  - body text / JSON pretty rendering
+- Persisted application settings in SQLite
+- Persisted request history in SQLite
+- Settings page wired to backend persistence
+- History panel wired to backend persistence
+
+### Not Yet Implemented
+
+- Cancel in-flight request
+- Collections
+- Saved requests
+- Environments and variable substitution
+- Postman import/export
+- Multi-tab workflow
+- Pre-request scripts
+- Test scripts
+- Secret storage outside SQLite
+
+## 4. High-Level Architecture
+
+The app is split into two layers.
 
 ### Frontend
 
 Responsibilities:
 
-- Render request editor and response viewer
-- Manage tabs and local UI state
-- Trigger Tauri commands for persistence and request execution
-- Provide a responsive desktop workflow
+- Render request editor, response viewer, settings page, and history panel
+- Manage page-level UI state
+- Invoke typed Tauri commands for persistence and request execution
+- Provide a desktop-oriented workflow without browser networking
 
-The frontend does not perform network requests directly. All request execution flows through Rust.
+The frontend does not execute HTTP requests directly. All network traffic goes through Rust.
 
 ### Native Layer
 
 Responsibilities:
 
+- Initialize SQLite database and run migrations
 - Execute HTTP requests
-- Read/write SQLite data
+- Load and persist settings
+- Persist request history
 - Resolve app data paths
-- Handle import/export
-- Manage request history
-- Provide a stable command API to the UI
+- Expose a stable Tauri command surface to the UI
 
 ### Data Flow
 
 1. User edits a request in the UI
 2. Frontend builds a typed request payload
-3. Frontend invokes a Tauri command
-4. Rust resolves environment variables and auth details
+3. Frontend invokes `send_request`
+4. Rust loads persisted request settings from SQLite
 5. Rust executes the request with `reqwest`
-6. Rust returns response metadata and body preview to the UI
-7. Rust optionally stores a history entry
-8. UI renders response and keeps tab state in sync
+6. Rust returns response metadata and body to the UI
+7. Rust writes a history entry to SQLite
+8. Frontend reloads history and renders the latest response
 
-## 4. MVP Scope
+## 5. Actual Folder Structure
 
-### In Scope for MVP
-
-- Desktop app for Windows, Linux, and macOS
-- Request tabs
-- HTTP methods: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`
-- URL editor
-- Query parameters editor
-- Headers editor
-- Request body support:
-  - none
-  - raw text
-  - JSON
-  - `application/x-www-form-urlencoded`
-  - `multipart/form-data` with file attachments
-- Auth support:
-  - none
-  - basic
-  - bearer token
-  - API key
-- Send and cancel request
-- Response viewer:
-  - status
-  - duration
-  - size
-  - headers
-  - body with text/JSON pretty view
-- Save requests into collections and folders
-- Environments with variable substitution
-- Request history
-- Import/export in PostNot format
-- Import of Postman Collection v2.1 JSON
-- Light settings page
-
-### Explicit Non-Goals for MVP
-
-- Cloud sync
-- Team collaboration
-- Shared workspaces
-- Mock servers
-- Monitors
-- GraphQL-specialized tooling
-- WebSocket client
-- gRPC client
-- OAuth device/browser flows
-- Full Postman-compatible scripting runtime
-- Plugin marketplace
-
-### Deferred but Planned
-
-- Pre-request scripts
-- Test scripts
-- Cookie manager
-- OAuth2 helper flows
-- Keychain-backed secret storage
-- OpenAPI import
-
-## 5. Folder Structure
-
-Proposed repository layout:
+This is the meaningful structure currently present in the repo.
 
 ```text
 PostNot/
@@ -136,32 +119,27 @@ PostNot/
     tech-design.md
   src/
     app.html
+    app.d.ts
+    hooks.client.ts
     lib/
-      components/
-        layout/
-        request/
-        response/
-        collections/
-        environments/
-        shared/
-      stores/
-        tabs.ts
-        collections.ts
-        environments.ts
-        history.ts
-        settings.ts
       api/
         commands.ts
         types.ts
-      utils/
-        variables.ts
-        formatting.ts
-        validation.ts
+      components/
+        history/
+          HistoryPanel.svelte
+        layout/
+          AppShell.svelte
+        request/
+          RequestEditor.svelte
+        response/
+          ResponseViewer.svelte
       styles/
         tokens.css
         app.css
     routes/
       +layout.svelte
+      +layout.ts
       +page.svelte
       settings/
         +page.svelte
@@ -170,7 +148,9 @@ PostNot/
     tauri.conf.json
     build.rs
     capabilities/
+      default.json
     icons/
+      icon.png
     migrations/
       0001_init.sql
     src/
@@ -181,33 +161,25 @@ PostNot/
       commands/
         mod.rs
         requests.rs
-        collections.rs
-        environments.rs
-        history.rs
         settings.rs
-        import_export.rs
+        history.rs
       db/
         mod.rs
-        migrations.rs
       domain/
         mod.rs
         requests.rs
-        collections.rs
-        environments.rs
-        history.rs
         settings.rs
+        history.rs
       services/
         mod.rs
         http_client.rs
-        variable_resolver.rs
-        collection_service.rs
-        environment_service.rs
-        history_service.rs
         settings_service.rs
-        import_export_service.rs
+        history_service.rs
       storage/
         mod.rs
         paths.rs
+  build/
+    .gitkeep
   static/
   package.json
   svelte.config.js
@@ -215,134 +187,102 @@ PostNot/
   vite.config.ts
 ```
 
-### Structure Notes
-
-- `src/lib/api` contains the TypeScript boundary for Tauri commands and shared payload types
-- `src/lib/stores` contains app state stores used across pages and panels
-- `src-tauri/src/commands` is the UI-facing command layer
-- `src-tauri/src/domain` contains pure data models and DTOs
-- `src-tauri/src/services` contains business logic
-- `src-tauri/migrations` keeps SQL schema changes explicit and versioned
-
 ## 6. Core Domain Model
 
-Primary entities:
+The current implementation uses these core entities.
 
-- Collection
-- Collection Item
-- Environment
-- Environment Variable
-- Request Snapshot
-- History Entry
-- App Setting
+### Send Request Payload
 
-### Collection
+Represents the editable request state sent from the frontend to Rust.
 
-A named container for folders and saved requests.
+Fields:
 
-### Collection Item
+- name
+- method
+- url
+- query params
+- headers
+- body
+- auth
 
-A tree node within a collection.
+### Response Payload
 
-Kinds:
+Represents a completed request result returned from Rust to the frontend.
 
-- folder
-- request
+Fields:
 
-### Environment
+- status code
+- status text
+- duration
+- size
+- headers
+- body text
+- error text
+- executed at timestamp
 
-A named set of key/value variables used for substitution in URLs, headers, auth, and bodies.
+### App Settings
 
-### Request Snapshot
+Represents persisted request behavior settings.
 
-A full persisted representation of a request at a point in time. This is used both for saved requests and for history entries.
+Fields:
 
-### History Entry
+- theme
+- request timeout in milliseconds
+- follow redirects flag
+- validate TLS flag
+- history limit
 
-A past execution record containing a request snapshot plus response summary metadata.
+### History Entry Summary
+
+Represents a persisted request execution summary shown in the UI.
+
+Fields:
+
+- id
+- request name
+- method
+- url
+- status code
+- duration
+- response preview
+- error text
+- executed at timestamp
 
 ## 7. SQLite Storage Design
 
-The schema should stay simple and use JSON columns where nesting is natural. That gives us a stable relational spine without over-normalizing early.
+The schema currently matches the initial migration in `src-tauri/migrations/0001_init.sql`.
 
 ### Database Location
 
-Use the Tauri app data directory, for example:
+The database is created under the Tauri app data directory:
 
 - database file: `<app_data_dir>/postnot.sqlite`
-- exported files: user-selected path
-- temporary multipart files: OS temp directory
 
-### Tables
+### Tables Currently Used
 
-#### `collections`
+#### `app_settings`
+
+Used actively by the application.
 
 ```sql
-CREATE TABLE collections (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  description TEXT NOT NULL DEFAULT '',
-  created_at TEXT NOT NULL,
+CREATE TABLE app_settings (
+  key TEXT PRIMARY KEY,
+  value_json TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
 ```
 
-#### `collection_items`
+Current keys written by the app:
 
-Stores both folders and requests.
-
-```sql
-CREATE TABLE collection_items (
-  id TEXT PRIMARY KEY,
-  collection_id TEXT NOT NULL,
-  parent_id TEXT NULL,
-  kind TEXT NOT NULL CHECK (kind IN ('folder', 'request')),
-  name TEXT NOT NULL,
-  sort_order INTEGER NOT NULL DEFAULT 0,
-
-  method TEXT NULL,
-  url TEXT NULL,
-  query_params_json TEXT NOT NULL DEFAULT '[]',
-  headers_json TEXT NOT NULL DEFAULT '[]',
-  body_json TEXT NOT NULL DEFAULT '{}',
-  auth_json TEXT NOT NULL DEFAULT '{}',
-  prerequest_script TEXT NOT NULL DEFAULT '',
-  test_script TEXT NOT NULL DEFAULT '',
-
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-
-  FOREIGN KEY (collection_id) REFERENCES collections(id) ON DELETE CASCADE,
-  FOREIGN KEY (parent_id) REFERENCES collection_items(id) ON DELETE CASCADE
-);
-```
-
-Notes:
-
-- Folder rows keep request-specific fields empty
-- Request rows keep all request fields populated
-- `body_json` stores body mode and payload metadata
-- `auth_json` stores auth mode plus its configuration
-
-#### `environments`
-
-```sql
-CREATE TABLE environments (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  is_active INTEGER NOT NULL DEFAULT 0,
-  variables_json TEXT NOT NULL DEFAULT '[]',
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-```
-
-Notes:
-
-- `variables_json` contains objects like `{ key, value, enabled, secret }`
-- Only one environment should be active at a time in MVP
+- `theme`
+- `request_timeout_ms`
+- `follow_redirects`
+- `validate_tls`
+- `history_limit`
 
 #### `history_entries`
+
+Used actively by the application.
 
 ```sql
 CREATE TABLE history_entries (
@@ -361,242 +301,160 @@ CREATE TABLE history_entries (
 );
 ```
 
-Notes:
+Implementation notes:
 
-- Large response bodies should be stored on disk if needed instead of bloating the DB
-- `response_body_preview` stores a short preview for fast history rendering
+- successful requests are persisted with a response preview
+- failed requests are also persisted with `error_text`
+- history is pruned based on the persisted `history_limit` setting
 
-#### `app_settings`
+### Tables Present But Not Yet Used By The UI
 
-```sql
-CREATE TABLE app_settings (
-  key TEXT PRIMARY KEY,
-  value_json TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-```
+The initial migration also creates these tables for planned work:
 
-Suggested keys:
+- `collections`
+- `collection_items`
+- `environments`
 
-- `theme`
-- `font_size`
+They are not yet wired into the runtime UI or command surface.
+
+## 8. Runtime Behavior
+
+### Startup
+
+At startup, the Tauri app:
+
+1. resolves the app data directory
+2. creates the SQLite database if missing
+3. applies SQL migrations
+4. ensures default settings exist
+5. stores the SQLite pool in app state
+
+### Request Execution
+
+For each request send, Rust currently applies these persisted settings:
+
+- `request_timeout_ms`
 - `follow_redirects`
 - `validate_tls`
-- `request_timeout_ms`
-- `history_limit`
-- `last_opened_collection_id`
 
-### Indexes
+This means the settings page already changes actual network behavior, not just UI state.
 
-```sql
-CREATE INDEX idx_collection_items_collection_id
-  ON collection_items(collection_id);
+### History Persistence
 
-CREATE INDEX idx_collection_items_parent_id
-  ON collection_items(parent_id);
+On successful request execution:
 
-CREATE INDEX idx_history_entries_executed_at
-  ON history_entries(executed_at DESC);
+- the request snapshot is stored
+- response summary metadata is stored
+- response preview text is stored
+- history is pruned to the configured limit
 
-CREATE INDEX idx_environments_is_active
-  ON environments(is_active);
-```
+On failed request execution:
 
-## 8. Request Data Shapes
+- the request snapshot is stored
+- error text is stored
+- history is pruned to the configured limit
 
-These typed shapes should exist in both Rust and TypeScript.
+## 9. Current Tauri Command Boundary
 
-### Query Param
-
-```json
-{
-  "key": "page",
-  "value": "1",
-  "enabled": true
-}
-```
-
-### Header
-
-```json
-{
-  "key": "Accept",
-  "value": "application/json",
-  "enabled": true
-}
-```
-
-### Body
-
-```json
-{
-  "mode": "json",
-  "raw": "{\"hello\":\"world\"}",
-  "form": [],
-  "files": []
-}
-```
-
-### Auth
-
-```json
-{
-  "type": "bearer",
-  "bearerToken": "{{api_token}}",
-  "basic": null,
-  "apiKey": null
-}
-```
-
-## 9. Command Boundary
-
-Initial Tauri commands:
+Commands currently exposed to the frontend:
 
 - `send_request`
-- `cancel_request`
-- `list_collections`
-- `get_collection`
-- `save_collection_item`
-- `delete_collection_item`
-- `reorder_collection_items`
-- `list_environments`
-- `save_environment`
-- `set_active_environment`
-- `delete_environment`
-- `list_history`
-- `delete_history_entry`
-- `clear_history`
 - `get_settings`
-- `update_setting`
-- `import_postman_collection`
-- `export_postnot_bundle`
+- `update_settings`
+- `list_history`
 
-Guidelines:
+### Command Roles
 
-- UI commands should exchange typed DTOs, not raw SQL-shaped objects
-- Commands should be thin and delegate to services
-- Services should be testable without the Tauri runtime
+- `send_request`: executes the request using persisted settings and records history
+- `get_settings`: loads current settings from SQLite
+- `update_settings`: persists settings and returns the saved values
+- `list_history`: returns recent history entries ordered by execution time descending
 
-## 10. Variable Resolution Rules
+## 10. Frontend Screens
 
-Variable syntax:
+### Main Page
 
-- `{{variable_name}}`
+Current UI sections:
 
-Resolution order for MVP:
+- request profile summary using persisted settings
+- request editor
+- response viewer
+- history panel
 
-1. Active environment variables
-2. Future collection-scoped variables
-3. Future globals
+### Settings Page
 
-Rules:
+Current UI sections:
 
-- Disabled variables are ignored
-- Missing variables are left unresolved and highlighted in the UI
-- Secret variables are masked in the UI where possible
+- theme selector
+- request timeout input
+- history limit input
+- follow redirects toggle
+- validate TLS toggle
+- persisted save action
 
 ## 11. Security and Persistence Notes
 
-For MVP:
+Current state:
 
-- The app is fully local
-- Requests are executed in Rust, not in a browser context
-- Sensitive values may exist in SQLite for now
+- the app is fully local
+- requests are executed in Rust, not the browser
+- sensitive values may still be stored in SQLite as plain application data
 
-Follow-up improvement:
+This is acceptable for the current milestone but not the final security posture.
 
-- Move secret values to OS keychain storage while keeping non-secret metadata in SQLite
+Planned improvement:
 
-This is the main security compromise in MVP and should be called out clearly.
+- move secrets to OS keychain storage while leaving non-secret metadata in SQLite
 
-## 12. Milestone Plan
+## 12. Milestone Status
 
-Implementation should be staged to keep the app runnable early.
+### Milestone 1 Goal
 
-### Milestone 1: Local Request Runner
+Ship a usable desktop app that can compose and execute HTTP requests locally, persist request behavior settings, and preserve request history across restarts.
 
-Goal:
-
-Ship a usable desktop app that can compose and execute HTTP requests locally and inspect responses.
-
-Included:
+### Milestone 1 Implemented So Far
 
 - Tauri + SvelteKit app shell
-- Single request tab
-- Method, URL, headers, query params, and body editors
-- Auth support for none/basic/bearer/API key
-- Send request through Rust
-- Response viewer with status, time, headers, and body
-- Basic app settings in SQLite
-- Request history in SQLite
+- single request editor
+- auth support for none/basic/bearer/API key
+- request execution through Rust
+- response viewer
+- SQLite initialization and migrations
+- persisted settings
+- persisted history
+- settings page
+- history panel
 
-Excluded from Milestone 1:
+### Milestone 1 Remaining
 
-- Saved collections
-- Environments UI
-- Postman import
-- Multiple tabs
-- Scripts
+- request cancellation
+- better multipart/file workflow
+- actual runtime verification via `tauri dev`
+- tighter error handling and UX polish
 
-Acceptance criteria:
+## 13. Next Recommended Steps
 
-- User can launch the app without any external server
-- User can send a JSON request to a public API endpoint
-- User can inspect response status, headers, and prettified JSON body
-- User can cancel an in-flight request
-- History persists across app restarts
-- App settings persist across app restarts
+Recommended implementation order from the current state:
 
-### Milestone 2: Saved Requests and Environments
-
-Included:
-
-- Collections and folders
-- Save/update/delete request definitions
-- Environments and variable resolution
-- Multiple tabs
-
-### Milestone 3: Import/Export
-
-Included:
-
-- PostNot bundle export/import
-- Postman Collection v2.1 import
-- Better history browsing
-
-### Milestone 4: Scripting and Polish
-
-Included:
-
-- Pre-request scripts
-- Test scripts
-- Secret storage improvements
-- Better UX polish and keyboard flows
-
-## 13. Implementation Order for Scaffold
-
-When we scaffold the repo, build in this order:
-
-1. Create Tauri + SvelteKit + TypeScript base app
-2. Add Rust command bridge and typed frontend API layer
-3. Add SQLite setup and initial migration
-4. Implement `send_request`
-5. Implement request editor UI
-6. Implement response viewer UI
-7. Persist settings and history
-8. Add collections and environments in the next pass
+1. Run the app with `tauri dev` and verify end-to-end behavior manually
+2. Add history management actions:
+   - clear history
+   - inspect full history entry details
+3. Add request cancellation support
+4. Add saved requests and collections using the tables already present in the schema
+5. Add environments and variable resolution
 
 ## 14. Open Decisions
 
-These can be deferred until after scaffold:
+These are still unresolved:
 
-- Whether to use Tailwind or plain CSS
-- Whether response bodies over a threshold should always spill to files
-- Exact import/export bundle format
-- Whether tab state should persist in SQLite or only in frontend state for MVP
+- whether large response bodies should spill to files instead of SQLite preview-only storage
+- whether tabs should persist in SQLite or only in frontend state at first
+- exact import/export format for PostNot bundles
+- how to model secrets before keychain integration
 
 ## 15. Recommendation
 
-Proceed with scaffolding against Milestone 1 first.
+Treat the repository as being in an active Milestone 1 state, not full MVP completion.
 
-That gives us a thin but real desktop API client quickly, while leaving room for collections and environments without reworking the architecture.
+The design is now grounded in what the code actually does: persisted settings influence request execution, history is stored in SQLite, and the frontend surfaces both. The next work should stay focused on completing Milestone 1 before opening collections, environments, or import/export.

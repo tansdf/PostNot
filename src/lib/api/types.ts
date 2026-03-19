@@ -54,6 +54,26 @@ export type ResponsePayload = {
   executedAt: string;
 };
 
+export type AppSettings = {
+  theme: string;
+  requestTimeoutMs: number;
+  followRedirects: boolean;
+  validateTls: boolean;
+  historyLimit: number;
+};
+
+export type HistoryEntrySummary = {
+  id: string;
+  requestName: string;
+  method: HttpMethod;
+  url: string;
+  statusCode: number | null;
+  durationMs: number;
+  responseBodyPreview: string;
+  errorText: string;
+  executedAt: string;
+};
+
 function createId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();
@@ -93,5 +113,15 @@ export function createRequestDraft(): RequestDraft {
       apiKeyValue: "",
       apiKeyIn: "header"
     }
+  };
+}
+
+export function createDefaultSettings(): AppSettings {
+  return {
+    theme: "system",
+    requestTimeoutMs: 30_000,
+    followRedirects: true,
+    validateTls: true,
+    historyLimit: 200
   };
 }

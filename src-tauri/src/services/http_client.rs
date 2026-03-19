@@ -1,15 +1,27 @@
-use std::time::Instant;
+use std::{time::{Duration, Instant}};
 
 use chrono::Utc;
 use reqwest::header::{HeaderName, HeaderValue};
+use reqwest::redirect::Policy;
 use reqwest::{multipart, Client, Method};
 use url::Url;
 
-use crate::domain::requests::{KeyValueRow, ResponsePayload, SendRequestPayload};
+use crate::domain::{
+    requests::{KeyValueRow, ResponsePayload, SendRequestPayload},
+    settings::AppSettings,
+};
 use crate::error::{AppError, AppResult};
 
-pub async fn send_request(payload: &SendRequestPayload) -> AppResult<ResponsePayload> {
-    let client = Client::builder().build()?;
+pub async fn send_request(payload: &SendRequestPayload, settings: &AppSettings) -> AppResult<ResponsePayload> {
+    let client = Client::builder()
+        .danger_accept_invalid_certs(!settings.validate_tls)
+        .redirect(if settings.follow_redirects {
+            Policy::limited(10)
+        } else {
+            Policy::none()
+        })
+        .timeout(Duration::from_millis(settings.request_timeout_ms.max(1)))
+        .build()?;
     let mut url = Url::parse(&payload.url)?;
 
     for query in payload.query_params.iter().filter(|item| item.enabled && !item.key.trim().is_empty()) {

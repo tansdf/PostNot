@@ -11,14 +11,19 @@
       <p>{subtitle}</p>
     </div>
 
+    <nav class="sidebar-nav" aria-label="Primary">
+      <a class="sidebar-link" href="/">Requests</a>
+      <a class="sidebar-link" href="/settings">Settings</a>
+    </nav>
+
     <div class="sidebar-card">
       <h2>Milestone 1</h2>
       <p>Single request runner, native execution, local settings, and persisted history.</p>
     </div>
 
     <div class="sidebar-card muted">
-      <h2>Next Up</h2>
-      <p>Collections, environments, Postman import, and request tabs.</p>
+      <h2>Current Scope</h2>
+      <p>Saved request settings now affect execution, and request history persists in SQLite.</p>
     </div>
   </aside>
 
