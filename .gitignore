@@ -2,12 +2,13 @@
 node_modules/
 .npm/
 .pnpm-store/
-
-# Build output
-build/
-dist/
 .svelte-kit/
 .vite/
+
+# Build output
+build/*
+!build/.gitkeep
+dist/
 
 # Rust / Tauri
 target/

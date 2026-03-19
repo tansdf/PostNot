@@ -1,1 +1,43 @@
+use std::{fs, path::Path, str::FromStr};
+
+use sqlx::{
+    migrate::Migrator,
+    sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous},
+    SqlitePool,
+};
+use tauri::AppHandle;
+
+use crate::{error::{AppError, AppResult}, storage::paths};
+
 pub const DATABASE_FILE_NAME: &str = "postnot.sqlite";
+
+pub async fn init(app: &AppHandle) -> AppResult<SqlitePool> {
+    let database_path = paths::database_path(app)?;
+
+    if let Some(parent) = database_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    let options = SqliteConnectOptions::from_str(&format!("sqlite://{}", database_path.display()))
+        .map_err(|error| AppError::Message(error.to_string()))?
+        .create_if_missing(true)
+        .foreign_keys(true)
+        .journal_mode(SqliteJournalMode::Wal)
+        .synchronous(SqliteSynchronous::Normal);
+
+    let pool = SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(options)
+        .await?;
+
+    let migrator = Migrator::new(Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations")))
+        .await
+        .map_err(|error| AppError::Message(error.to_string()))?;
+
+    migrator
+        .run(&pool)
+        .await
+        .map_err(|error| AppError::Message(error.to_string()))?;
+
+    Ok(pool)
+}

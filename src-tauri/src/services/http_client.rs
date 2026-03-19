@@ -6,7 +6,7 @@ use reqwest::{multipart, Client, Method};
 use url::Url;
 
 use crate::domain::requests::{KeyValueRow, ResponsePayload, SendRequestPayload};
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 
 pub async fn send_request(payload: &SendRequestPayload) -> AppResult<ResponsePayload> {
     let client = Client::builder().build()?;
@@ -24,7 +24,8 @@ pub async fn send_request(payload: &SendRequestPayload) -> AppResult<ResponsePay
             .append_pair(&payload.auth.api_key_name, &payload.auth.api_key_value);
     }
 
-    let method = Method::from_bytes(payload.method.as_bytes())?;
+    let method = Method::from_bytes(payload.method.as_bytes())
+        .map_err(|error| AppError::Message(error.to_string()))?;
     let mut request = client.request(method, url);
 
     for header in payload.headers.iter().filter(|item| item.enabled && !item.key.trim().is_empty()) {

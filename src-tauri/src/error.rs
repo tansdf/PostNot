@@ -47,3 +47,15 @@ impl From<std::io::Error> for AppError {
         Self::Message(value.to_string())
     }
 }
+
+impl From<sqlx::Error> for AppError {
+    fn from(value: sqlx::Error) -> Self {
+        Self::Message(value.to_string())
+    }
+}
+
+impl From<serde_json::Error> for AppError {
+    fn from(value: serde_json::Error) -> Self {
+        Self::Message(value.to_string())
+    }
+}

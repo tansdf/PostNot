@@ -199,7 +199,7 @@
           value={request.body.raw}
           placeholder={request.body.mode === "json" ? '{"hello":"world"}' : "Raw request body"}
           on:input={(event) => updateBodyField("raw", event.currentTarget.value)}
-        />
+        ></textarea>
       {/if}
 
       {#if request.body.mode === "form-urlencoded"}
@@ -251,7 +251,7 @@
       {#if request.auth.type === "bearer"}
         <label>
           <span class="field-label">Token</span>
-          <input class="text-input" type="password" bind:value={request.auth.bearerToken} placeholder="{{api_token}}" />
+          <input class="text-input" type="password" bind:value={request.auth.bearerToken} placeholder={"{{api_token}}"} />
         </label>
       {/if}
 
