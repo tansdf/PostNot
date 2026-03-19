@@ -1,0 +1,41 @@
+# Node / frontend
+node_modules/
+.npm/
+.pnpm-store/
+
+# Build output
+build/
+dist/
+.svelte-kit/
+.vite/
+
+# Rust / Tauri
+target/
+src-tauri/target/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local databases and dev data
+*.sqlite
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
+*.sqlite-shm
+*.sqlite-wal
+
+# Editor / OS
+.idea/
+.vscode/
+Thumbs.db
+.DS_Store

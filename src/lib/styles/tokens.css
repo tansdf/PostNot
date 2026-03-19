@@ -1,0 +1,22 @@
+:root {
+  --font-sans: "IBM Plex Sans", "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", monospace;
+
+  --bg-app: #f2efe7;
+  --bg-panel: rgba(255, 252, 246, 0.92);
+  --bg-panel-strong: #fffaf1;
+  --bg-sidebar: linear-gradient(180deg, #163331 0%, #214b48 100%);
+  --bg-accent: #d96c3b;
+  --bg-accent-strong: #b85024;
+  --bg-accent-soft: rgba(217, 108, 59, 0.14);
+  --border-soft: rgba(23, 44, 43, 0.12);
+  --border-strong: rgba(23, 44, 43, 0.24);
+  --text-primary: #172c2b;
+  --text-secondary: #4a5a59;
+  --text-inverse: #f8f3e7;
+  --danger: #b33939;
+  --shadow-soft: 0 22px 48px rgba(16, 28, 27, 0.12);
+  --radius-lg: 24px;
+  --radius-md: 16px;
+  --radius-sm: 10px;
+}

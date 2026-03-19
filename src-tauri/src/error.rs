@@ -1,0 +1,49 @@
+use serde::ser::{Serialize, Serializer};
+use thiserror::Error;
+
+pub type AppResult<T> = Result<T, AppError>;
+
+#[derive(Debug, Error)]
+pub enum AppError {
+    #[error("{0}")]
+    Message(String),
+}
+
+impl Serialize for AppError {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl From<reqwest::Error> for AppError {
+    fn from(value: reqwest::Error) -> Self {
+        Self::Message(value.to_string())
+    }
+}
+
+impl From<url::ParseError> for AppError {
+    fn from(value: url::ParseError) -> Self {
+        Self::Message(value.to_string())
+    }
+}
+
+impl From<reqwest::header::InvalidHeaderName> for AppError {
+    fn from(value: reqwest::header::InvalidHeaderName) -> Self {
+        Self::Message(value.to_string())
+    }
+}
+
+impl From<reqwest::header::InvalidHeaderValue> for AppError {
+    fn from(value: reqwest::header::InvalidHeaderValue) -> Self {
+        Self::Message(value.to_string())
+    }
+}
+
+impl From<std::io::Error> for AppError {
+    fn from(value: std::io::Error) -> Self {
+        Self::Message(value.to_string())
+    }
+}
