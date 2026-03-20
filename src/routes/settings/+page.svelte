@@ -4,6 +4,7 @@
   import AppShell from "$lib/components/layout/AppShell.svelte";
   import { getSettings, updateSettings } from "$lib/api/commands";
   import { createDefaultSettings, type AppSettings } from "$lib/api/types";
+  import { applyTheme } from "$lib/theme";
 
   let settings: AppSettings = createDefaultSettings();
   let isLoading = true;
@@ -32,6 +33,7 @@
 
     try {
       settings = await updateSettings(settings);
+      applyTheme(settings.theme);
       errorText = "";
       saveMessage = "Settings saved.";
     } catch (error) {
