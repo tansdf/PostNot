@@ -57,6 +57,7 @@ This section reflects the code currently implemented in the repository.
   - body text / JSON pretty rendering
 - Persisted application settings in SQLite
 - Persisted request history in SQLite
+- Cancel in-flight request
 - Settings page wired to backend persistence
 - History panel wired to backend persistence
 - History detail inspection from persisted snapshots
@@ -64,7 +65,6 @@ This section reflects the code currently implemented in the repository.
 
 ### Not Yet Implemented
 
-- Cancel in-flight request
 - Collections
 - Saved requests
 - Environments and variable substitution
@@ -358,11 +358,17 @@ On failed request execution:
 - error text is stored
 - history is pruned to the configured limit
 
+On canceled request execution:
+
+- the in-flight native request is aborted
+- no history entry is written
+
 ## 9. Current Tauri Command Boundary
 
 Commands currently exposed to the frontend:
 
 - `send_request`
+- `cancel_active_request`
 - `get_settings`
 - `update_settings`
 - `list_history`
@@ -372,6 +378,7 @@ Commands currently exposed to the frontend:
 ### Command Roles
 
 - `send_request`: executes the request using persisted settings and records history
+- `cancel_active_request`: aborts the currently active native request, if one exists
 - `get_settings`: loads current settings from SQLite
 - `update_settings`: persists settings and returns the saved values
 - `list_history`: returns recent history entries ordered by execution time descending
@@ -427,6 +434,7 @@ Ship a usable desktop app that can compose and execute HTTP requests locally, pe
 - single request editor
 - auth support for none/basic/bearer/API key
 - request execution through Rust
+- request cancellation
 - response viewer
 - SQLite initialization and migrations
 - persisted settings
@@ -438,7 +446,6 @@ Ship a usable desktop app that can compose and execute HTTP requests locally, pe
 
 ### Milestone 1 Remaining
 
-- request cancellation
 - better multipart/file workflow
 - actual runtime verification via `tauri dev`
 - tighter error handling and UX polish
@@ -448,10 +455,10 @@ Ship a usable desktop app that can compose and execute HTTP requests locally, pe
 Recommended implementation order from the current state:
 
 1. Run the app with `tauri dev` and verify end-to-end behavior manually
-2. Add request cancellation support
-3. Add saved requests and collections using the tables already present in the schema
-4. Add environments and variable resolution
-5. Add Postman import/export
+2. Add saved requests and collections using the tables already present in the schema
+3. Add environments and variable resolution
+4. Add Postman import/export
+5. Improve multipart and native file workflows
 
 ## 14. Open Decisions
 

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
 
-  import { clearHistory, getHistoryEntry, getSettings, listHistory, sendRequest } from "$lib/api/commands";
+  import { cancelActiveRequest, clearHistory, getHistoryEntry, getSettings, listHistory, sendRequest } from "$lib/api/commands";
   import type { AppSettings, HistoryEntryDetail, HistoryEntrySummary, ResponsePayload } from "$lib/api/types";
   import { createDefaultSettings, createRequestDraft } from "$lib/api/types";
   import HistoryPanel from "$lib/components/history/HistoryPanel.svelte";
@@ -14,6 +14,7 @@
   let settings: AppSettings = createDefaultSettings();
   let history: HistoryEntrySummary[] = [];
   let isSending = false;
+  let isCancelingRequest = false;
   let isHistoryLoading = true;
   let isHistoryDetailLoading = false;
   let isClearingHistory = false;
@@ -103,27 +104,45 @@
 
   async function handleSend() {
     isSending = true;
+    isCancelingRequest = false;
 
     try {
       response = await sendRequest(request);
     } catch (error) {
+      const errorText = error instanceof Error ? error.message : String(error);
+
       response = {
         statusCode: null,
-        statusText: "Request failed",
+        statusText: errorText === "Request canceled." ? "Request canceled" : "Request failed",
         durationMs: 0,
         sizeBytes: 0,
         headers: [],
         bodyText: "",
-        errorText: error instanceof Error ? error.message : String(error),
+        errorText,
         executedAt: new Date().toISOString()
       };
     } finally {
       isSending = false;
+      isCancelingRequest = false;
       await loadHistory();
 
       if (selectedHistoryId) {
         await inspectHistoryEntry(selectedHistoryId, true);
       }
+    }
+  }
+
+  async function handleCancelRequest() {
+    if (!isSending || isCancelingRequest) {
+      return;
+    }
+
+    isCancelingRequest = true;
+
+    try {
+      await cancelActiveRequest();
+    } catch {
+      isCancelingRequest = false;
     }
   }
 </script>
@@ -163,7 +182,7 @@
       {/if}
     </section>
 
-    <RequestEditor bind:request {isSending} onSend={handleSend} />
+    <RequestEditor bind:request {isSending} isCanceling={isCancelingRequest} onSend={handleSend} onCancel={handleCancelRequest} />
     <ResponseViewer {response} />
     <HistoryPanel
       items={history}

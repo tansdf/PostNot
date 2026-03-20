@@ -216,6 +216,14 @@ select option {
   background: var(--bg-accent-strong);
 }
 
+.send-button.cancel-button {
+  background: var(--danger);
+}
+
+.send-button.cancel-button:hover:not(:disabled) {
+  background: #a83030;
+}
+
 .send-button:disabled {
   opacity: 0.62;
   cursor: wait;

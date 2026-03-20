@@ -7,6 +7,8 @@ pub type AppResult<T> = Result<T, AppError>;
 pub enum AppError {
     #[error("{0}")]
     Message(String),
+    #[error("Request canceled.")]
+    Cancelled,
 }
 
 impl Serialize for AppError {
@@ -57,5 +59,11 @@ impl From<sqlx::Error> for AppError {
 impl From<serde_json::Error> for AppError {
     fn from(value: serde_json::Error) -> Self {
         Self::Message(value.to_string())
+    }
+}
+
+impl AppError {
+    pub fn is_cancelled(&self) -> bool {
+        matches!(self, Self::Cancelled)
     }
 }

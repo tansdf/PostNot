@@ -3,7 +3,9 @@
 
   export let request: RequestDraft;
   export let isSending = false;
+  export let isCanceling = false;
   export let onSend: () => Promise<void> | void = () => {};
+  export let onCancel: () => Promise<void> | void = () => {};
 
   let activePanel: "query" | "headers" | "body" | "auth" = "query";
 
@@ -103,8 +105,18 @@
       />
     </div>
 
-    <button class="send-button" type="button" on:click={() => onSend()} disabled={isSending}>
-      {isSending ? "Sending..." : "Send"}
+    <button
+      class:cancel-button={isSending}
+      class="send-button"
+      type="button"
+      on:click={() => (isSending ? onCancel() : onSend())}
+      disabled={isCanceling}
+    >
+      {#if isSending}
+        {isCanceling ? "Canceling..." : "Cancel"}
+      {:else}
+        Send
+      {/if}
     </button>
   </div>
 

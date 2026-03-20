@@ -4,6 +4,7 @@ use chrono::Utc;
 use reqwest::header::{HeaderName, HeaderValue};
 use reqwest::redirect::Policy;
 use reqwest::{multipart, Client, Method};
+use tokio::sync::watch;
 use url::Url;
 
 use crate::domain::{
@@ -12,7 +13,12 @@ use crate::domain::{
 };
 use crate::error::{AppError, AppResult};
 
-pub async fn send_request(payload: &SendRequestPayload, settings: &AppSettings) -> AppResult<ResponsePayload> {
+pub async fn send_request(
+    payload: &SendRequestPayload,
+    settings: &AppSettings,
+    cancel_rx: watch::Receiver<bool>,
+) -> AppResult<ResponsePayload> {
+    let mut cancel_rx = cancel_rx;
     let client = Client::builder()
         .danger_accept_invalid_certs(!settings.validate_tls)
         .redirect(if settings.follow_redirects {
@@ -89,7 +95,10 @@ pub async fn send_request(payload: &SendRequestPayload, settings: &AppSettings) 
                     continue;
                 }
 
-                let bytes = tokio::fs::read(&file.path).await?;
+                let bytes = tokio::select! {
+                    bytes = tokio::fs::read(&file.path) => bytes?,
+                    _ = wait_for_cancellation(&mut cancel_rx) => return Err(AppError::Cancelled),
+                };
                 let part = multipart::Part::bytes(bytes).file_name(file.name.clone());
                 form = form.part(file.name.clone(), part);
             }
@@ -100,7 +109,10 @@ pub async fn send_request(payload: &SendRequestPayload, settings: &AppSettings) 
     }
 
     let started_at = Instant::now();
-    let response = request.send().await?;
+    let response = tokio::select! {
+        response = request.send() => response?,
+        _ = wait_for_cancellation(&mut cancel_rx) => return Err(AppError::Cancelled),
+    };
     let status = response.status();
 
     let headers = response
@@ -115,7 +127,10 @@ pub async fn send_request(payload: &SendRequestPayload, settings: &AppSettings) 
         })
         .collect();
 
-    let body_bytes = response.bytes().await?;
+    let body_bytes = tokio::select! {
+        body = response.bytes() => body?,
+        _ = wait_for_cancellation(&mut cancel_rx) => return Err(AppError::Cancelled),
+    };
 
     Ok(ResponsePayload {
         status_code: Some(status.as_u16()),
@@ -127,4 +142,20 @@ pub async fn send_request(payload: &SendRequestPayload, settings: &AppSettings) 
         error_text: String::new(),
         executed_at: Utc::now().to_rfc3339(),
     })
+}
+
+async fn wait_for_cancellation(cancel_rx: &mut watch::Receiver<bool>) {
+    if *cancel_rx.borrow() {
+        return;
+    }
+
+    loop {
+        if cancel_rx.changed().await.is_err() {
+            return;
+        }
+
+        if *cancel_rx.borrow() {
+            return;
+        }
+    }
 }

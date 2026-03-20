@@ -113,6 +113,14 @@ export async function sendRequest(payload: RequestDraft): Promise<ResponsePayloa
   return invoke<ResponsePayload>("send_request", { payload });
 }
 
+export async function cancelActiveRequest(): Promise<boolean> {
+  if (!hasTauriRuntime()) {
+    return true;
+  }
+
+  return invoke<boolean>("cancel_active_request");
+}
+
 export async function getSettings(): Promise<AppSettings> {
   if (!hasTauriRuntime()) {
     return createDefaultSettings();
