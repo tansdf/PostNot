@@ -1,3 +1,4 @@
 pub mod requests;
 pub mod settings;
 pub mod history;
+pub mod collections;

@@ -88,6 +88,36 @@ export type HistoryEntryDetail = {
   executedAt: string;
 };
 
+export type CollectionSummary = {
+  id: string;
+  name: string;
+  description: string;
+  requestCount: number;
+  updatedAt: string;
+};
+
+export type CreateCollectionInput = {
+  name: string;
+  description: string;
+};
+
+export type SavedRequestSummary = {
+  id: string;
+  collectionId: string;
+  name: string;
+  method: HttpMethod;
+  url: string;
+  updatedAt: string;
+};
+
+export type SavedRequestDetail = {
+  id: string;
+  collectionId: string;
+  name: string;
+  updatedAt: string;
+  request: RequestDraft;
+};
+
 function createId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();

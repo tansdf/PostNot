@@ -1,13 +1,32 @@
 <script lang="ts">
+  import { goto } from "$app/navigation";
+  import { page } from "$app/stores";
+  import { get } from "svelte/store";
   import { onMount, tick } from "svelte";
 
-  import { cancelActiveRequest, clearHistory, getHistoryEntry, getSettings, listHistory, sendRequest } from "$lib/api/commands";
+  import {
+    cancelActiveRequest,
+    clearHistory,
+    getHistoryEntry,
+    getSavedRequest,
+    getSettings,
+    listHistory,
+    sendRequest
+  } from "$lib/api/commands";
   import type { AppSettings, HistoryEntryDetail, HistoryEntrySummary, ResponsePayload } from "$lib/api/types";
   import { createDefaultSettings, createRequestDraft } from "$lib/api/types";
   import HistoryPanel from "$lib/components/history/HistoryPanel.svelte";
   import AppShell from "$lib/components/layout/AppShell.svelte";
   import RequestEditor from "$lib/components/request/RequestEditor.svelte";
   import ResponseViewer from "$lib/components/response/ResponseViewer.svelte";
+  import {
+    collectionsState,
+    ensureCollectionsLoaded,
+    resetCollectionsError,
+    saveNewRequest,
+    selectCollection,
+    updateExistingSavedRequest
+  } from "$lib/stores/collections";
 
   let request = createRequestDraft();
   let response: ResponsePayload | null = null;
@@ -21,12 +40,30 @@
   let historyErrorText = "";
   let historyDetailErrorText = "";
   let settingsErrorText = "";
+  let requestSaveErrorText = "";
   let selectedHistoryId = "";
   let selectedHistoryDetail: HistoryEntryDetail | null = null;
+  let activeSavedRequestId = "";
+  let activeSavedRequestCollectionId = "";
+  let isSaveDialogOpen = false;
+  let saveTargetCollectionId = "";
+  let lastLoadedSavedRequestId = "";
+  let isLoadingSavedRequest = false;
+  let requestedSavedRequestId = "";
 
   onMount(async () => {
-    await Promise.all([loadSettings(), loadHistory()]);
+    await Promise.all([loadSettings(), loadHistory(), ensureCollectionsLoaded()]);
   });
+
+  $: requestedSavedRequestId = $page.url.searchParams.get("savedRequestId") ?? "";
+
+  $: if (
+    requestedSavedRequestId &&
+    requestedSavedRequestId !== lastLoadedSavedRequestId &&
+    !isLoadingSavedRequest
+  ) {
+    void loadSavedRequestFromRoute(requestedSavedRequestId);
+  }
 
   async function loadSettings() {
     try {
@@ -145,6 +182,102 @@
       isCancelingRequest = false;
     }
   }
+
+  async function loadSavedRequestFromRoute(itemId: string) {
+    isLoadingSavedRequest = true;
+
+    try {
+      const savedRequest = await getSavedRequest(itemId);
+      await ensureCollectionsLoaded(savedRequest.collectionId);
+      request = structuredClone(savedRequest.request);
+      response = null;
+      activeSavedRequestId = savedRequest.id;
+      activeSavedRequestCollectionId = savedRequest.collectionId;
+      lastLoadedSavedRequestId = savedRequest.id;
+      requestSaveErrorText = "";
+      resetCollectionsError();
+      await selectCollection(savedRequest.collectionId);
+    } catch (error) {
+      requestSaveErrorText = error instanceof Error ? error.message : String(error);
+    } finally {
+      isLoadingSavedRequest = false;
+    }
+  }
+
+  async function handleSaveRequest() {
+    requestSaveErrorText = "";
+    resetCollectionsError();
+
+    const collectionState = get(collectionsState);
+    const hasActiveSavedRequest =
+      activeSavedRequestId &&
+      activeSavedRequestCollectionId &&
+      collectionState.collections.some((collection) => collection.id === activeSavedRequestCollectionId);
+
+    if (hasActiveSavedRequest) {
+      const savedRequest = await updateExistingSavedRequest(activeSavedRequestId, activeSavedRequestCollectionId, request);
+
+      if (!savedRequest) {
+        requestSaveErrorText = get(collectionsState).errorText;
+        return;
+      }
+
+      await goto(`/?savedRequestId=${encodeURIComponent(savedRequest.id)}`, {
+        replaceState: true,
+        noScroll: true,
+        keepFocus: true
+      });
+
+      return;
+    }
+
+    if (collectionState.collections.length === 0) {
+      requestSaveErrorText = "Create a collection first from the sidebar.";
+      return;
+    }
+
+    saveTargetCollectionId =
+      collectionState.selectedCollectionId || activeSavedRequestCollectionId || collectionState.collections[0].id;
+    isSaveDialogOpen = true;
+  }
+
+  async function confirmSaveRequest() {
+    if (!saveTargetCollectionId) {
+      requestSaveErrorText = "Choose a collection first.";
+      return;
+    }
+
+    const savedRequest = await saveNewRequest(saveTargetCollectionId, request);
+
+    if (!savedRequest) {
+      requestSaveErrorText = get(collectionsState).errorText;
+      return;
+    }
+
+    activeSavedRequestId = savedRequest.id;
+    activeSavedRequestCollectionId = savedRequest.collectionId;
+    lastLoadedSavedRequestId = savedRequest.id;
+    requestSaveErrorText = "";
+    isSaveDialogOpen = false;
+    await selectCollection(savedRequest.collectionId);
+    await goto(`/?savedRequestId=${encodeURIComponent(savedRequest.id)}`, {
+      replaceState: true,
+      noScroll: true,
+      keepFocus: true
+    });
+  }
+
+  function closeSaveDialog() {
+    isSaveDialogOpen = false;
+    requestSaveErrorText = "";
+  }
+
+  function handleSaveDialogBackdropKeydown(event: KeyboardEvent) {
+    if (event.key === "Escape" || event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      closeSaveDialog();
+    }
+  }
 </script>
 
 <svelte:head>
@@ -182,7 +315,22 @@
       {/if}
     </section>
 
-    <RequestEditor bind:request {isSending} isCanceling={isCancelingRequest} onSend={handleSend} onCancel={handleCancelRequest} />
+    <RequestEditor
+      bind:request
+      {isSending}
+      isCanceling={isCancelingRequest}
+      isSaving={$collectionsState.isSavingRequest}
+      saveLabel={activeSavedRequestId ? "Update" : "Save"}
+      saveDisabled={isSending}
+      onSend={handleSend}
+      onCancel={handleCancelRequest}
+      onSave={handleSaveRequest}
+    />
+
+    {#if requestSaveErrorText}
+      <div class="response-error">{requestSaveErrorText}</div>
+    {/if}
+
     <ResponseViewer {response} />
     <HistoryPanel
       items={history}
@@ -198,4 +346,57 @@
       onCloseDetail={closeHistoryDetail}
     />
   </div>
+
+  {#if isSaveDialogOpen}
+    <div
+      class="modal-backdrop"
+      role="button"
+      tabindex="0"
+      aria-label="Close save request dialog"
+      on:click|self={closeSaveDialog}
+      on:keydown={handleSaveDialogBackdropKeydown}
+    >
+      <div
+        class="panel save-dialog"
+        role="dialog"
+        tabindex="-1"
+        aria-modal="true"
+        aria-labelledby="save-request-title"
+      >
+        <div class="editor-header">
+          <h2 id="save-request-title">Save Request</h2>
+        </div>
+
+        <div class="editor-block">
+          <div>
+            <span class="field-label">Choose a collection</span>
+            <div class="save-target-list" role="listbox" aria-label="Choose a collection">
+              {#each $collectionsState.collections as collection (collection.id)}
+                <button
+                  class:save-target-active={saveTargetCollectionId === collection.id}
+                  class="save-target-button"
+                  type="button"
+                  role="option"
+                  aria-selected={saveTargetCollectionId === collection.id}
+                  on:click={() => (saveTargetCollectionId = collection.id)}
+                >
+                  <strong>{collection.name}</strong>
+                  <span>{collection.requestCount} request{collection.requestCount === 1 ? "" : "s"}</span>
+                </button>
+              {/each}
+            </div>
+          </div>
+
+          <div class="collections-page-actions">
+            <button class="send-button" type="button" on:click={confirmSaveRequest} disabled={$collectionsState.isSavingRequest}>
+              {$collectionsState.isSavingRequest ? "Saving..." : "Save request"}
+            </button>
+            <button class="ghost-button" type="button" on:click={closeSaveDialog}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  {/if}
 </AppShell>

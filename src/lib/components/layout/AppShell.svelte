@@ -1,4 +1,8 @@
 <script lang="ts">
+  import { page } from "$app/stores";
+
+  import SidebarCollections from "$lib/components/layout/SidebarCollections.svelte";
+
   export let title = "PostNot";
   export let subtitle = "A local-first desktop API client.";
 </script>
@@ -12,19 +16,12 @@
     </div>
 
     <nav class="sidebar-nav" aria-label="Primary">
-      <a class="sidebar-link" href="/">Requests</a>
-      <a class="sidebar-link" href="/settings">Settings</a>
+      <a class:sidebar-link-active={$page.url.pathname === "/"} class="sidebar-link" href="/">Requests</a>
+      <a class:sidebar-link-active={$page.url.pathname.startsWith("/collections")} class="sidebar-link" href="/collections">Collections</a>
+      <a class:sidebar-link-active={$page.url.pathname.startsWith("/settings")} class="sidebar-link" href="/settings">Settings</a>
     </nav>
 
-    <div class="sidebar-card">
-      <h2>Milestone 1</h2>
-      <p>Single request runner, native execution, local settings, and persisted history.</p>
-    </div>
-
-    <div class="sidebar-card muted">
-      <h2>Current Scope</h2>
-      <p>Saved request settings now affect execution, and request history persists in SQLite.</p>
-    </div>
+    <SidebarCollections />
   </aside>
 
   <main class="workspace">

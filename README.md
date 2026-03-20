@@ -38,6 +38,8 @@ Implemented now:
 - persisted request settings
 - persisted request history
 - request cancellation
+- collections and saved requests
+- collections sidebar and dedicated collection view
 - settings page wired to SQLite
 - history panel wired to SQLite
 - history detail inspection
@@ -45,8 +47,6 @@ Implemented now:
 
 Not implemented yet:
 
-- request cancellation
-- collections and saved requests
 - environments and variable substitution
 - Postman import/export
 - scripts
@@ -73,11 +73,12 @@ cargo check --manifest-path src-tauri/Cargo.toml
 - Request history is persisted after each send and pruned using the configured history limit.
 - History summaries keep a preview in SQLite, and full response bodies for new entries are stored under the app data directory for detail inspection.
 - Request cancellation is available while a request is in flight and canceled requests are not written to history.
+- Collections are browsed from the sidebar, edited on `/collections`, and the request editor can save new requests or update the currently loaded saved request.
 
 ## Recommended Next Steps
 
 1. Run the app with `tauri dev` and verify end-to-end behavior.
-2. Add collections and saved requests.
-3. Add environments and variable resolution.
-4. Add Postman import/export.
-5. Tighten multipart/file workflow.
+2. Add environments and variable resolution.
+3. Add Postman import/export.
+4. Tighten multipart/file workflow.
+5. Add collection folders and richer request organization.

@@ -4,8 +4,12 @@
   export let request: RequestDraft;
   export let isSending = false;
   export let isCanceling = false;
+  export let isSaving = false;
+  export let saveLabel = "Save";
+  export let saveDisabled = false;
   export let onSend: () => Promise<void> | void = () => {};
   export let onCancel: () => Promise<void> | void = () => {};
+  export let onSave: () => Promise<void> | void = () => {};
 
   let activePanel: "query" | "headers" | "body" | "auth" = "query";
 
@@ -105,19 +109,25 @@
       />
     </div>
 
-    <button
-      class:cancel-button={isSending}
-      class="send-button"
-      type="button"
-      on:click={() => (isSending ? onCancel() : onSend())}
-      disabled={isCanceling}
-    >
-      {#if isSending}
-        {isCanceling ? "Canceling..." : "Cancel"}
-      {:else}
-        Send
-      {/if}
-    </button>
+    <div class="request-actions">
+      <button class="ghost-button request-save-button" type="button" on:click={onSave} disabled={saveDisabled || isSaving}>
+        {isSaving ? "Saving..." : saveLabel}
+      </button>
+
+      <button
+        class:cancel-button={isSending}
+        class="send-button"
+        type="button"
+        on:click={() => (isSending ? onCancel() : onSend())}
+        disabled={isCanceling}
+      >
+        {#if isSending}
+          {isCanceling ? "Canceling..." : "Cancel"}
+        {:else}
+          Send
+        {/if}
+      </button>
+    </div>
   </div>
 
   <div class="url-row">

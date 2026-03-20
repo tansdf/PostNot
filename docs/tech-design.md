@@ -58,6 +58,7 @@ This section reflects the code currently implemented in the repository.
 - Persisted application settings in SQLite
 - Persisted request history in SQLite
 - Cancel in-flight request
+- Collections and saved requests
 - Settings page wired to backend persistence
 - History panel wired to backend persistence
 - History detail inspection from persisted snapshots
@@ -65,8 +66,6 @@ This section reflects the code currently implemented in the repository.
 
 ### Not Yet Implemented
 
-- Collections
-- Saved requests
 - Environments and variable substitution
 - Postman import/export
 - Multi-tab workflow
@@ -318,7 +317,9 @@ The initial migration also creates these tables for planned work:
 - `collection_items`
 - `environments`
 
-They are not yet wired into the runtime UI or command surface.
+`collections` and `collection_items` are now wired into the runtime UI and command surface for flat collections of saved requests.
+
+`environments` is still present in the schema but not yet wired into the runtime UI or command surface.
 
 ## 8. Runtime Behavior
 
@@ -374,6 +375,15 @@ Commands currently exposed to the frontend:
 - `list_history`
 - `get_history_entry`
 - `clear_history`
+- `list_collections`
+- `create_collection`
+- `update_collection`
+- `delete_collection`
+- `list_saved_requests`
+- `save_request_to_collection`
+- `update_saved_request`
+- `get_saved_request`
+- `delete_saved_request`
 
 ### Command Roles
 
@@ -384,6 +394,15 @@ Commands currently exposed to the frontend:
 - `list_history`: returns recent history entries ordered by execution time descending
 - `get_history_entry`: returns a stored request snapshot and response metadata for one history entry
 - `clear_history`: deletes all stored history entries
+- `list_collections`: returns saved request collections with request counts
+- `create_collection`: creates a new collection for saved requests
+- `update_collection`: updates one collection's name and description
+- `delete_collection`: removes a collection and its saved requests
+- `list_saved_requests`: lists saved requests within one collection
+- `save_request_to_collection`: stores the current request draft in a collection
+- `update_saved_request`: updates an existing saved request in place
+- `get_saved_request`: loads one saved request back into the editor
+- `delete_saved_request`: removes one saved request from a collection
 
 ## 10. Frontend Screens
 
@@ -393,6 +412,7 @@ Current UI sections:
 
 - request profile summary using persisted settings
 - request editor
+- request-level save/update action
 - response viewer
 - history panel
 - history detail inspector
@@ -407,6 +427,15 @@ Current UI sections:
 - follow redirects toggle
 - validate TLS toggle
 - persisted save action
+
+### Collections Page
+
+Current UI sections:
+
+- sidebar collection browser with saved request stack
+- dedicated collection editor view
+- saved request list for the selected collection
+- open-in-requests and delete actions for saved requests
 
 ## 11. Security and Persistence Notes
 
@@ -435,6 +464,8 @@ Ship a usable desktop app that can compose and execute HTTP requests locally, pe
 - auth support for none/basic/bearer/API key
 - request execution through Rust
 - request cancellation
+- collections and saved requests
+- sidebar-first collection browsing and dedicated collection editing
 - response viewer
 - SQLite initialization and migrations
 - persisted settings
@@ -455,10 +486,10 @@ Ship a usable desktop app that can compose and execute HTTP requests locally, pe
 Recommended implementation order from the current state:
 
 1. Run the app with `tauri dev` and verify end-to-end behavior manually
-2. Add saved requests and collections using the tables already present in the schema
-3. Add environments and variable resolution
-4. Add Postman import/export
-5. Improve multipart and native file workflows
+2. Add environments and variable resolution
+3. Add Postman import/export
+4. Improve multipart and native file workflows
+5. Add collection folders and richer request organization
 
 ## 14. Open Decisions
 
@@ -473,4 +504,4 @@ These are still unresolved:
 
 Treat the repository as being in an active Milestone 1 state, not full MVP completion.
 
-The design is now grounded in what the code actually does: persisted settings influence request execution, history is stored in SQLite, and the frontend surfaces both. The next work should stay focused on completing Milestone 1 before opening collections, environments, or import/export.
+The design is now grounded in what the code actually does: persisted settings influence request execution, history is stored in SQLite, collections are part of the working UI, and the frontend surfaces all three. The next work should stay focused on completing Milestone 1 with environments, import/export, and remaining UX polish.

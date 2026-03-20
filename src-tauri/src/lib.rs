@@ -24,6 +24,15 @@ pub fn run() {
             commands::history::list_history,
             commands::history::get_history_entry,
             commands::history::clear_history,
+            commands::collections::list_collections,
+            commands::collections::create_collection,
+            commands::collections::update_collection,
+            commands::collections::delete_collection,
+            commands::collections::list_saved_requests,
+            commands::collections::save_request_to_collection,
+            commands::collections::update_saved_request,
+            commands::collections::get_saved_request,
+            commands::collections::delete_saved_request,
         ])
         .run(tauri::generate_context!())
         .expect("error while running PostNot application");
