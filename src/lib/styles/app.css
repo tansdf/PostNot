@@ -434,12 +434,54 @@ select option {
   gap: 12px;
 }
 
+.history-content {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(20rem, 0.95fr) minmax(0, 1.05fr);
+  align-items: start;
+  overflow-anchor: none;
+}
+
+.history-list-column,
+.history-detail-column {
+  min-width: 0;
+}
+
+.history-list-column .history-list {
+  max-height: clamp(24rem, 70vh, 52rem);
+  overflow-y: auto;
+  padding-right: 4px;
+  overflow-anchor: none;
+}
+
+.history-detail-column {
+  position: sticky;
+  top: 12px;
+}
+
+.history-toolbar,
+.history-row-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.history-toolbar {
+  flex-wrap: wrap;
+}
+
 .history-item {
   padding: 16px;
   border-radius: var(--radius-md);
   background: var(--surface-subtle);
+  border: 1px solid transparent;
   display: grid;
   gap: 10px;
+}
+
+.history-item-active {
+  border-color: var(--control-selected-border);
+  box-shadow: inset 0 0 0 1px var(--control-selected-border);
 }
 
 .history-item-top,
@@ -455,6 +497,10 @@ select option {
 .history-item-meta,
 .settings-actions {
   justify-content: space-between;
+}
+
+.history-row-actions {
+  justify-content: flex-start;
 }
 
 .history-status {
@@ -492,6 +538,131 @@ select option {
   background: var(--surface-danger-soft);
 }
 
+.history-detail {
+  padding: 16px;
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
+  border: 1px solid var(--border-soft);
+  display: grid;
+  gap: 16px;
+}
+
+.detail-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 1fr;
+}
+
+.detail-card {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  border: 1px solid var(--border-soft);
+  display: grid;
+  gap: 16px;
+}
+
+.detail-card-span {
+  grid-column: 1 / -1;
+}
+
+.detail-section-title,
+.detail-subtitle {
+  margin: 0;
+}
+
+.detail-subtitle {
+  font-size: 0.92rem;
+}
+
+.detail-micro-title {
+  margin: 0;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+
+.detail-facts {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.detail-wide {
+  grid-column: 1 / -1;
+}
+
+.detail-block {
+  display: grid;
+  gap: 10px;
+}
+
+.detail-kv-list {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr;
+}
+
+.detail-kv-list-compact {
+  grid-template-columns: 1fr;
+}
+
+.detail-kv-item {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel-strong);
+  border: 1px solid var(--border-soft);
+}
+
+.detail-kv-item strong,
+.detail-kv-item span {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.detail-code-block {
+  margin: 0;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-code);
+  border: 1px solid var(--border-soft);
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: clamp(10rem, 36vh, 24rem);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.detail-response-columns {
+  display: grid;
+  gap: 18px;
+  align-items: start;
+  grid-template-columns: minmax(18rem, 0.9fr) minmax(20rem, 1.1fr);
+}
+
+.detail-response-column {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.detail-response-column .detail-kv-list,
+.detail-response-column .detail-kv-list-compact {
+  max-height: clamp(14rem, 42vh, 28rem);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.detail-stack {
+  display: grid;
+  gap: 12px;
+}
+
 .settings-toggle {
   justify-content: flex-start;
 }
@@ -502,18 +673,49 @@ select option {
 }
 
 @media (max-width: 980px) {
+  .history-content,
   .status-grid,
+  .detail-facts,
   .history-item-top,
   .history-item-meta,
   .settings-actions {
-    grid-template-columns: 1fr;
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .history-content,
+  .detail-facts {
+    grid-template-columns: 1fr;
+  }
+
+  .history-list-column .history-list,
+  .history-detail-column {
+    max-height: none;
+    position: static;
+  }
+}
+
+@media (max-width: 1500px) {
+  .history-content {
+    grid-template-columns: 1fr;
+  }
+
+  .history-detail-column {
+    position: static;
+    order: -1;
+  }
+
+  .history-list-column .history-list {
+    max-height: none;
   }
 }
 
 @media (max-width: 1220px) {
   .response-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-response-columns {
     grid-template-columns: 1fr;
   }
 

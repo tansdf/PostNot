@@ -74,6 +74,20 @@ export type HistoryEntrySummary = {
   executedAt: string;
 };
 
+export type HistoryEntryDetail = {
+  id: string;
+  requestName: string;
+  method: HttpMethod;
+  url: string;
+  statusCode: number | null;
+  durationMs: number;
+  requestSnapshot: RequestDraft;
+  responseHeaders: KeyValueRow[];
+  responseBodyText: string;
+  errorText: string;
+  executedAt: string;
+};
+
 function createId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();

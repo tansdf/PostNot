@@ -21,6 +21,8 @@ pub fn run() {
             commands::settings::get_settings,
             commands::settings::update_settings,
             commands::history::list_history,
+            commands::history::get_history_entry,
+            commands::history::clear_history,
         ])
         .run(tauri::generate_context!())
         .expect("error while running PostNot application");

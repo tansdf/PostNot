@@ -1,4 +1,4 @@
-use tauri::State;
+use tauri::{AppHandle, State};
 
 use crate::{
     app_state::AppState,
@@ -9,6 +9,7 @@ use crate::{
 
 #[tauri::command]
 pub async fn send_request(
+    app: AppHandle,
     state: State<'_, AppState>,
     payload: SendRequestPayload,
 ) -> AppResult<ResponsePayload> {
@@ -16,7 +17,7 @@ pub async fn send_request(
 
     match http_client::send_request(&payload, &settings).await {
         Ok(response) => {
-            history_service::record_success(state.db(), &payload, &response).await?;
+            history_service::record_success(state.db(), &payload, &response, &app).await?;
             Ok(response)
         }
         Err(error) => {

@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   createDefaultSettings,
   type AppSettings,
+  type HistoryEntryDetail,
   type HistoryEntrySummary,
   type RequestDraft,
   type ResponsePayload
@@ -54,6 +55,56 @@ function createMockHistory(limit = 10): HistoryEntrySummary[] {
   ].slice(0, limit);
 }
 
+function createMockHistoryDetail(id: string): HistoryEntryDetail {
+  const request = {
+    ...createMockHistory(1)[0],
+    requestSnapshot: {
+      name: "Sample request",
+      method: "GET" as const,
+      url: "https://jsonplaceholder.typicode.com/todos/1",
+      queryParams: [],
+      headers: [],
+      body: {
+        mode: "none" as const,
+        raw: "",
+        form: [],
+        files: []
+      },
+      auth: {
+        type: "none" as const,
+        basicUsername: "",
+        basicPassword: "",
+        bearerToken: "",
+        apiKeyName: "",
+        apiKeyValue: "",
+        apiKeyIn: "header" as const
+      }
+    },
+    responseHeaders: [
+      {
+        id: "mock-header",
+        key: "content-type",
+        value: "application/json",
+        enabled: true
+      }
+    ]
+  };
+
+  return {
+    id,
+    requestName: request.requestName,
+    method: request.method,
+    url: request.url,
+    statusCode: request.statusCode,
+    durationMs: request.durationMs,
+    requestSnapshot: request.requestSnapshot,
+    responseHeaders: request.responseHeaders,
+    responseBodyText: request.responseBodyPreview,
+    errorText: request.errorText,
+    executedAt: request.executedAt
+  };
+}
+
 export async function sendRequest(payload: RequestDraft): Promise<ResponsePayload> {
   if (!hasTauriRuntime()) {
     return createMockResponse(payload);
@@ -84,4 +135,20 @@ export async function listHistory(limit = 25): Promise<HistoryEntrySummary[]> {
   }
 
   return invoke<HistoryEntrySummary[]>("list_history", { limit });
+}
+
+export async function getHistoryEntry(id: string): Promise<HistoryEntryDetail> {
+  if (!hasTauriRuntime()) {
+    return createMockHistoryDetail(id);
+  }
+
+  return invoke<HistoryEntryDetail>("get_history_entry", { id });
+}
+
+export async function clearHistory(): Promise<void> {
+  if (!hasTauriRuntime()) {
+    return;
+  }
+
+  await invoke("clear_history");
 }

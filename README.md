@@ -39,6 +39,8 @@ Implemented now:
 - persisted request history
 - settings page wired to SQLite
 - history panel wired to SQLite
+- history detail inspection
+- clear history action
 
 Not implemented yet:
 
@@ -68,11 +70,12 @@ cargo check --manifest-path src-tauri/Cargo.toml
 - The app stores SQLite data under the Tauri app data directory.
 - Saved settings currently affect request timeout, redirect behavior, and TLS validation.
 - Request history is persisted after each send and pruned using the configured history limit.
+- History summaries keep a preview in SQLite, and full response bodies for new entries are stored under the app data directory for detail inspection.
 
 ## Recommended Next Steps
 
 1. Run the app with `tauri dev` and verify end-to-end behavior.
 2. Add request cancellation.
-3. Add history actions and detail inspection.
-4. Add collections and saved requests.
-5. Add environments and variable resolution.
+3. Add collections and saved requests.
+4. Add environments and variable resolution.
+5. Add Postman import/export.

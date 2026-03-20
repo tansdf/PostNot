@@ -59,6 +59,8 @@ This section reflects the code currently implemented in the repository.
 - Persisted request history in SQLite
 - Settings page wired to backend persistence
 - History panel wired to backend persistence
+- History detail inspection from persisted snapshots
+- Clear history action
 
 ### Not Yet Implemented
 
@@ -304,6 +306,7 @@ CREATE TABLE history_entries (
 Implementation notes:
 
 - successful requests are persisted with a response preview
+- successful requests also persist the full response body to a file path referenced by `response_body_path`
 - failed requests are also persisted with `error_text`
 - history is pruned based on the persisted `history_limit` setting
 
@@ -346,6 +349,7 @@ On successful request execution:
 - the request snapshot is stored
 - response summary metadata is stored
 - response preview text is stored
+- full response bodies are stored on disk for detail inspection
 - history is pruned to the configured limit
 
 On failed request execution:
@@ -362,6 +366,8 @@ Commands currently exposed to the frontend:
 - `get_settings`
 - `update_settings`
 - `list_history`
+- `get_history_entry`
+- `clear_history`
 
 ### Command Roles
 
@@ -369,6 +375,8 @@ Commands currently exposed to the frontend:
 - `get_settings`: loads current settings from SQLite
 - `update_settings`: persists settings and returns the saved values
 - `list_history`: returns recent history entries ordered by execution time descending
+- `get_history_entry`: returns a stored request snapshot and response metadata for one history entry
+- `clear_history`: deletes all stored history entries
 
 ## 10. Frontend Screens
 
@@ -380,6 +388,7 @@ Current UI sections:
 - request editor
 - response viewer
 - history panel
+- history detail inspector
 
 ### Settings Page
 
@@ -424,6 +433,8 @@ Ship a usable desktop app that can compose and execute HTTP requests locally, pe
 - persisted history
 - settings page
 - history panel
+- history detail inspection
+- clear history action
 
 ### Milestone 1 Remaining
 
@@ -437,12 +448,10 @@ Ship a usable desktop app that can compose and execute HTTP requests locally, pe
 Recommended implementation order from the current state:
 
 1. Run the app with `tauri dev` and verify end-to-end behavior manually
-2. Add history management actions:
-   - clear history
-   - inspect full history entry details
-3. Add request cancellation support
-4. Add saved requests and collections using the tables already present in the schema
-5. Add environments and variable resolution
+2. Add request cancellation support
+3. Add saved requests and collections using the tables already present in the schema
+4. Add environments and variable resolution
+5. Add Postman import/export
 
 ## 14. Open Decisions
 

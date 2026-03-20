@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
 
-  import { getSettings, listHistory, sendRequest } from "$lib/api/commands";
-  import type { AppSettings, HistoryEntrySummary, ResponsePayload } from "$lib/api/types";
+  import { clearHistory, getHistoryEntry, getSettings, listHistory, sendRequest } from "$lib/api/commands";
+  import type { AppSettings, HistoryEntryDetail, HistoryEntrySummary, ResponsePayload } from "$lib/api/types";
   import { createDefaultSettings, createRequestDraft } from "$lib/api/types";
   import HistoryPanel from "$lib/components/history/HistoryPanel.svelte";
   import AppShell from "$lib/components/layout/AppShell.svelte";
@@ -15,8 +15,13 @@
   let history: HistoryEntrySummary[] = [];
   let isSending = false;
   let isHistoryLoading = true;
+  let isHistoryDetailLoading = false;
+  let isClearingHistory = false;
   let historyErrorText = "";
+  let historyDetailErrorText = "";
   let settingsErrorText = "";
+  let selectedHistoryId = "";
+  let selectedHistoryDetail: HistoryEntryDetail | null = null;
 
   onMount(async () => {
     await Promise.all([loadSettings(), loadHistory()]);
@@ -37,10 +42,62 @@
     try {
       history = await listHistory(12);
       historyErrorText = "";
+
+      if (selectedHistoryId && !history.some((entry) => entry.id === selectedHistoryId)) {
+        closeHistoryDetail();
+      }
     } catch (error) {
       historyErrorText = error instanceof Error ? error.message : String(error);
     } finally {
       isHistoryLoading = false;
+    }
+  }
+
+  async function inspectHistoryEntry(id: string, shouldKeepExistingDetail = false) {
+    const scrollY = window.scrollY;
+    selectedHistoryId = id;
+    isHistoryDetailLoading = true;
+    historyDetailErrorText = "";
+
+    if (!shouldKeepExistingDetail) {
+      selectedHistoryDetail = null;
+    }
+
+    try {
+      selectedHistoryDetail = await getHistoryEntry(id);
+    } catch (error) {
+      selectedHistoryDetail = null;
+      historyDetailErrorText = error instanceof Error ? error.message : String(error);
+    } finally {
+      isHistoryDetailLoading = false;
+      await tick();
+      window.scrollTo({ top: scrollY });
+    }
+  }
+
+  function closeHistoryDetail() {
+    selectedHistoryId = "";
+    selectedHistoryDetail = null;
+    historyDetailErrorText = "";
+    isHistoryDetailLoading = false;
+  }
+
+  async function handleClearHistory() {
+    if (!window.confirm("Clear all stored request history? This cannot be undone.")) {
+      return;
+    }
+
+    isClearingHistory = true;
+
+    try {
+      await clearHistory();
+      closeHistoryDetail();
+      await loadHistory();
+      historyErrorText = "";
+    } catch (error) {
+      historyErrorText = error instanceof Error ? error.message : String(error);
+    } finally {
+      isClearingHistory = false;
     }
   }
 
@@ -63,6 +120,10 @@
     } finally {
       isSending = false;
       await loadHistory();
+
+      if (selectedHistoryId) {
+        await inspectHistoryEntry(selectedHistoryId, true);
+      }
     }
   }
 </script>
@@ -104,6 +165,18 @@
 
     <RequestEditor bind:request {isSending} onSend={handleSend} />
     <ResponseViewer {response} />
-    <HistoryPanel items={history} isLoading={isHistoryLoading} errorText={historyErrorText} />
+    <HistoryPanel
+      items={history}
+      isLoading={isHistoryLoading}
+      errorText={historyErrorText}
+      selectedId={selectedHistoryId}
+      detail={selectedHistoryDetail}
+      detailErrorText={historyDetailErrorText}
+      isDetailLoading={isHistoryDetailLoading}
+      isClearing={isClearingHistory}
+      onInspect={inspectHistoryEntry}
+      onClear={handleClearHistory}
+      onCloseDetail={closeHistoryDetail}
+    />
   </div>
 </AppShell>
