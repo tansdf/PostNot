@@ -1,7 +1,6 @@
-use std::{fs, path::Path, str::FromStr};
+use std::{fs, str::FromStr};
 
 use sqlx::{
-    migrate::Migrator,
     sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous},
     SqlitePool,
 };
@@ -10,6 +9,7 @@ use tauri::AppHandle;
 use crate::{error::{AppError, AppResult}, storage::paths};
 
 pub const DATABASE_FILE_NAME: &str = "postnot.sqlite";
+static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
 
 pub async fn init(app: &AppHandle) -> AppResult<SqlitePool> {
     let database_path = paths::database_path(app)?;
@@ -30,11 +30,7 @@ pub async fn init(app: &AppHandle) -> AppResult<SqlitePool> {
         .connect_with(options)
         .await?;
 
-    let migrator = Migrator::new(Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations")))
-        .await
-        .map_err(|error| AppError::Message(error.to_string()))?;
-
-    migrator
+    MIGRATOR
         .run(&pool)
         .await
         .map_err(|error| AppError::Message(error.to_string()))?;
