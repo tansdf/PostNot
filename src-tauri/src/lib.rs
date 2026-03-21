@@ -1,3 +1,13 @@
+use std::{
+    env,
+    fs,
+    path::PathBuf,
+    sync::Once,
+};
+
+#[cfg(target_os = "windows")]
+use std::process::Command;
+
 use tauri::Manager;
 
 pub mod app_state;
@@ -8,7 +18,11 @@ pub mod error;
 pub mod services;
 pub mod storage;
 
-pub fn run() {
+static PANIC_HOOK: Once = Once::new();
+
+pub fn run() -> Result<(), String> {
+    install_panic_hook();
+
     tauri::Builder::default()
         .setup(|app| {
             let database = tauri::async_runtime::block_on(db::init(app.handle()))?;
@@ -41,5 +55,62 @@ pub fn run() {
             commands::environments::set_active_environment,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running PostNot application");
+        .map_err(|error| error.to_string())
+}
+
+pub fn report_startup_failure(message: &str) {
+    let log_path = write_startup_log(message);
+    let summary = format!(
+        "PostNot failed to start.\n\n{}\n\nStartup log: {}",
+        message,
+        log_path.display()
+    );
+
+    eprintln!("{}", summary);
+
+    #[cfg(target_os = "windows")]
+    {
+        show_windows_error_dialog(&summary);
+    }
+}
+
+fn install_panic_hook() {
+    PANIC_HOOK.call_once(|| {
+        std::panic::set_hook(Box::new(|panic_info| {
+            let message = match panic_info.payload().downcast_ref::<&str>() {
+                Some(payload) => (*payload).to_string(),
+                None => match panic_info.payload().downcast_ref::<String>() {
+                    Some(payload) => payload.clone(),
+                    None => "Unknown panic".to_string(),
+                },
+            };
+
+            let location = panic_info
+                .location()
+                .map(|location| format!("{}:{}:{}", location.file(), location.line(), location.column()))
+                .unwrap_or_else(|| "unknown location".to_string());
+
+            report_startup_failure(&format!("panic at {}: {}", location, message));
+        }));
+    });
+}
+
+fn write_startup_log(message: &str) -> PathBuf {
+    let log_path = env::temp_dir().join("postnot-startup.log");
+    let log_body = format!("PostNot startup failure\n\n{}", message);
+    let _ = fs::write(&log_path, log_body);
+    log_path
+}
+
+#[cfg(target_os = "windows")]
+fn show_windows_error_dialog(message: &str) {
+    let escaped_message = message.replace('\'', "''");
+    let script = format!(
+        "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show('{escaped}', 'PostNot failed to start') | Out-Null",
+        escaped = escaped_message
+    );
+
+    let _ = Command::new("powershell")
+        .args(["-NoProfile", "-Command", &script])
+        .spawn();
 }

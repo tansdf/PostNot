@@ -411,6 +411,7 @@
 
     <RequestEditor
       bind:request
+      environmentVariables={activeEnvironmentDetail?.variables ?? []}
       {isSending}
       isCanceling={isCancelingRequest}
       isSaving={$collectionsState.isSavingRequest}

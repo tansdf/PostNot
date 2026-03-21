@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createKeyValueRow, type AuthType, type BodyMode, type KeyValueRow, type RequestDraft } from "$lib/api/types";
+  import VariableField from "$lib/components/request/VariableField.svelte";
 
   export let request: RequestDraft;
   export let isSending = false;
@@ -7,6 +8,7 @@
   export let isSaving = false;
   export let saveLabel = "Save";
   export let saveDisabled = false;
+  export let environmentVariables: KeyValueRow[] = [];
   export let onSend: () => Promise<void> | void = () => {};
   export let onCancel: () => Promise<void> | void = () => {};
   export let onSave: () => Promise<void> | void = () => {};
@@ -141,11 +143,13 @@
       <option value="OPTIONS">OPTIONS</option>
     </select>
 
-    <input
-      class="text-input url-input"
-      bind:value={request.url}
+    <VariableField
+      className="text-input url-input"
+      value={request.url}
+      variables={environmentVariables}
       placeholder="https://api.example.com/resource"
-      spellcheck="false"
+      spellcheck={false}
+      onValueInput={(nextValue) => (request = { ...request, url: nextValue })}
     />
   </div>
 
@@ -174,7 +178,13 @@
           <div class="kv-row">
             <input type="checkbox" checked={row.enabled} on:change={(event) => updateRows("queryParams", index, { enabled: event.currentTarget.checked })} />
             <input class="text-input" value={row.key} placeholder="Key" on:input={(event) => updateRows("queryParams", index, { key: event.currentTarget.value })} />
-            <input class="text-input" value={row.value} placeholder="Value" on:input={(event) => updateRows("queryParams", index, { value: event.currentTarget.value })} />
+            <VariableField
+              className="text-input"
+              value={row.value}
+              variables={environmentVariables}
+              placeholder="Value"
+              onValueInput={(nextValue) => updateRows("queryParams", index, { value: nextValue })}
+            />
             <button class="icon-button" type="button" on:click={() => removeRow("queryParams", row.id)}>Remove</button>
           </div>
         {/each}
@@ -194,7 +204,13 @@
           <div class="kv-row">
             <input type="checkbox" checked={row.enabled} on:change={(event) => updateRows("headers", index, { enabled: event.currentTarget.checked })} />
             <input class="text-input" value={row.key} placeholder="Header" on:input={(event) => updateRows("headers", index, { key: event.currentTarget.value })} />
-            <input class="text-input" value={row.value} placeholder="Value" on:input={(event) => updateRows("headers", index, { value: event.currentTarget.value })} />
+            <VariableField
+              className="text-input"
+              value={row.value}
+              variables={environmentVariables}
+              placeholder="Value"
+              onValueInput={(nextValue) => updateRows("headers", index, { value: nextValue })}
+            />
             <button class="icon-button" type="button" on:click={() => removeRow("headers", row.id)}>Remove</button>
           </div>
         {/each}
@@ -216,12 +232,14 @@
       </div>
 
       {#if request.body.mode === "json" || request.body.mode === "raw"}
-        <textarea
-          class="body-textarea"
+        <VariableField
+          className="body-textarea"
+          multiline={true}
           value={request.body.raw}
+          variables={environmentVariables}
           placeholder={request.body.mode === "json" ? '{"hello":"world"}' : "Raw request body"}
-          on:input={(event) => updateBodyField("raw", event.currentTarget.value)}
-        ></textarea>
+          onValueInput={(nextValue) => updateBodyField("raw", nextValue)}
+        />
       {/if}
 
       {#if request.body.mode === "form-urlencoded"}
@@ -230,7 +248,13 @@
             <div class="kv-row">
               <input type="checkbox" checked={row.enabled} on:change={(event) => updateFormRow(index, { enabled: event.currentTarget.checked })} />
               <input class="text-input" value={row.key} placeholder="Field" on:input={(event) => updateFormRow(index, { key: event.currentTarget.value })} />
-              <input class="text-input" value={row.value} placeholder="Value" on:input={(event) => updateFormRow(index, { value: event.currentTarget.value })} />
+              <VariableField
+                className="text-input"
+                value={row.value}
+                variables={environmentVariables}
+                placeholder="Value"
+                onValueInput={(nextValue) => updateFormRow(index, { value: nextValue })}
+              />
               <button class="icon-button" type="button" on:click={() => removeFormRow(row.id)}>Remove</button>
             </div>
           {/each}
@@ -262,18 +286,48 @@
       {#if request.auth.type === "basic"}
         <label>
           <span class="field-label">Username</span>
-          <input class="text-input" bind:value={request.auth.basicUsername} />
+          <VariableField
+            className="text-input"
+            value={request.auth.basicUsername}
+            variables={environmentVariables}
+            onValueInput={(nextValue) =>
+              (request = {
+                ...request,
+                auth: { ...request.auth, basicUsername: nextValue }
+              })}
+          />
         </label>
         <label>
           <span class="field-label">Password</span>
-          <input class="text-input" type="password" bind:value={request.auth.basicPassword} />
+          <VariableField
+            className="text-input"
+            type="password"
+            value={request.auth.basicPassword}
+            variables={environmentVariables}
+            onValueInput={(nextValue) =>
+              (request = {
+                ...request,
+                auth: { ...request.auth, basicPassword: nextValue }
+              })}
+          />
         </label>
       {/if}
 
       {#if request.auth.type === "bearer"}
         <label>
           <span class="field-label">Token</span>
-          <input class="text-input" type="password" bind:value={request.auth.bearerToken} placeholder={"{{api_token}}"} />
+          <VariableField
+            className="text-input"
+            type="password"
+            value={request.auth.bearerToken}
+            variables={environmentVariables}
+            placeholder={"{{api_token}}"}
+            onValueInput={(nextValue) =>
+              (request = {
+                ...request,
+                auth: { ...request.auth, bearerToken: nextValue }
+              })}
+          />
         </label>
       {/if}
 
@@ -284,7 +338,17 @@
         </label>
         <label>
           <span class="field-label">Value</span>
-          <input class="text-input" type="password" bind:value={request.auth.apiKeyValue} />
+          <VariableField
+            className="text-input"
+            type="password"
+            value={request.auth.apiKeyValue}
+            variables={environmentVariables}
+            onValueInput={(nextValue) =>
+              (request = {
+                ...request,
+                auth: { ...request.auth, apiKeyValue: nextValue }
+              })}
+          />
         </label>
         <label>
           <span class="field-label">Send in</span>
