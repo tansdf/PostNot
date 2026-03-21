@@ -75,6 +75,14 @@ cargo check --manifest-path src-tauri/Cargo.toml
 - Request cancellation is available while a request is in flight and canceled requests are not written to history.
 - Collections are browsed from the sidebar, edited on `/collections`, and the request editor can save new requests or update the currently loaded saved request.
 
+## Versioning Policy
+
+- PostNot uses pre-1.0 semantic versioning.
+- Patch versions (`0.x.Y`) are for bug fixes, UI polish, and small internal improvements.
+- Minor versions (`0.X.0`) are for meaningful user-facing milestones such as new workflows, command-surface growth, or persistence features.
+- The changelog in [CHANGELOG.md](CHANGELOG.md) is the source of truth for release history.
+- When bumping versions, keep `package.json`, `package-lock.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json` in sync.
+
 ## Recommended Next Steps
 
 1. Run the app with `tauri dev` and verify end-to-end behavior.
