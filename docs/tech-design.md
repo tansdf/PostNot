@@ -68,6 +68,7 @@ This section reflects the code currently implemented in the repository.
 
 - Environments and variable substitution
 - Postman import/export
+- Tauri updater integration
 - Multi-tab workflow
 - Pre-request scripts
 - Test scripts
@@ -489,7 +490,8 @@ Recommended implementation order from the current state:
 2. Add environments and variable resolution
 3. Add Postman import/export
 4. Improve multipart and native file workflows
-5. Add collection folders and richer request organization
+5. Add Tauri updater integration
+6. Add collection folders and richer request organization
 
 ## 14. Open Decisions
 
