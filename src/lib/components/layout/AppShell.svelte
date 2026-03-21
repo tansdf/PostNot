@@ -18,6 +18,7 @@
     <nav class="sidebar-nav" aria-label="Primary">
       <a class:sidebar-link-active={$page.url.pathname === "/"} class="sidebar-link" href="/">Requests</a>
       <a class:sidebar-link-active={$page.url.pathname.startsWith("/collections")} class="sidebar-link" href="/collections">Collections</a>
+      <a class:sidebar-link-active={$page.url.pathname.startsWith("/environments")} class="sidebar-link" href="/environments">Environments</a>
       <a class:sidebar-link-active={$page.url.pathname.startsWith("/settings")} class="sidebar-link" href="/settings">Settings</a>
     </nav>
 

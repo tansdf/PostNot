@@ -652,7 +652,7 @@ select option {
 }
 
 .status-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
 }
 
 .status-item {
@@ -661,6 +661,29 @@ select option {
   background: var(--surface-subtle);
   display: grid;
   gap: 6px;
+}
+
+.environment-toolbar,
+.environment-summary,
+.environment-select-field {
+  display: flex;
+  gap: 12px;
+}
+
+.environment-toolbar {
+  margin-top: 16px;
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+.environment-select-field {
+  flex: 1 1 18rem;
+  flex-direction: column;
+}
+
+.environment-summary {
+  align-items: center;
+  min-height: 48px;
 }
 
 .status-label,
@@ -953,6 +976,11 @@ select option {
 
 .save-target-active {
   border-color: var(--control-selected-border);
+  background: var(--control-selected-bg);
+  color: var(--control-selected-text);
+}
+
+.save-target-active:hover {
   background: var(--control-selected-bg);
   color: var(--control-selected-text);
 }

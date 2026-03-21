@@ -4,7 +4,7 @@ use crate::{
     app_state::AppState,
     domain::requests::{ResponsePayload, SendRequestPayload},
     error::AppResult,
-    services::{history_service, http_client, settings_service},
+    services::{environments_service, history_service, http_client, settings_service},
 };
 
 #[tauri::command]
@@ -15,11 +15,13 @@ pub async fn send_request(
 ) -> AppResult<ResponsePayload> {
     let (request_id, cancel_rx) = state.start_request()?;
     let settings = settings_service::get_settings(state.db()).await?;
+    let active_environment = environments_service::get_active_environment(state.db()).await?;
+    let resolved_payload = environments_service::resolve_request(&payload, active_environment.as_ref());
 
-    let request_result = http_client::send_request(&payload, &settings, cancel_rx).await;
+    let request_result = http_client::send_request(&resolved_payload, &settings, cancel_rx).await;
 
     let result = match request_result {
-        Ok(response) => match history_service::record_success(state.db(), &payload, &response, &app).await {
+        Ok(response) => match history_service::record_success(state.db(), &resolved_payload, &response, &app).await {
             Ok(()) => Ok(response),
             Err(error) => Err(error),
         },
@@ -27,7 +29,7 @@ pub async fn send_request(
             true => Err(error),
             false => {
                 let history_result =
-                    history_service::record_failure(state.db(), &payload, &error.to_string()).await;
+                    history_service::record_failure(state.db(), &resolved_payload, &error.to_string()).await;
 
                 match history_result {
                     Ok(()) => Err(error),

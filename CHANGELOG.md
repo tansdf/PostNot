@@ -12,6 +12,9 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 - Sidebar-first collections browser with expandable collection stacks.
 - In-editor save flow with `Save` for new requests and `Update` for already saved requests.
 - Save dialog collection picker that avoids native select popup issues.
+- Dedicated `/environments` view for environment editing and activation.
+- Active environment selection on the request page.
+- Runtime `{{variable}}` resolution across URL, query params, headers, body, and auth fields.
 - Reconstructed project changelog for ongoing release tracking.
 
 ### Changed
@@ -20,6 +23,7 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 - Changed collection creation to a Postman-style flow: create blank collection from the sidebar, then edit it in the collection view.
 - Increased the default desktop window size from `1440x920` to `1520x980`.
 - Improved sidebar request-card truncation so long URLs no longer stretch the layout or hide controls.
+- Added generated multi-platform Tauri icon assets and refreshed them from the current app icon source.
 
 ### Fixed
 

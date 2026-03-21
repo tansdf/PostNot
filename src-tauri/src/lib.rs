@@ -33,6 +33,12 @@ pub fn run() {
             commands::collections::update_saved_request,
             commands::collections::get_saved_request,
             commands::collections::delete_saved_request,
+            commands::environments::list_environments,
+            commands::environments::create_environment,
+            commands::environments::get_environment,
+            commands::environments::update_environment,
+            commands::environments::delete_environment,
+            commands::environments::set_active_environment,
         ])
         .run(tauri::generate_context!())
         .expect("error while running PostNot application");

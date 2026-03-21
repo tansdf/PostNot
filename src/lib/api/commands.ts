@@ -4,6 +4,9 @@ import {
   type CreateCollectionInput,
   createDefaultSettings,
   type AppSettings,
+  type EnvironmentDetail,
+  type EnvironmentInput,
+  type EnvironmentSummary,
   type HistoryEntryDetail,
   type HistoryEntrySummary,
   type RequestDraft,
@@ -82,6 +85,41 @@ function createMockSavedRequests(): SavedRequestSummary[] {
       updatedAt: new Date().toISOString()
     }
   ];
+}
+
+function createMockEnvironments(): EnvironmentSummary[] {
+  return [
+    {
+      id: "mock-environment-1",
+      name: "Local",
+      isActive: true,
+      variableCount: 2,
+      updatedAt: new Date().toISOString()
+    }
+  ];
+}
+
+function createMockEnvironmentDetail(id: string): EnvironmentDetail {
+  return {
+    id,
+    name: "Local",
+    isActive: true,
+    updatedAt: new Date().toISOString(),
+    variables: [
+      {
+        id: "env-1",
+        key: "base_url",
+        value: "https://jsonplaceholder.typicode.com",
+        enabled: true
+      },
+      {
+        id: "env-2",
+        key: "api_token",
+        value: "demo-token",
+        enabled: true
+      }
+    ]
+  };
 }
 
 function createMockHistoryDetail(id: string): HistoryEntryDetail {
@@ -317,4 +355,58 @@ export async function deleteSavedRequest(itemId: string): Promise<void> {
   }
 
   await invoke("delete_saved_request", { itemId });
+}
+
+export async function listEnvironments(): Promise<EnvironmentSummary[]> {
+  if (!hasTauriRuntime()) {
+    return createMockEnvironments();
+  }
+
+  return invoke<EnvironmentSummary[]>("list_environments");
+}
+
+export async function createEnvironment(): Promise<EnvironmentDetail> {
+  if (!hasTauriRuntime()) {
+    return createMockEnvironmentDetail(`mock-environment-${Date.now()}`);
+  }
+
+  return invoke<EnvironmentDetail>("create_environment");
+}
+
+export async function getEnvironment(environmentId: string): Promise<EnvironmentDetail> {
+  if (!hasTauriRuntime()) {
+    return createMockEnvironmentDetail(environmentId);
+  }
+
+  return invoke<EnvironmentDetail>("get_environment", { environmentId });
+}
+
+export async function updateEnvironment(environmentId: string, input: EnvironmentInput): Promise<EnvironmentDetail> {
+  if (!hasTauriRuntime()) {
+    return {
+      id: environmentId,
+      name: input.name,
+      isActive: false,
+      updatedAt: new Date().toISOString(),
+      variables: input.variables
+    };
+  }
+
+  return invoke<EnvironmentDetail>("update_environment", { environmentId, input });
+}
+
+export async function deleteEnvironment(environmentId: string): Promise<void> {
+  if (!hasTauriRuntime()) {
+    return;
+  }
+
+  await invoke("delete_environment", { environmentId });
+}
+
+export async function setActiveEnvironment(environmentId: string | null): Promise<void> {
+  if (!hasTauriRuntime()) {
+    return;
+  }
+
+  await invoke("set_active_environment", { environmentId });
 }

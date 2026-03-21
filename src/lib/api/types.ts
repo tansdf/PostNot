@@ -118,6 +118,27 @@ export type SavedRequestDetail = {
   request: RequestDraft;
 };
 
+export type EnvironmentSummary = {
+  id: string;
+  name: string;
+  isActive: boolean;
+  variableCount: number;
+  updatedAt: string;
+};
+
+export type EnvironmentDetail = {
+  id: string;
+  name: string;
+  isActive: boolean;
+  variables: KeyValueRow[];
+  updatedAt: string;
+};
+
+export type EnvironmentInput = {
+  name: string;
+  variables: KeyValueRow[];
+};
+
 function createId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();

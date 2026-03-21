@@ -7,13 +7,23 @@
   import {
     cancelActiveRequest,
     clearHistory,
+    getEnvironment,
     getHistoryEntry,
     getSavedRequest,
     getSettings,
+    listEnvironments,
     listHistory,
+    setActiveEnvironment,
     sendRequest
   } from "$lib/api/commands";
-  import type { AppSettings, HistoryEntryDetail, HistoryEntrySummary, ResponsePayload } from "$lib/api/types";
+  import type {
+    AppSettings,
+    EnvironmentDetail,
+    EnvironmentSummary,
+    HistoryEntryDetail,
+    HistoryEntrySummary,
+    ResponsePayload
+  } from "$lib/api/types";
   import { createDefaultSettings, createRequestDraft } from "$lib/api/types";
   import HistoryPanel from "$lib/components/history/HistoryPanel.svelte";
   import AppShell from "$lib/components/layout/AppShell.svelte";
@@ -41,6 +51,12 @@
   let historyDetailErrorText = "";
   let settingsErrorText = "";
   let requestSaveErrorText = "";
+  let environments: EnvironmentSummary[] = [];
+  let activeEnvironmentId = "";
+  let activeEnvironmentDetail: EnvironmentDetail | null = null;
+  let isEnvironmentsLoading = true;
+  let isEnvironmentChanging = false;
+  let environmentsErrorText = "";
   let selectedHistoryId = "";
   let selectedHistoryDetail: HistoryEntryDetail | null = null;
   let activeSavedRequestId = "";
@@ -52,7 +68,7 @@
   let requestedSavedRequestId = "";
 
   onMount(async () => {
-    await Promise.all([loadSettings(), loadHistory(), ensureCollectionsLoaded()]);
+    await Promise.all([loadSettings(), loadHistory(), ensureCollectionsLoaded(), loadEnvironments()]);
   });
 
   $: requestedSavedRequestId = $page.url.searchParams.get("savedRequestId") ?? "";
@@ -91,6 +107,33 @@
     }
   }
 
+  async function loadEnvironments(preferredEnvironmentId = activeEnvironmentId) {
+    isEnvironmentsLoading = true;
+
+    try {
+      environments = await listEnvironments();
+      const activeEnvironment = environments.find((environment) => environment.isActive) ?? null;
+      activeEnvironmentId = activeEnvironment?.id ?? "";
+      environmentsErrorText = "";
+
+      const detailEnvironmentId =
+        preferredEnvironmentId && environments.some((environment) => environment.id === preferredEnvironmentId)
+          ? preferredEnvironmentId
+          : activeEnvironment?.id ?? "";
+
+      if (detailEnvironmentId) {
+        activeEnvironmentDetail = await getEnvironment(detailEnvironmentId);
+      } else {
+        activeEnvironmentDetail = null;
+      }
+    } catch (error) {
+      environmentsErrorText = error instanceof Error ? error.message : String(error);
+      activeEnvironmentDetail = null;
+    } finally {
+      isEnvironmentsLoading = false;
+    }
+  }
+
   async function inspectHistoryEntry(id: string, shouldKeepExistingDetail = false) {
     const scrollY = window.scrollY;
     selectedHistoryId = id;
@@ -118,6 +161,19 @@
     selectedHistoryDetail = null;
     historyDetailErrorText = "";
     isHistoryDetailLoading = false;
+  }
+
+  async function handleEnvironmentChange(environmentId: string) {
+    isEnvironmentChanging = true;
+
+    try {
+      await setActiveEnvironment(environmentId || null);
+      await loadEnvironments(environmentId);
+    } catch (error) {
+      environmentsErrorText = error instanceof Error ? error.message : String(error);
+    } finally {
+      isEnvironmentChanging = false;
+    }
   }
 
   async function handleClearHistory() {
@@ -308,10 +364,48 @@
           <span class="status-label">History limit</span>
           <strong>{settings.historyLimit}</strong>
         </div>
+        <div class="status-item">
+          <span class="status-label">Environment</span>
+          <strong>{activeEnvironmentDetail?.name ?? "None"}</strong>
+        </div>
+      </div>
+
+      <div class="environment-toolbar">
+        <label class="environment-select-field">
+          <span class="field-label">Active environment</span>
+          <select
+            class="text-input"
+            value={activeEnvironmentId}
+            on:change={(event) => handleEnvironmentChange(event.currentTarget.value)}
+            disabled={isEnvironmentChanging}
+          >
+            <option value="">No environment</option>
+            {#each environments as environment (environment.id)}
+              <option value={environment.id}>{environment.name}</option>
+            {/each}
+          </select>
+        </label>
+
+        <div class="environment-summary">
+          {#if isEnvironmentsLoading}
+            <span class="history-meta">Loading environments...</span>
+          {:else if activeEnvironmentDetail}
+            <span class="history-meta">
+              {activeEnvironmentDetail.variables.filter((item) => item.enabled && item.key.trim()).length}
+              active variable{activeEnvironmentDetail.variables.filter((item) => item.enabled && item.key.trim()).length === 1 ? "" : "s"}
+            </span>
+          {:else}
+            <span class="history-meta">Requests will be sent without variable substitution.</span>
+          {/if}
+        </div>
       </div>
 
       {#if settingsErrorText}
         <div class="response-error">{settingsErrorText}</div>
+      {/if}
+
+      {#if environmentsErrorText}
+        <div class="response-error">{environmentsErrorText}</div>
       {/if}
     </section>
 

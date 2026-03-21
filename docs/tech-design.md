@@ -59,6 +59,7 @@ This section reflects the code currently implemented in the repository.
 - Persisted request history in SQLite
 - Cancel in-flight request
 - Collections and saved requests
+- Environments and variable resolution
 - Settings page wired to backend persistence
 - History panel wired to backend persistence
 - History detail inspection from persisted snapshots
@@ -66,7 +67,6 @@ This section reflects the code currently implemented in the repository.
 
 ### Not Yet Implemented
 
-- Environments and variable substitution
 - Postman import/export
 - Tauri updater integration
 - Multi-tab workflow
@@ -320,7 +320,7 @@ The initial migration also creates these tables for planned work:
 
 `collections` and `collection_items` are now wired into the runtime UI and command surface for flat collections of saved requests.
 
-`environments` is still present in the schema but not yet wired into the runtime UI or command surface.
+`environments` is now wired into the runtime UI and command surface for single-active-environment variable resolution.
 
 ## 8. Runtime Behavior
 
@@ -343,6 +343,12 @@ For each request send, Rust currently applies these persisted settings:
 - `validate_tls`
 
 This means the settings page already changes actual network behavior, not just UI state.
+
+For each request send, Rust also:
+
+- loads the currently active environment, if one exists
+- resolves `{{variable}}` placeholders in URL, query params, headers, body text, form fields, and auth values
+- sends the resolved request payload
 
 ### History Persistence
 
@@ -385,6 +391,12 @@ Commands currently exposed to the frontend:
 - `update_saved_request`
 - `get_saved_request`
 - `delete_saved_request`
+- `list_environments`
+- `create_environment`
+- `get_environment`
+- `update_environment`
+- `delete_environment`
+- `set_active_environment`
 
 ### Command Roles
 
@@ -404,6 +416,12 @@ Commands currently exposed to the frontend:
 - `update_saved_request`: updates an existing saved request in place
 - `get_saved_request`: loads one saved request back into the editor
 - `delete_saved_request`: removes one saved request from a collection
+- `list_environments`: returns saved environments with active-state and variable counts
+- `create_environment`: creates a blank environment draft
+- `get_environment`: returns one environment and its variables
+- `update_environment`: persists environment name and variables
+- `delete_environment`: removes one environment
+- `set_active_environment`: marks one environment active or clears the active environment
 
 ## 10. Frontend Screens
 
@@ -412,6 +430,7 @@ Commands currently exposed to the frontend:
 Current UI sections:
 
 - request profile summary using persisted settings
+- active environment selector
 - request editor
 - request-level save/update action
 - response viewer
@@ -437,6 +456,15 @@ Current UI sections:
 - dedicated collection editor view
 - saved request list for the selected collection
 - open-in-requests and delete actions for saved requests
+
+### Environments Page
+
+Current UI sections:
+
+- environment list
+- active/inactive environment controls
+- environment variable editor
+- variable usage hint for `{{name}}` syntax
 
 ## 11. Security and Persistence Notes
 
@@ -467,6 +495,7 @@ Ship a usable desktop app that can compose and execute HTTP requests locally, pe
 - request cancellation
 - collections and saved requests
 - sidebar-first collection browsing and dedicated collection editing
+- environments and variable resolution
 - response viewer
 - SQLite initialization and migrations
 - persisted settings
@@ -487,11 +516,10 @@ Ship a usable desktop app that can compose and execute HTTP requests locally, pe
 Recommended implementation order from the current state:
 
 1. Run the app with `tauri dev` and verify end-to-end behavior manually
-2. Add environments and variable resolution
-3. Add Postman import/export
-4. Improve multipart and native file workflows
-5. Add Tauri updater integration
-6. Add collection folders and richer request organization
+2. Add Postman import/export
+3. Improve multipart and native file workflows
+4. Add Tauri updater integration
+5. Add collection folders and richer request organization
 
 ## 14. Open Decisions
 
@@ -506,4 +534,4 @@ These are still unresolved:
 
 Treat the repository as being in an active Milestone 1 state, not full MVP completion.
 
-The design is now grounded in what the code actually does: persisted settings influence request execution, history is stored in SQLite, collections are part of the working UI, and the frontend surfaces all three. The next work should stay focused on completing Milestone 1 with environments, import/export, and remaining UX polish.
+The design is now grounded in what the code actually does: persisted settings influence request execution, history is stored in SQLite, environments resolve variables at send time, collections are part of the working UI, and the frontend surfaces all four. The next work should stay focused on completing Milestone 1 with import/export, updater work, and remaining UX polish.
