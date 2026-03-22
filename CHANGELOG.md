@@ -4,16 +4,29 @@ This changelog was reconstructed from the project chat history and is now the tr
 
 The project currently uses pre-1.0 semantic versioning. Minor versions mark meaningful product milestones, while patch versions should be used for smaller fixes and polish.
 
-## [Unreleased]
+## [0.5.0] - 2026-03-22
 
 ### Added
 
-- Paste-based import for Postman Collection v2.1 JSON on the dedicated `/collections` page.
-- Paste-based import for single cURL commands into the selected collection or a fallback imported collection.
+- Paste-based and file-based import for Postman Collection v2.1 JSON on the dedicated `/collections` page.
+- cURL request import directly into the request editor via a dedicated import modal.
+- `New` request action in the request editor header for clearing the current draft and saved-request binding.
+- URL and query-parameter synchronization so pasted URLs unpack query params into the UI and active params are reflected back into the URL field.
+- Variable-aware autocomplete and preview pills across URL, headers, query values, auth, and request body inputs.
 
 ### Changed
 
+- Moved collection import behind a dedicated modal trigger instead of keeping the import block permanently visible on the Collections page.
+- Refined the request editor section headers so `Request`, `Body`, and `Auth` follow a more consistent panel pattern.
+- Added explicit empty-state messaging for body and auth sections when they are omitted.
 - Updated the project docs to reflect that request import now supports Postman collections and cURL, while export remains future work.
+
+### Fixed
+
+- Windows packaged startup by embedding SQL migrations instead of depending on build-machine paths.
+- Release packaging by restoring the generated Tauri icon set and explicit bundle icon configuration.
+- Query/header/form row toggle alignment with a custom-styled checkbox that fits the app theme.
+- Multiple request editor layout issues around save/send actions, body/auth headers, and narrow-width behavior.
 
 ## [0.4.0] - 2026-03-21
 

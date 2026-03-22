@@ -23,6 +23,8 @@
   let isImporting = false;
   let importErrorText = "";
   let importSuccessText = "";
+  let isImportModalOpen = false;
+  let importFileInput: HTMLInputElement | null = null;
 
   $: requestedCollectionId = $page.url.searchParams.get("collectionId") ?? "";
 
@@ -138,6 +140,16 @@
       isImporting = false;
     }
   }
+
+  function openImportModal() {
+    importErrorText = "";
+    isImportModalOpen = true;
+  }
+
+  function closeImportModal() {
+    isImportModalOpen = false;
+    importErrorText = "";
+  }
 </script>
 
 <svelte:head>
@@ -154,14 +166,90 @@
     pendingDeleteCollectionId={$collectionsState.pendingDeleteCollectionId}
     pendingDeleteSavedRequestId={$collectionsState.pendingDeleteSavedRequestId}
     errorText={$collectionsState.errorText}
-    bind:importSource
     {isImporting}
-    {importErrorText}
     {importSuccessText}
+    onOpenImport={openImportModal}
     onSaveCollection={handleSaveCollection}
     onDeleteCollection={handleDeleteCollection}
     onOpenSavedRequest={handleOpenSavedRequest}
     onDeleteSavedRequest={handleDeleteSavedRequest}
-    onImportRequests={handleImportRequests}
   />
+
+  {#if isImportModalOpen}
+    <div
+      class="modal-backdrop"
+      role="button"
+      tabindex="0"
+      aria-label="Close import dialog"
+      on:click|self={closeImportModal}
+      on:keydown={(event) => {
+        if (event.key === "Escape" || event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          closeImportModal();
+        }
+      }}
+    >
+      <div class="panel save-dialog" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="import-collection-title">
+        <div class="editor-header">
+          <h2 id="import-collection-title">Import</h2>
+          <span class="history-meta">Postman Collection v2.1 JSON</span>
+        </div>
+
+        <div class="editor-block">
+          <p class="field-help">Import a Postman collection by opening a JSON file or pasting the collection payload directly.</p>
+
+          <label>
+            <span class="field-label">Paste source</span>
+            <textarea
+              class="text-input collections-import-source"
+              bind:value={importSource}
+              placeholder={'{ "info": { "name": "My collection" }, "item": [...] }'}
+            ></textarea>
+          </label>
+
+          <input
+            bind:this={importFileInput}
+            class="sr-only"
+            type="file"
+            accept=".json,application/json"
+            on:change={async (event) => {
+              const file = event.currentTarget.files?.[0];
+              if (!file) {
+                return;
+              }
+
+              importSource = await file.text();
+              event.currentTarget.value = "";
+            }}
+          />
+
+          {#if importErrorText}
+            <div class="response-error">{importErrorText}</div>
+          {/if}
+
+          <div class="collections-page-actions">
+            <button class="ghost-button" type="button" on:click={() => importFileInput?.click()}>
+              Open JSON file
+            </button>
+            <button
+              class="send-button"
+              type="button"
+              on:click={async () => {
+                await handleImportRequests();
+                if (!importErrorText) {
+                  closeImportModal();
+                }
+              }}
+              disabled={isImporting}
+            >
+              {isImporting ? "Importing..." : "Import"}
+            </button>
+            <button class="ghost-button" type="button" on:click={closeImportModal}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  {/if}
 </AppShell>

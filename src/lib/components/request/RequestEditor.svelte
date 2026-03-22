@@ -322,16 +322,25 @@
 
   {#if activePanel === "body"}
     <div class="editor-block">
-      <div class="editor-header split">
+      <div class="editor-header">
         <h2>Body</h2>
-        <select class="body-mode-select" value={request.body.mode} on:change={(event) => updateBodyMode(event.currentTarget.value as BodyMode)}>
-          <option value="none">None</option>
-          <option value="json">JSON</option>
-          <option value="raw">Raw</option>
-          <option value="form-urlencoded">Form URL Encoded</option>
-          <option value="multipart">Multipart</option>
-        </select>
+        <label class="body-mode-control">
+          <span class="sr-only">Body type</span>
+          <select class="body-mode-select" value={request.body.mode} on:change={(event) => updateBodyMode(event.currentTarget.value as BodyMode)}>
+            <option value="none">None</option>
+            <option value="json">JSON</option>
+            <option value="raw">Raw</option>
+            <option value="form-urlencoded">Form URL Encoded</option>
+            <option value="multipart">Multipart</option>
+          </select>
+        </label>
       </div>
+
+      {#if request.body.mode === "none"}
+        <div class="empty-state body-empty-state">
+          This request will be sent without a body.
+        </div>
+      {/if}
 
       {#if request.body.mode === "json" || request.body.mode === "raw"}
         <VariableField
@@ -380,91 +389,106 @@
   {/if}
 
   {#if activePanel === "auth"}
-    <div class="editor-block auth-grid">
-      <label>
-        <span class="field-label">Type</span>
-        <select class="text-input" value={request.auth.type} on:change={(event) => updateAuthType(event.currentTarget.value as AuthType)}>
-          <option value="none">None</option>
-          <option value="basic">Basic</option>
-          <option value="bearer">Bearer</option>
-          <option value="api-key">API key</option>
-        </select>
-      </label>
+    <div class="editor-block">
+      <div class="editor-header">
+        <h2>Auth</h2>
+        <label class="body-mode-control">
+          <span class="sr-only">Auth type</span>
+          <select class="body-mode-select" value={request.auth.type} on:change={(event) => updateAuthType(event.currentTarget.value as AuthType)}>
+            <option value="none">None</option>
+            <option value="basic">Basic</option>
+            <option value="bearer">Bearer</option>
+            <option value="api-key">API key</option>
+          </select>
+        </label>
+      </div>
+
+      {#if request.auth.type === "none"}
+        <div class="empty-state body-empty-state">
+          This request will be sent without authentication.
+        </div>
+      {/if}
 
       {#if request.auth.type === "basic"}
-        <label>
-          <span class="field-label">Username</span>
-          <VariableField
-            className="text-input"
-            value={request.auth.basicUsername}
-            variables={environmentVariables}
-            onValueInput={(nextValue) =>
-              (request = {
-                ...request,
-                auth: { ...request.auth, basicUsername: nextValue }
-              })}
-          />
-        </label>
-        <label>
-          <span class="field-label">Password</span>
-          <VariableField
-            className="text-input"
-            type="password"
-            value={request.auth.basicPassword}
-            variables={environmentVariables}
-            onValueInput={(nextValue) =>
-              (request = {
-                ...request,
-                auth: { ...request.auth, basicPassword: nextValue }
-              })}
-          />
-        </label>
+        <div class="auth-grid">
+          <label>
+            <span class="field-label">Username</span>
+            <VariableField
+              className="text-input"
+              value={request.auth.basicUsername}
+              variables={environmentVariables}
+              onValueInput={(nextValue) =>
+                (request = {
+                  ...request,
+                  auth: { ...request.auth, basicUsername: nextValue }
+                })}
+            />
+          </label>
+          <label>
+            <span class="field-label">Password</span>
+            <VariableField
+              className="text-input"
+              type="password"
+              value={request.auth.basicPassword}
+              variables={environmentVariables}
+              onValueInput={(nextValue) =>
+                (request = {
+                  ...request,
+                  auth: { ...request.auth, basicPassword: nextValue }
+                })}
+            />
+          </label>
+        </div>
       {/if}
 
       {#if request.auth.type === "bearer"}
-        <label>
-          <span class="field-label">Token</span>
-          <VariableField
-            className="text-input"
-            type="password"
-            value={request.auth.bearerToken}
-            variables={environmentVariables}
-            placeholder={"{{api_token}}"}
-            onValueInput={(nextValue) =>
-              (request = {
-                ...request,
-                auth: { ...request.auth, bearerToken: nextValue }
-              })}
-          />
-        </label>
+        <div class="auth-grid">
+          <label>
+            <span class="field-label">Token</span>
+            <VariableField
+              className="text-input"
+              type="password"
+              value={request.auth.bearerToken}
+              variables={environmentVariables}
+              placeholder={"{{api_token}}"}
+              onValueInput={(nextValue) =>
+                (request = {
+                  ...request,
+                  auth: { ...request.auth, bearerToken: nextValue }
+                })}
+            />
+          </label>
+        </div>
       {/if}
 
       {#if request.auth.type === "api-key"}
-        <label>
-          <span class="field-label">Key</span>
-          <input class="text-input" bind:value={request.auth.apiKeyName} />
-        </label>
-        <label>
-          <span class="field-label">Value</span>
-          <VariableField
-            className="text-input"
-            type="password"
-            value={request.auth.apiKeyValue}
-            variables={environmentVariables}
-            onValueInput={(nextValue) =>
-              (request = {
-                ...request,
-                auth: { ...request.auth, apiKeyValue: nextValue }
-              })}
-          />
-        </label>
-        <label>
-          <span class="field-label">Send in</span>
-          <select class="text-input" bind:value={request.auth.apiKeyIn}>
-            <option value="header">Header</option>
-            <option value="query">Query parameter</option>
-          </select>
-        </label>
+        <div class="auth-grid">
+          <label>
+            <span class="field-label">Key</span>
+            <input class="text-input" bind:value={request.auth.apiKeyName} />
+          </label>
+          <label>
+            <span class="field-label">Value</span>
+            <VariableField
+              className="text-input"
+              type="password"
+              value={request.auth.apiKeyValue}
+              variables={environmentVariables}
+              onValueInput={(nextValue) =>
+                (request = {
+                  ...request,
+                  auth: { ...request.auth, apiKeyValue: nextValue }
+                })}
+            />
+          </label>
+          <label>
+            <span class="field-label">Send in</span>
+            <select class="text-input" bind:value={request.auth.apiKeyIn}>
+              <option value="header">Header</option>
+              <option value="query">Query parameter</option>
+            </select>
+          </label>
+        </div>
       {/if}
     </div>
   {/if}

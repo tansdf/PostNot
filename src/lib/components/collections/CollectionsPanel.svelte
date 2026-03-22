@@ -9,17 +9,13 @@
   export let pendingDeleteCollectionId = "";
   export let pendingDeleteSavedRequestId = "";
   export let errorText = "";
-  export let importSource = "";
   export let isImporting = false;
-  export let importErrorText = "";
   export let importSuccessText = "";
+  export let onOpenImport: () => Promise<void> | void = () => {};
   export let onSaveCollection: (name: string, description: string) => Promise<boolean> | boolean = () => false;
   export let onDeleteCollection: (collectionId: string) => Promise<void> | void = () => {};
   export let onOpenSavedRequest: (itemId: string) => Promise<void> | void = () => {};
   export let onDeleteSavedRequest: (itemId: string) => Promise<void> | void = () => {};
-  export let onImportRequests: () => Promise<void> | void = () => {};
-
-  let importFileInput: HTMLInputElement | null = null;
 
   let editableCollectionId = "";
   let draftName = "";
@@ -60,64 +56,20 @@
   }
 </script>
 
-<section class="panel collections-import-panel">
-  <div class="collections-column-header">
-    <h2>Import</h2>
-    <span class="history-meta">Postman Collection v2.1 JSON</span>
-  </div>
-
-  <p class="field-help">Import a Postman collection by opening a JSON file or pasting the collection payload directly.</p>
-
-  <label>
-    <span class="field-label">Paste source</span>
-    <textarea
-      class="text-input collections-import-source"
-      bind:value={importSource}
-      placeholder={'{ "info": { "name": "My collection" }, "item": [...] }'}
-    ></textarea>
-  </label>
-
-  <input
-    bind:this={importFileInput}
-    class="sr-only"
-    type="file"
-    accept=".json,application/json"
-    on:change={async (event) => {
-      const file = event.currentTarget.files?.[0];
-      if (!file) {
-        return;
-      }
-
-      importSource = await file.text();
-      event.currentTarget.value = "";
-    }}
-  />
-
-  {#if importErrorText}
-    <div class="response-error">{importErrorText}</div>
-  {/if}
-
-  {#if importSuccessText}
-    <div class="response-placeholder collections-import-success">{importSuccessText}</div>
-  {/if}
-
-  <div class="collections-page-actions">
-    <button class="ghost-button" type="button" on:click={() => importFileInput?.click()}>
-      Open JSON file
-    </button>
-    <button class="send-button" type="button" on:click={onImportRequests} disabled={isImporting}>
-      {isImporting ? "Importing..." : "Import"}
-    </button>
-  </div>
-</section>
-
 <div class="workspace-grid">
   <section class="panel collections-page-panel">
     <div class="editor-header">
       <h1>Collection View</h1>
-      {#if isCollectionsLoading}
-        <span class="history-meta">Loading...</span>
-      {/if}
+      <div class="collections-page-actions">
+        {#if isImporting}
+          <span class="history-meta">Importing...</span>
+        {:else if importSuccessText}
+          <span class="history-meta">{importSuccessText}</span>
+        {:else if isCollectionsLoading}
+          <span class="history-meta">Loading...</span>
+        {/if}
+        <button class="ghost-button" type="button" on:click={onOpenImport}>Import</button>
+      </div>
     </div>
 
     {#if errorText}
