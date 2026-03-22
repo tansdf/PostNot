@@ -100,7 +100,7 @@
 </script>
 
 <section class="panel request-panel">
-  <div class="request-topbar">
+  <div class="request-header-grid">
     <div class="request-name-block">
       <label class="field-label" for="request-name">Request</label>
       <input
@@ -111,28 +111,10 @@
       />
     </div>
 
-    <div class="request-actions">
-      <button class="ghost-button request-save-button" type="button" on:click={onSave} disabled={saveDisabled || isSaving}>
-        {isSaving ? "Saving..." : saveLabel}
-      </button>
+    <button class="ghost-button request-save-control" type="button" on:click={onSave} disabled={saveDisabled || isSaving}>
+      {isSaving ? "Saving..." : saveLabel}
+    </button>
 
-      <button
-        class:cancel-button={isSending}
-        class="send-button"
-        type="button"
-        on:click={() => (isSending ? onCancel() : onSend())}
-        disabled={isCanceling}
-      >
-        {#if isSending}
-          {isCanceling ? "Canceling..." : "Cancel"}
-        {:else}
-          Send
-        {/if}
-      </button>
-    </div>
-  </div>
-
-  <div class="url-row">
     <select class="method-select" bind:value={request.method}>
       <option value="GET">GET</option>
       <option value="POST">POST</option>
@@ -143,14 +125,30 @@
       <option value="OPTIONS">OPTIONS</option>
     </select>
 
-    <VariableField
-      className="text-input url-input"
-      value={request.url}
-      variables={environmentVariables}
-      placeholder="https://api.example.com/resource"
-      spellcheck={false}
-      onValueInput={(nextValue) => (request = { ...request, url: nextValue })}
-    />
+    <div class="request-url-field">
+      <VariableField
+        className="text-input url-input"
+        value={request.url}
+        variables={environmentVariables}
+        placeholder="https://api.example.com/resource"
+        spellcheck={false}
+        onValueInput={(nextValue) => (request = { ...request, url: nextValue })}
+      />
+    </div>
+
+    <button
+      class:cancel-button={isSending}
+      class="send-button request-send-control"
+      type="button"
+      on:click={() => (isSending ? onCancel() : onSend())}
+      disabled={isCanceling}
+    >
+      {#if isSending}
+        {isCanceling ? "Canceling..." : "Cancel"}
+      {:else}
+        Send
+      {/if}
+    </button>
   </div>
 
   <div class="panel-tabs">

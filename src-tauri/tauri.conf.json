@@ -14,8 +14,8 @@
       {
         "title": "PostNot",
         "label": "main",
-        "width": 1520,
-        "height": 980,
+        "width": 1480,
+        "height": 900,
         "minWidth": 1100,
         "minHeight": 760,
         "resizable": true
