@@ -4,6 +4,17 @@ This changelog was reconstructed from the project chat history and is now the tr
 
 The project currently uses pre-1.0 semantic versioning. Minor versions mark meaningful product milestones, while patch versions should be used for smaller fixes and polish.
 
+## [Unreleased]
+
+### Added
+
+- Paste-based import for Postman Collection v2.1 JSON on the dedicated `/collections` page.
+- Paste-based import for single cURL commands into the selected collection or a fallback imported collection.
+
+### Changed
+
+- Updated the project docs to reflect that request import now supports Postman collections and cURL, while export remains future work.
+
 ## [0.4.0] - 2026-03-21
 
 ### Added

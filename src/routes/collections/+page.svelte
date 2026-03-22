@@ -4,6 +4,7 @@
   import { get } from "svelte/store";
 
   import CollectionsPanel from "$lib/components/collections/CollectionsPanel.svelte";
+  import { importRequests } from "$lib/api/commands";
   import AppShell from "$lib/components/layout/AppShell.svelte";
   import {
     collectionsState,
@@ -16,9 +17,12 @@
     selectedCollection,
     selectedSavedRequests
   } from "$lib/stores/collections";
-
   let isSavingCollection = false;
   let requestedCollectionId = "";
+  let importSource = "";
+  let isImporting = false;
+  let importErrorText = "";
+  let importSuccessText = "";
 
   $: requestedCollectionId = $page.url.searchParams.get("collectionId") ?? "";
 
@@ -96,6 +100,44 @@
     await removeSavedRequestItem(collection.id, itemId);
     await loadCollections(collection.id);
   }
+
+  async function handleImportRequests() {
+    importErrorText = "";
+    importSuccessText = "";
+
+    const source = importSource.trim();
+    if (!source) {
+      importErrorText = "Open a Postman collection JSON file or paste its JSON payload to import.";
+      return;
+    }
+
+    isImporting = true;
+
+    try {
+      const result = await importRequests({
+        format: "postman",
+        source,
+        targetCollectionId: null
+      });
+
+      await loadCollections(result.collectionId);
+
+      await goto(`/collections?collectionId=${encodeURIComponent(result.collectionId)}`, {
+        replaceState: true,
+        noScroll: true,
+        keepFocus: true
+      });
+
+      importSuccessText = `${result.importedRequestCount} request${
+        result.importedRequestCount === 1 ? "" : "s"
+      } imported into ${result.collectionName}.`;
+      importSource = "";
+    } catch (error) {
+      importErrorText = error instanceof Error ? error.message : String(error);
+    } finally {
+      isImporting = false;
+    }
+  }
 </script>
 
 <svelte:head>
@@ -112,9 +154,14 @@
     pendingDeleteCollectionId={$collectionsState.pendingDeleteCollectionId}
     pendingDeleteSavedRequestId={$collectionsState.pendingDeleteSavedRequestId}
     errorText={$collectionsState.errorText}
+    bind:importSource
+    {isImporting}
+    {importErrorText}
+    {importSuccessText}
     onSaveCollection={handleSaveCollection}
     onDeleteCollection={handleDeleteCollection}
     onOpenSavedRequest={handleOpenSavedRequest}
     onDeleteSavedRequest={handleDeleteSavedRequest}
+    onImportRequests={handleImportRequests}
   />
 </AppShell>

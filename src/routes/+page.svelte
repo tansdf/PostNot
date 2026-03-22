@@ -9,6 +9,7 @@
     clearHistory,
     getEnvironment,
     getHistoryEntry,
+    importCurlRequestToDraft,
     getSavedRequest,
     getSettings,
     listEnvironments,
@@ -62,6 +63,10 @@
   let activeSavedRequestId = "";
   let activeSavedRequestCollectionId = "";
   let isSaveDialogOpen = false;
+  let isCurlImportDialogOpen = false;
+  let curlImportSource = "";
+  let isImportingCurl = false;
+  let curlImportErrorText = "";
   let saveTargetCollectionId = "";
   let lastLoadedSavedRequestId = "";
   let isLoadingSavedRequest = false;
@@ -328,6 +333,63 @@
     requestSaveErrorText = "";
   }
 
+  async function handleNewRequest() {
+    request = createRequestDraft();
+    response = null;
+    requestSaveErrorText = "";
+    activeSavedRequestId = "";
+    activeSavedRequestCollectionId = "";
+    lastLoadedSavedRequestId = "";
+    await goto("/", {
+      replaceState: true,
+      noScroll: true,
+      keepFocus: true
+    });
+  }
+
+  function openCurlImportDialog() {
+    curlImportSource = "";
+    curlImportErrorText = "";
+    isCurlImportDialogOpen = true;
+  }
+
+  function closeCurlImportDialog() {
+    isCurlImportDialogOpen = false;
+    curlImportSource = "";
+    curlImportErrorText = "";
+  }
+
+  async function handleImportCurl() {
+    curlImportErrorText = "";
+    const source = curlImportSource.trim();
+    if (!source) {
+      curlImportErrorText = "Paste a complete cURL command to import.";
+      return;
+    }
+
+    isImportingCurl = true;
+
+    try {
+      const imported = await importCurlRequestToDraft({ source });
+      request = structuredClone(imported.request);
+      response = null;
+      requestSaveErrorText = "";
+      activeSavedRequestId = "";
+      activeSavedRequestCollectionId = "";
+      lastLoadedSavedRequestId = "";
+      closeCurlImportDialog();
+      await goto("/", {
+        replaceState: true,
+        noScroll: true,
+        keepFocus: true
+      });
+    } catch (error) {
+      curlImportErrorText = error instanceof Error ? error.message : String(error);
+    } finally {
+      isImportingCurl = false;
+    }
+  }
+
   function handleSaveDialogBackdropKeydown(event: KeyboardEvent) {
     if (event.key === "Escape" || event.key === "Enter" || event.key === " ") {
       event.preventDefault();
@@ -417,6 +479,8 @@
       isSaving={$collectionsState.isSavingRequest}
       saveLabel={activeSavedRequestId ? "Update" : "Save"}
       saveDisabled={isSending}
+      onNewRequest={handleNewRequest}
+      onOpenCurlImport={openCurlImportDialog}
       onSend={handleSend}
       onCancel={handleCancelRequest}
       onSave={handleSaveRequest}
@@ -487,6 +551,52 @@
               {$collectionsState.isSavingRequest ? "Saving..." : "Save request"}
             </button>
             <button class="ghost-button" type="button" on:click={closeSaveDialog}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  {#if isCurlImportDialogOpen}
+    <div
+      class="modal-backdrop"
+      role="button"
+      tabindex="0"
+      aria-label="Close cURL import dialog"
+      on:click|self={closeCurlImportDialog}
+      on:keydown={(event) => {
+        if (event.key === "Escape" || event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          closeCurlImportDialog();
+        }
+      }}
+    >
+      <div class="panel save-dialog" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="curl-import-title">
+        <div class="editor-header">
+          <h2 id="curl-import-title">Import cURL</h2>
+        </div>
+
+        <div class="editor-block">
+          <label>
+            <span class="field-label">Paste cURL command</span>
+            <textarea
+              class="text-input collections-import-source"
+              bind:value={curlImportSource}
+              placeholder={'curl --request GET https://api.example.com/items -H "Authorization: Bearer token"'}
+            ></textarea>
+          </label>
+
+          {#if curlImportErrorText}
+            <div class="response-error">{curlImportErrorText}</div>
+          {/if}
+
+          <div class="collections-page-actions">
+            <button class="send-button" type="button" on:click={handleImportCurl} disabled={isImportingCurl}>
+              {isImportingCurl ? "Importing..." : "Import request"}
+            </button>
+            <button class="ghost-button" type="button" on:click={closeCurlImportDialog}>
               Cancel
             </button>
           </div>

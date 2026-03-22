@@ -60,6 +60,8 @@ This section reflects the code currently implemented in the repository.
 - Cancel in-flight request
 - Collections and saved requests
 - Environments and variable resolution
+- Postman collection JSON import
+- cURL command import
 - Settings page wired to backend persistence
 - History panel wired to backend persistence
 - History detail inspection from persisted snapshots
@@ -67,7 +69,8 @@ This section reflects the code currently implemented in the repository.
 
 ### Not Yet Implemented
 
-- Postman import/export
+- Postman environment import
+- Postman export
 - Tauri updater integration
 - Multi-tab workflow
 - Pre-request scripts
@@ -496,6 +499,8 @@ Ship a usable desktop app that can compose and execute HTTP requests locally, pe
 - collections and saved requests
 - sidebar-first collection browsing and dedicated collection editing
 - environments and variable resolution
+- Postman collection JSON import
+- cURL command import
 - response viewer
 - SQLite initialization and migrations
 - persisted settings
@@ -516,7 +521,7 @@ Ship a usable desktop app that can compose and execute HTTP requests locally, pe
 Recommended implementation order from the current state:
 
 1. Run the app with `tauri dev` and verify end-to-end behavior manually
-2. Add Postman import/export
+2. Add Postman environment import and export
 3. Improve multipart and native file workflows
 4. Add Tauri updater integration
 5. Add collection folders and richer request organization
@@ -534,4 +539,4 @@ These are still unresolved:
 
 Treat the repository as being in an active Milestone 1 state, not full MVP completion.
 
-The design is now grounded in what the code actually does: persisted settings influence request execution, history is stored in SQLite, environments resolve variables at send time, collections are part of the working UI, and the frontend surfaces all four. The next work should stay focused on completing Milestone 1 with import/export, updater work, and remaining UX polish.
+The design is now grounded in what the code actually does: persisted settings influence request execution, history is stored in SQLite, environments resolve variables at send time, collections are part of the working UI, and import can pull requests in from Postman collections and cURL. The next work should stay focused on completing the remaining import/export surface, updater work, and remaining UX polish.

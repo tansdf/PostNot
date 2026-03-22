@@ -101,6 +101,29 @@ export type CreateCollectionInput = {
   description: string;
 };
 
+export type ImportFormat = "postman" | "curl";
+
+export type ImportRequestInput = {
+  format: ImportFormat;
+  source: string;
+  targetCollectionId?: string | null;
+};
+
+export type ImportResult = {
+  collectionId: string;
+  collectionName: string;
+  importedRequestCount: number;
+  createdCollection: boolean;
+};
+
+export type CurlImportInput = {
+  source: string;
+};
+
+export type ImportedRequestDraft = {
+  request: RequestDraft;
+};
+
 export type SavedRequestSummary = {
   id: string;
   collectionId: string;

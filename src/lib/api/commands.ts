@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   type CollectionSummary,
   type CreateCollectionInput,
+  type CurlImportInput,
   createDefaultSettings,
   type AppSettings,
   type EnvironmentDetail,
@@ -9,6 +10,9 @@ import {
   type EnvironmentSummary,
   type HistoryEntryDetail,
   type HistoryEntrySummary,
+  type ImportRequestInput,
+  type ImportResult,
+  type ImportedRequestDraft,
   type RequestDraft,
   type ResponsePayload,
   type SavedRequestDetail,
@@ -355,6 +359,72 @@ export async function deleteSavedRequest(itemId: string): Promise<void> {
   }
 
   await invoke("delete_saved_request", { itemId });
+}
+
+export async function importRequests(input: ImportRequestInput): Promise<ImportResult> {
+  if (!hasTauriRuntime()) {
+    return {
+      collectionId: input.targetCollectionId ?? `mock-imported-${Date.now()}`,
+      collectionName: input.format === "curl" ? "Imported cURL" : "Imported Postman collection",
+      importedRequestCount: input.format === "curl" ? 1 : 3,
+      createdCollection: !input.targetCollectionId
+    };
+  }
+
+  return invoke<ImportResult>("import_requests", { input });
+}
+
+export async function importCurlRequestToDraft(input: CurlImportInput): Promise<ImportedRequestDraft> {
+  if (!hasTauriRuntime()) {
+    const url = input.source.match(/https?:\/\/\S+/)?.[0] ?? "https://example.com";
+    return {
+      request: {
+        name: `GET ${url}`,
+        method: "GET",
+        url,
+        queryParams: [
+          {
+            id: `mock-query-${Date.now()}`,
+            key: "",
+            value: "",
+            enabled: true
+          }
+        ],
+        headers: [
+          {
+            id: `mock-header-${Date.now()}`,
+            key: "",
+            value: "",
+            enabled: true
+          }
+        ],
+        body: {
+          mode: "none",
+          raw: "",
+          form: [
+            {
+              id: `mock-form-${Date.now()}`,
+              key: "",
+              value: "",
+              enabled: true
+            }
+          ],
+          files: []
+        },
+        auth: {
+          type: "none",
+          basicUsername: "",
+          basicPassword: "",
+          bearerToken: "",
+          apiKeyName: "",
+          apiKeyValue: "",
+          apiKeyIn: "header"
+        }
+      }
+    };
+  }
+
+  return invoke<ImportedRequestDraft>("import_curl_request_to_draft", { input });
 }
 
 export async function listEnvironments(): Promise<EnvironmentSummary[]> {

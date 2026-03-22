@@ -53,6 +53,8 @@ pub fn run() -> Result<(), String> {
             commands::environments::update_environment,
             commands::environments::delete_environment,
             commands::environments::set_active_environment,
+            commands::imports::import_requests,
+            commands::imports::import_curl_request_to_draft,
         ])
         .run(tauri::generate_context!())
         .map_err(|error| error.to_string())

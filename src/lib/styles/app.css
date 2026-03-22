@@ -123,6 +123,37 @@ button {
   padding: 22px;
 }
 
+.request-section-header,
+.request-section-title,
+.request-section-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.request-section-header {
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.request-section-title {
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.request-section-header h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.request-header-button {
+  min-width: 0;
+  min-height: 2.1rem;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.92rem;
+  line-height: 1.1;
+}
+
 .request-header-grid {
   display: grid;
   gap: 12px;
@@ -210,6 +241,12 @@ button {
   margin-bottom: 6px;
   color: var(--text-secondary);
   font-size: 0.88rem;
+}
+
+.field-help {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.92rem;
 }
 
 .text-input,
@@ -759,6 +796,13 @@ select option {
   padding: 22px;
 }
 
+.collections-import-panel {
+  padding: 22px;
+  margin-bottom: 18px;
+  display: grid;
+  gap: 14px;
+}
+
 .status-grid,
 .settings-form {
   display: grid;
@@ -797,6 +841,43 @@ select option {
 .collections-detail-form {
   display: grid;
   gap: 10px;
+}
+
+.collections-import-grid {
+  display: grid;
+  grid-template-columns: minmax(15rem, 20rem) minmax(0, 1fr);
+  gap: 14px;
+  align-items: end;
+}
+
+.collections-import-target {
+  min-height: 100%;
+}
+
+.collections-import-source {
+  min-height: 13rem;
+  resize: vertical;
+  font-family: var(--font-mono);
+}
+
+.collections-import-success {
+  color: var(--text-primary);
+  border: 1px solid var(--border-soft);
+  background: var(--surface-subtle);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .collection-item {
@@ -1219,6 +1300,14 @@ select option {
     grid-row: 1;
   }
 
+  .request-section-header {
+    align-items: flex-start;
+  }
+
+  .request-section-title {
+    width: 100%;
+  }
+
   .request-header-grid {
     grid-template-columns: 7.5rem minmax(0, 1fr) auto;
     align-items: start;
@@ -1290,5 +1379,11 @@ select option {
 
   .header-list {
     max-height: clamp(12rem, 34vh, 22rem);
+  }
+}
+
+@media (max-width: 900px) {
+  .collections-import-grid {
+    grid-template-columns: 1fr;
   }
 }

@@ -9,6 +9,8 @@
   export let saveLabel = "Save";
   export let saveDisabled = false;
   export let environmentVariables: KeyValueRow[] = [];
+  export let onNewRequest: () => Promise<void> | void = () => {};
+  export let onOpenCurlImport: () => Promise<void> | void = () => {};
   export let onSend: () => Promise<void> | void = () => {};
   export let onCancel: () => Promise<void> | void = () => {};
   export let onSave: () => Promise<void> | void = () => {};
@@ -100,9 +102,16 @@
 </script>
 
 <section class="panel request-panel">
+  <div class="request-section-header">
+    <div class="request-section-title">
+      <h2>Request</h2>
+      <button class="ghost-button request-header-button" type="button" on:click={onNewRequest}>New</button>
+      <button class="ghost-button request-header-button" type="button" on:click={onOpenCurlImport}>Import</button>
+    </div>
+  </div>
+
   <div class="request-header-grid">
     <div class="request-name-block">
-      <label class="field-label" for="request-name">Request</label>
       <input
         id="request-name"
         class="text-input"
