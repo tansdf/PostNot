@@ -374,9 +374,54 @@ select option {
   align-items: flex-start;
 }
 
-.kv-row input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
+.row-toggle {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  margin: 14px 2px 0 2px;
+  border: 1px solid var(--border-soft);
+  border-radius: 5px;
+  background: var(--control-bg);
+  display: inline-grid;
+  place-content: center;
+  flex: 0 0 auto;
+  transition: 180ms ease;
+  box-shadow: inset 0 0 0 1px transparent;
+}
+
+.row-toggle::before {
+  content: "";
+  width: 8px;
+  height: 5px;
+  border-left: 2px solid var(--control-selected-text);
+  border-bottom: 2px solid var(--control-selected-text);
+  transform: rotate(-45deg) scale(0);
+  transform-origin: center;
+  transition: transform 160ms ease;
+}
+
+.row-toggle:hover {
+  background: var(--control-hover-bg);
+}
+
+.row-toggle:focus-visible {
+  outline: none;
+  border-color: var(--control-selected-border);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--control-selected-border) 26%, transparent);
+}
+
+.row-toggle:checked {
+  background: var(--control-selected-bg);
+  border-color: var(--control-selected-border);
+}
+
+.row-toggle:checked::before {
+  transform: rotate(-45deg) scale(1);
+}
+
+.row-toggle:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .kv-row > .text-input,

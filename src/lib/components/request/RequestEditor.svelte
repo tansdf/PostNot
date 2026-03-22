@@ -24,6 +24,89 @@
     { id: "auth", label: "Auth" }
   ] as const;
 
+  function splitUrlAndQuery(value: string) {
+    const hashIndex = value.indexOf("#");
+    const hash = hashIndex >= 0 ? value.slice(hashIndex) : "";
+    const beforeHash = hashIndex >= 0 ? value.slice(0, hashIndex) : value;
+    const queryIndex = beforeHash.indexOf("?");
+
+    if (queryIndex < 0) {
+      return {
+        baseUrl: value,
+        queryString: ""
+      };
+    }
+
+    return {
+      baseUrl: `${beforeHash.slice(0, queryIndex)}${hash}`,
+      queryString: beforeHash.slice(queryIndex + 1)
+    };
+  }
+
+  function safeDecodeQueryValue(value: string) {
+    try {
+      return decodeURIComponent(value.replace(/\+/g, " "));
+    } catch {
+      return value;
+    }
+  }
+
+  function parseQueryRows(queryString: string) {
+    if (!queryString.trim()) {
+      return [];
+    }
+
+    return queryString
+      .split("&")
+      .filter((segment) => segment.length > 0)
+      .map((segment) => {
+        const [rawKey, ...rawValueParts] = segment.split("=");
+        return {
+          id: createKeyValueRow().id,
+          key: safeDecodeQueryValue(rawKey ?? ""),
+          value: safeDecodeQueryValue(rawValueParts.join("=")),
+          enabled: true
+        };
+      });
+  }
+
+  function buildDisplayUrl(baseUrl: string, rows: KeyValueRow[]) {
+    const activeRows = rows.filter((row) => row.enabled && row.key.trim());
+    if (activeRows.length === 0) {
+      return baseUrl;
+    }
+
+    const hashIndex = baseUrl.indexOf("#");
+    const hash = hashIndex >= 0 ? baseUrl.slice(hashIndex) : "";
+    const beforeHash = hashIndex >= 0 ? baseUrl.slice(0, hashIndex) : baseUrl;
+    const queryString = activeRows
+      .map((row) => `${row.key}${row.value.length > 0 ? `=${row.value}` : ""}`)
+      .join("&");
+
+    return `${beforeHash}?${queryString}${hash}`;
+  }
+
+  function syncUrlInput(nextValue: string) {
+    const { baseUrl, queryString } = splitUrlAndQuery(nextValue);
+    const parsedRows = parseQueryRows(queryString);
+
+    request = {
+      ...request,
+      url: baseUrl,
+      queryParams: parsedRows.length > 0 ? parsedRows : [createKeyValueRow()]
+    };
+  }
+
+  function toggleRow(kind: "queryParams" | "headers", index: number, enabled: boolean) {
+    updateRows(kind, index, { enabled });
+  }
+
+  function toggleFormEnabled(index: number, enabled: boolean) {
+    updateFormRow(index, { enabled });
+  }
+
+  $: displayUrl = buildDisplayUrl(request.url, request.queryParams);
+
   function updateRows(kind: "queryParams" | "headers", index: number, patch: Partial<KeyValueRow>) {
     const nextRows = request[kind].map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row));
     request = { ...request, [kind]: nextRows };
@@ -137,11 +220,11 @@
     <div class="request-url-field">
       <VariableField
         className="text-input url-input"
-        value={request.url}
+        value={displayUrl}
         variables={environmentVariables}
         placeholder="https://api.example.com/resource"
         spellcheck={false}
-        onValueInput={(nextValue) => (request = { ...request, url: nextValue })}
+        onValueInput={syncUrlInput}
       />
     </div>
 
@@ -183,7 +266,13 @@
       <div class="row-list">
         {#each request.queryParams as row, index (row.id)}
           <div class="kv-row">
-            <input type="checkbox" checked={row.enabled} on:change={(event) => updateRows("queryParams", index, { enabled: event.currentTarget.checked })} />
+            <input
+              class="row-toggle"
+              type="checkbox"
+              checked={row.enabled}
+              aria-label="Enable query parameter row"
+              on:change={(event) => toggleRow("queryParams", index, event.currentTarget.checked)}
+            />
             <input class="text-input" value={row.key} placeholder="Key" on:input={(event) => updateRows("queryParams", index, { key: event.currentTarget.value })} />
             <VariableField
               className="text-input"
@@ -209,7 +298,13 @@
       <div class="row-list">
         {#each request.headers as row, index (row.id)}
           <div class="kv-row">
-            <input type="checkbox" checked={row.enabled} on:change={(event) => updateRows("headers", index, { enabled: event.currentTarget.checked })} />
+            <input
+              class="row-toggle"
+              type="checkbox"
+              checked={row.enabled}
+              aria-label="Enable header row"
+              on:change={(event) => toggleRow("headers", index, event.currentTarget.checked)}
+            />
             <input class="text-input" value={row.key} placeholder="Header" on:input={(event) => updateRows("headers", index, { key: event.currentTarget.value })} />
             <VariableField
               className="text-input"
@@ -253,7 +348,13 @@
         <div class="row-list">
           {#each request.body.form as row, index (row.id)}
             <div class="kv-row">
-              <input type="checkbox" checked={row.enabled} on:change={(event) => updateFormRow(index, { enabled: event.currentTarget.checked })} />
+              <input
+                class="row-toggle"
+                type="checkbox"
+                checked={row.enabled}
+                aria-label="Enable form field row"
+                on:change={(event) => toggleFormEnabled(index, event.currentTarget.checked)}
+              />
               <input class="text-input" value={row.key} placeholder="Field" on:input={(event) => updateFormRow(index, { key: event.currentTarget.value })} />
               <VariableField
                 className="text-input"
