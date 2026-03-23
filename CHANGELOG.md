@@ -4,6 +4,21 @@ This changelog was reconstructed from the project chat history and is now the tr
 
 The project currently uses pre-1.0 semantic versioning. Minor versions mark meaningful product milestones, while patch versions should be used for smaller fixes and polish.
 
+## [0.5.1] - 2026-03-23
+
+### Changed
+
+- Refined the history split-view behavior so empty and selected detail states behave more intentionally on packaged desktop builds.
+- Improved request editor consistency across body, auth, query, and import workflows with additional header and control polish.
+
+### Fixed
+
+- Windows packaged startup and installer behavior by embedding migrations and improving release diagnostics.
+- Multi-platform release packaging issues around Tauri bundle icons and generated icon assets.
+- History layout issues on Windows fullscreen and windowed builds, including URL truncation, overflow handling, and split-pane sizing.
+- Request editor control alignment, custom checkbox styling, and query parameter URL synchronization polish.
+- Collections import modal alignment and other packaged-build visual regressions.
+
 ## [0.5.0] - 2026-03-22
 
 ### Added
