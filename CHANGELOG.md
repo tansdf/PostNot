@@ -4,6 +4,17 @@ This changelog was reconstructed from the project chat history and is now the tr
 
 The project currently uses pre-1.0 semantic versioning. Minor versions mark meaningful product milestones, while patch versions should be used for smaller fixes and polish.
 
+## [0.5.2] - 2026-03-23
+
+### Changed
+
+- Polished Windows/Tauri scroll areas with theme-aware custom scrollbar styling so dense split views feel more integrated with the app.
+
+### Fixed
+
+- Medium-width history entry overflow caused by long request URLs stretching the card and preview body width.
+- Additional history split-view sizing issues in selected and empty detail states on packaged desktop builds.
+
 ## [0.5.1] - 2026-03-23
 
 ### Changed

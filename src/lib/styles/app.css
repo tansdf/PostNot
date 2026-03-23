@@ -19,6 +19,34 @@ body {
 
 * {
   box-sizing: border-box;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 button,
@@ -1108,6 +1136,7 @@ select option {
   display: grid;
   gap: 10px;
   min-width: 0;
+  overflow: hidden;
 }
 
 .history-item-active {
@@ -1117,6 +1146,7 @@ select option {
 
 .history-item-summary {
   min-width: 0;
+  flex: 1 1 auto;
 }
 
 .history-item-top,
@@ -1126,6 +1156,7 @@ select option {
   display: flex;
   gap: 12px;
   align-items: center;
+  min-width: 0;
 }
 
 .history-item-top,
@@ -1139,6 +1170,8 @@ select option {
 }
 
 .history-url {
+  display: block;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1165,6 +1198,10 @@ select option {
   border-radius: var(--radius-sm);
   background: var(--bg-code);
   border: 1px solid var(--border-soft);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   font-family: var(--font-mono);
   white-space: pre-wrap;
   overflow-x: hidden;

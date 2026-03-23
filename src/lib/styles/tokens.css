@@ -30,6 +30,9 @@
   --control-selected-text: #f8f3e7;
   --control-selected-border: rgba(23, 44, 43, 0.08);
   --select-arrow: #4a5a59;
+  --scrollbar-track: rgba(23, 44, 43, 0.08);
+  --scrollbar-thumb: rgba(23, 44, 43, 0.28);
+  --scrollbar-thumb-hover: rgba(23, 44, 43, 0.4);
   --text-primary: #172c2b;
   --text-secondary: #4a5a59;
   --text-inverse: #f8f3e7;
@@ -69,6 +72,9 @@
   --control-selected-text: #111917;
   --control-selected-border: rgba(222, 124, 79, 0.2);
   --select-arrow: #a7b7b0;
+  --scrollbar-track: rgba(248, 243, 231, 0.08);
+  --scrollbar-thumb: rgba(248, 243, 231, 0.26);
+  --scrollbar-thumb-hover: rgba(248, 243, 231, 0.42);
   --text-primary: #eaf0ea;
   --text-secondary: #a7b7b0;
   --text-inverse: #f8f3e7;
