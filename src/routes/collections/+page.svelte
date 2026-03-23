@@ -190,7 +190,7 @@
       }}
     >
       <div class="panel save-dialog" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="import-collection-title">
-        <div class="editor-header">
+        <div class="editor-header import-dialog-header">
           <h2 id="import-collection-title">Import</h2>
           <span class="history-meta">Postman Collection v2.1 JSON</span>
         </div>

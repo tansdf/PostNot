@@ -319,13 +319,16 @@ select option {
   box-sizing: border-box;
   border: 0;
   border-radius: 999px;
-  padding: 11px 16px;
+  height: 46px;
   min-height: 46px;
+  padding: 0 16px;
   transition: 180ms ease;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  line-height: 1;
+  line-height: 1.05;
+  vertical-align: middle;
+  text-align: center;
 }
 
 .send-button {
@@ -735,6 +738,10 @@ select option {
   height: 36px;
   font-size: 1.2rem;
   line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
 }
 
 .sidebar-plus-button:hover:not(:disabled) {
@@ -1034,25 +1041,52 @@ select option {
   display: grid;
   gap: 18px;
   grid-template-columns: minmax(20rem, 0.95fr) minmax(0, 1.05fr);
-  align-items: start;
+  align-items: stretch;
   overflow-anchor: none;
 }
 
 .history-list-column,
 .history-detail-column {
   min-width: 0;
+  display: flex;
 }
 
 .history-list-column .history-list {
-  max-height: clamp(24rem, 70vh, 52rem);
+  flex: 1 1 auto;
+  min-height: clamp(26rem, 62vh, 56rem);
+  max-height: clamp(26rem, 72vh, 56rem);
   overflow-y: auto;
   padding-right: 4px;
   overflow-anchor: none;
+  overflow-x: hidden;
 }
 
 .history-detail-column {
-  position: sticky;
-  top: 12px;
+  position: static;
+}
+
+.history-content-detail-open .history-list-column,
+.history-content-detail-open .history-detail-column {
+  min-height: clamp(28rem, 72vh, 56rem);
+  max-height: clamp(28rem, 72vh, 56rem);
+}
+
+.history-content-detail-open .history-list-column .history-list {
+  min-height: 0;
+  height: 100%;
+  max-height: none;
+}
+
+.history-content-detail-open .history-detail-filled {
+  min-height: 0;
+  max-height: 100%;
+  overflow-y: auto;
+  align-content: start;
+  padding-right: 12px;
+}
+
+.history-detail-column-empty {
+  align-items: flex-start;
 }
 
 .history-toolbar,
@@ -1073,11 +1107,16 @@ select option {
   border: 1px solid transparent;
   display: grid;
   gap: 10px;
+  min-width: 0;
 }
 
 .history-item-active {
   border-color: var(--control-selected-border);
   box-shadow: inset 0 0 0 1px var(--control-selected-border);
+}
+
+.history-item-summary {
+  min-width: 0;
 }
 
 .history-item-top,
@@ -1097,6 +1136,12 @@ select option {
 
 .history-row-actions {
   justify-content: flex-start;
+}
+
+.history-url {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .history-status {
@@ -1122,7 +1167,7 @@ select option {
   border: 1px solid var(--border-soft);
   font-family: var(--font-mono);
   white-space: pre-wrap;
-  overflow-x: auto;
+  overflow-x: hidden;
   overflow-y: auto;
   max-height: clamp(8rem, 32vh, 20rem);
   overflow-wrap: anywhere;
@@ -1135,12 +1180,44 @@ select option {
 }
 
 .history-detail {
+  width: 100%;
   padding: 16px;
   border-radius: var(--radius-md);
   background: var(--surface-subtle);
   border: 1px solid var(--border-soft);
   display: grid;
   gap: 16px;
+}
+
+.history-detail-filled {
+  min-height: 100%;
+}
+
+.history-detail-empty {
+  align-content: start;
+}
+
+.history-detail-empty-card {
+  margin-top: 4px;
+  max-width: 36rem;
+  padding: 20px 22px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  display: grid;
+  gap: 8px;
+  align-self: start;
+}
+
+.history-detail-empty-title {
+  font-size: 1rem;
+  line-height: 1.25;
+}
+
+.history-detail-empty-text {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.45;
 }
 
 .history-detail .editor-header {
@@ -1224,6 +1301,13 @@ select option {
   word-break: break-word;
 }
 
+.detail-url-value {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .detail-code-block {
   margin: 0;
   padding: 12px;
@@ -1284,6 +1368,10 @@ select option {
   padding: 22px;
 }
 
+.import-dialog-header {
+  align-items: center;
+}
+
 .save-target-list {
   display: grid;
   gap: 10px;
@@ -1330,9 +1418,8 @@ select option {
   justify-content: flex-start;
 }
 
-.settings-toggle input {
-  width: 16px;
-  height: 16px;
+.settings-checkbox {
+  margin: 0;
 }
 
 @media (max-width: 720px) {

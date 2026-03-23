@@ -303,6 +303,7 @@
             {#each environmentDetail.variables as row, index (row.id)}
               <div class="kv-row">
                 <input
+                  class="row-toggle"
                   type="checkbox"
                   checked={row.enabled}
                   on:change={(event) => updateVariable(index, { enabled: event.currentTarget.checked })}

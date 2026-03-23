@@ -78,12 +78,12 @@
       </label>
 
       <label class="settings-toggle">
-        <input type="checkbox" bind:checked={settings.followRedirects} />
+        <input class="row-toggle settings-checkbox" type="checkbox" bind:checked={settings.followRedirects} />
         <span>Follow redirects automatically</span>
       </label>
 
       <label class="settings-toggle">
-        <input type="checkbox" bind:checked={settings.validateTls} />
+        <input class="row-toggle settings-checkbox" type="checkbox" bind:checked={settings.validateTls} />
         <span>Validate TLS certificates</span>
       </label>
 

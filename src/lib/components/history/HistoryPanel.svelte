@@ -29,6 +29,8 @@
       return value;
     }
   }
+
+  $: hasActiveDetail = Boolean(detail || isDetailLoading || detailErrorText);
 </script>
 
 <section class="panel history-panel">
@@ -52,15 +54,15 @@
   {:else if items.length === 0 && !isLoading}
     <div class="empty-state">Request history will appear here after the first send.</div>
   {:else}
-    <div class="history-content">
+    <div class:history-content-detail-open={hasActiveDetail} class="history-content">
       <div class="history-list-column">
         <div class="history-list">
           {#each items as item (item.id)}
             <article class:history-item-active={selectedId === item.id} class="history-item">
               <div class="history-item-top">
-                <div>
+                <div class="history-item-summary">
                   <strong>{item.requestName || item.url}</strong>
-                  <div class="history-url">{item.method} {item.url}</div>
+                  <div class="history-url" title={`${item.method} ${item.url}`}>{item.method} {item.url}</div>
                 </div>
                 <div class:history-status-error={item.statusCode === null || !!item.errorText} class="history-status">
                   {#if item.statusCode !== null}
@@ -97,7 +99,7 @@
         </div>
       </div>
 
-      <div class="history-detail-column">
+      <div class:history-detail-column-empty={!hasActiveDetail} class="history-detail-column">
         <HistoryDetail
           {detail}
           errorText={detailErrorText}
