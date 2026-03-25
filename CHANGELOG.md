@@ -4,6 +4,21 @@ This changelog was reconstructed from the project chat history and is now the tr
 
 The project currently uses pre-1.0 semantic versioning. Minor versions mark meaningful product milestones, while patch versions should be used for smaller fixes and polish.
 
+## [0.5.4] - 2026-03-25
+
+### Added
+
+- Persisted interface zoom control in Settings so desktop users can scale the PostNot UI up or down without relying on OS-level display changes.
+
+### Changed
+
+- Reduced the default desktop UI scale so the main request workflow fits more comfortably inside medium Windows window sizes.
+
+### Fixed
+
+- Windows sidebar collections header and cards now align more consistently with the primary page selector buttons.
+- Interface zoom now scales the desktop shell inside a bounded viewport instead of causing the app content to overflow the window.
+
 ## [0.5.3] - 2026-03-25
 
 ### Changed

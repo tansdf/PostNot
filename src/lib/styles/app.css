@@ -1,5 +1,9 @@
 @import "$lib/styles/tokens.css";
 
+:root {
+  --ui-scale: 1;
+}
+
 html,
 body {
   margin: 0;
@@ -109,12 +113,23 @@ button:disabled {
 }
 
 .app-shell {
+  width: calc(100% / var(--ui-scale));
+  height: calc(100vh / var(--ui-scale));
+  min-height: calc(100vh / var(--ui-scale));
+  transform: scale(var(--ui-scale));
+  transform-origin: top left;
+  will-change: transform;
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
-  height: 100vh;
-  min-height: 100vh;
   background: var(--bg-app);
   overflow: hidden;
+}
+
+.app-viewport {
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg-app);
 }
 
 .sidebar {
@@ -265,6 +280,11 @@ button:disabled {
 .sidebar-section-header {
   align-items: center;
   flex-wrap: wrap;
+}
+
+.sidebar-section-header {
+  justify-content: space-between;
+  width: 100%;
 }
 
 .request-name-block {
@@ -760,6 +780,15 @@ select option {
     grid-template-columns: 1fr;
     height: auto;
     min-height: 100vh;
+    width: 100%;
+    transform: none;
+    will-change: auto;
+    overflow: visible;
+  }
+
+  .app-viewport {
+    height: auto;
+    min-height: 100vh;
     overflow: visible;
   }
 
@@ -781,6 +810,8 @@ select option {
   }
 
   .sidebar-section-scroll {
+    width: auto;
+    margin-right: 0;
     overflow: visible;
     padding-right: 0;
   }
@@ -843,10 +874,12 @@ select option {
 .sidebar-section-scroll {
   display: grid;
   gap: 12px;
+  width: calc(100% + 16px);
   min-height: 0;
+  margin-right: -16px;
   overflow-y: auto;
   overflow-x: hidden;
-  padding-right: 4px;
+  padding-right: 16px;
 }
 
 .sidebar-plus-button {
@@ -888,12 +921,14 @@ select option {
 }
 
 .sidebar-collection-stack {
+  width: 100%;
   padding-bottom: 12px;
 }
 
 .sidebar-collection-card {
   display: grid;
   gap: 10px;
+  width: 100%;
   padding: 12px;
   border-radius: var(--radius-md);
   background: var(--sidebar-card-bg);

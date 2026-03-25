@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub struct AppSettings {
     pub theme: String,
+    pub ui_scale: f64,
     pub request_timeout_ms: u64,
     pub follow_redirects: bool,
     pub validate_tls: bool,

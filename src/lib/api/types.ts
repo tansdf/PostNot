@@ -56,6 +56,7 @@ export type ResponsePayload = {
 
 export type AppSettings = {
   theme: string;
+  uiScale: number;
   requestTimeoutMs: number;
   followRedirects: boolean;
   validateTls: boolean;
@@ -207,6 +208,7 @@ export function createRequestDraft(): RequestDraft {
 export function createDefaultSettings(): AppSettings {
   return {
     theme: "system",
+    uiScale: 1,
     requestTimeoutMs: 30_000,
     followRedirects: true,
     validateTls: true,

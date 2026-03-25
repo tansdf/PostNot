@@ -6,14 +6,19 @@ use crate::{
 };
 
 const THEME_KEY: &str = "theme";
+const UI_SCALE_KEY: &str = "ui_scale";
 const REQUEST_TIMEOUT_MS_KEY: &str = "request_timeout_ms";
 const FOLLOW_REDIRECTS_KEY: &str = "follow_redirects";
 const VALIDATE_TLS_KEY: &str = "validate_tls";
 const HISTORY_LIMIT_KEY: &str = "history_limit";
+const DEFAULT_UI_SCALE: f64 = 1.0;
+const MIN_UI_SCALE: f64 = 0.8;
+const MAX_UI_SCALE: f64 = 1.2;
 
 pub fn default_settings() -> AppSettings {
     AppSettings {
         theme: "system".to_string(),
+        ui_scale: DEFAULT_UI_SCALE,
         request_timeout_ms: 30_000,
         follow_redirects: true,
         validate_tls: true,
@@ -46,6 +51,7 @@ pub async fn get_settings(pool: &SqlitePool) -> AppResult<AppSettings> {
 
         match key.as_str() {
             THEME_KEY => settings.theme = serde_json::from_str(&value_json)?,
+            UI_SCALE_KEY => settings.ui_scale = normalize_ui_scale(serde_json::from_str(&value_json)?),
             REQUEST_TIMEOUT_MS_KEY => settings.request_timeout_ms = serde_json::from_str(&value_json)?,
             FOLLOW_REDIRECTS_KEY => settings.follow_redirects = serde_json::from_str(&value_json)?,
             VALIDATE_TLS_KEY => settings.validate_tls = serde_json::from_str(&value_json)?,
@@ -58,7 +64,9 @@ pub async fn get_settings(pool: &SqlitePool) -> AppResult<AppSettings> {
 }
 
 pub async fn save_settings(pool: &SqlitePool, settings: &AppSettings) -> AppResult<()> {
-    for (key, value_json) in serialize_settings(settings)? {
+    let settings = normalize_settings(settings);
+
+    for (key, value_json) in serialize_settings(&settings)? {
         upsert_setting(pool, key, &value_json).await?;
     }
 
@@ -72,6 +80,7 @@ pub async fn history_limit(pool: &SqlitePool) -> AppResult<u32> {
 fn serialize_settings(settings: &AppSettings) -> AppResult<Vec<(&'static str, String)>> {
     Ok(vec![
         (THEME_KEY, serde_json::to_string(&settings.theme)?),
+        (UI_SCALE_KEY, serde_json::to_string(&settings.ui_scale)?),
         (
             REQUEST_TIMEOUT_MS_KEY,
             serde_json::to_string(&settings.request_timeout_ms)?,
@@ -83,6 +92,16 @@ fn serialize_settings(settings: &AppSettings) -> AppResult<Vec<(&'static str, St
         (VALIDATE_TLS_KEY, serde_json::to_string(&settings.validate_tls)?),
         (HISTORY_LIMIT_KEY, serde_json::to_string(&settings.history_limit)?),
     ])
+}
+
+fn normalize_settings(settings: &AppSettings) -> AppSettings {
+    let mut normalized = settings.clone();
+    normalized.ui_scale = normalize_ui_scale(normalized.ui_scale);
+    normalized
+}
+
+fn normalize_ui_scale(value: f64) -> f64 {
+    value.clamp(MIN_UI_SCALE, MAX_UI_SCALE)
 }
 
 async fn insert_default(pool: &SqlitePool, key: &str, value_json: &str) -> AppResult<()> {
