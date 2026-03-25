@@ -4,6 +4,19 @@ This changelog was reconstructed from the project chat history and is now the tr
 
 The project currently uses pre-1.0 semantic versioning. Minor versions mark meaningful product milestones, while patch versions should be used for smaller fixes and polish.
 
+## [0.5.3] - 2026-03-25
+
+### Changed
+
+- Hardened desktop button rendering so shared controls align more consistently with the Linux styling across Windows and Linux builds.
+- Refined History Detail section surfaces to reduce accidental-looking inner framing and make the inspector hierarchy feel more intentional.
+
+### Fixed
+
+- History entries no longer collapse into clipped header-only rows in the left split-view pane.
+- History empty and selected detail states now size more predictably with full-width empty messaging and steadier scroll behavior.
+- Expanded collections in the sidebar are now contained inside the sidebar shell instead of stretching the full app height on desktop layouts.
+
 ## [0.5.2] - 2026-03-23
 
 ### Changed
