@@ -11,6 +11,7 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 - Moved the AppShell wrapper into the root layout so the sidebar stays mounted across page navigations, preserving expanded collection state and scroll position.
 - Applied HTTP method color badges to fallback request names in the sidebar and collections list when no custom name is set.
 - Extended the interface zoom range from 80-120% to 60-150% for better flexibility on high-DPI and large displays.
+- Added a version pill next to the app title in the sidebar header showing the current release.
 
 ### Fixed
 

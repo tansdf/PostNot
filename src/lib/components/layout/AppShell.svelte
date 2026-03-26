@@ -17,7 +17,7 @@
     <aside class="sidebar">
       <div class="brand-block">
         <p class="eyebrow">Desktop API Client</p>
-        <h1>{title}</h1>
+        <h1>{title} <span class="version-pill">v{__APP_VERSION__}</span></h1>
       </div>
 
       <nav class="sidebar-nav" aria-label="Primary">
