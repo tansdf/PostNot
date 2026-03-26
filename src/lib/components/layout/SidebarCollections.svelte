@@ -1,17 +1,12 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import { page } from "$app/stores";
+  import { page } from "$app/state";
   import { onMount } from "svelte";
+  import { SvelteSet } from "svelte/reactivity";
 
-  import {
-    collectionsState,
-    createBlankCollection,
-    ensureCollectionsLoaded,
-    loadSavedRequests,
-    selectCollection
-  } from "$lib/stores/collections";
+  import { collections } from "$lib/stores/collections.svelte";
 
-  let expandedCollectionIds = new Set<string>();
+  let expandedCollectionIds = new SvelteSet<string>();
 
   function formatUpdatedAt(value: string) {
     try {
@@ -25,11 +20,11 @@
   }
 
   onMount(() => {
-    void ensureCollectionsLoaded();
+    void collections.ensureLoaded();
   });
 
   async function handleCreateCollection() {
-    const collection = await createBlankCollection();
+    const collection = await collections.createBlankCollection();
     if (!collection) {
       return;
     }
@@ -38,29 +33,25 @@
   }
 
   async function openCollection(collectionId: string) {
-    await selectCollection(collectionId);
+    await collections.selectCollection(collectionId);
     await goto(`/collections?collectionId=${encodeURIComponent(collectionId)}`);
   }
 
   async function toggleCollection(collectionId: string) {
-    const nextExpandedCollectionIds = new Set(expandedCollectionIds);
-
-    if (nextExpandedCollectionIds.has(collectionId)) {
-      nextExpandedCollectionIds.delete(collectionId);
-      expandedCollectionIds = nextExpandedCollectionIds;
+    if (expandedCollectionIds.has(collectionId)) {
+      expandedCollectionIds.delete(collectionId);
       return;
     }
 
-    nextExpandedCollectionIds.add(collectionId);
-    expandedCollectionIds = nextExpandedCollectionIds;
+    expandedCollectionIds.add(collectionId);
 
-    if (!($collectionsState.savedRequestsByCollection[collectionId]?.length)) {
-      await loadSavedRequests(collectionId);
+    if (!(collections.savedRequestsByCollection[collectionId]?.length)) {
+      await collections.loadSavedRequests(collectionId);
     }
   }
 
   async function openSavedRequest(collectionId: string, itemId: string) {
-    await selectCollection(collectionId);
+    await collections.selectCollection(collectionId);
     await goto(`/?savedRequestId=${encodeURIComponent(itemId)}`);
   }
 </script>
@@ -71,31 +62,28 @@
     <button
       class="sidebar-plus-button"
       type="button"
-      on:click={handleCreateCollection}
-      disabled={$collectionsState.isCreatingCollection}
+      onclick={handleCreateCollection}
+      disabled={collections.isCreatingCollection}
       aria-label="Create collection"
       title="Create collection"
     >
-      {$collectionsState.isCreatingCollection ? "..." : "+"}
+      {collections.isCreatingCollection ? "..." : "+"}
     </button>
   </div>
 
   <div class="sidebar-section-scroll">
-    {#if $collectionsState.errorText}
-      <div class="sidebar-inline-error">{$collectionsState.errorText}</div>
+    {#if collections.errorText}
+      <div class="sidebar-inline-error">{collections.errorText}</div>
     {/if}
 
-    {#if $collectionsState.collections.length === 0 && !$collectionsState.isCollectionsLoading}
+    {#if collections.collections.length === 0 && !collections.isCollectionsLoading}
       <div class="sidebar-empty-state">Create a collection to keep saved requests close at hand.</div>
     {:else}
       <div class="sidebar-collection-stack">
-        {#each $collectionsState.collections as collection (collection.id)}
-          <article
-            class:sidebar-collection-active={$collectionsState.selectedCollectionId === collection.id}
-            class="sidebar-collection-card"
-          >
+        {#each collections.collections as collection (collection.id)}
+          <article class={["sidebar-collection-card", collections.selectedCollectionId === collection.id && "sidebar-collection-active"]}>
             <div class="sidebar-collection-row">
-              <button class="sidebar-collection-button" type="button" on:click={() => openCollection(collection.id)}>
+              <button class="sidebar-collection-button" type="button" onclick={() => openCollection(collection.id)}>
                 <strong>{collection.name}</strong>
                 <span>{collection.requestCount} request{collection.requestCount === 1 ? "" : "s"}</span>
                 <span class="sidebar-collection-meta">Updated {formatUpdatedAt(collection.updatedAt)}</span>
@@ -104,14 +92,13 @@
               <button
                 class="sidebar-toggle-button"
                 type="button"
-                on:click={() => toggleCollection(collection.id)}
+                onclick={() => toggleCollection(collection.id)}
                 aria-expanded={expandedCollectionIds.has(collection.id)}
                 aria-label={expandedCollectionIds.has(collection.id) ? "Collapse collection" : "Expand collection"}
                 title={expandedCollectionIds.has(collection.id) ? "Collapse" : "Expand"}
               >
                 <span
-                  class:sidebar-toggle-icon-expanded={expandedCollectionIds.has(collection.id)}
-                  class="sidebar-toggle-icon"
+                  class={["sidebar-toggle-icon", expandedCollectionIds.has(collection.id) && "sidebar-toggle-icon-expanded"]}
                   aria-hidden="true"
                 >
                   &gt;
@@ -121,17 +108,16 @@
 
             {#if expandedCollectionIds.has(collection.id)}
               <div class="sidebar-request-stack">
-                {#if $collectionsState.isSavedRequestsLoading && !($collectionsState.savedRequestsByCollection[collection.id]?.length)}
+                {#if collections.isSavedRequestsLoading && !(collections.savedRequestsByCollection[collection.id]?.length)}
                   <span class="sidebar-collection-meta">Loading requests...</span>
-                {:else if ($collectionsState.savedRequestsByCollection[collection.id] ?? []).length === 0}
+                {:else if (collections.savedRequestsByCollection[collection.id] ?? []).length === 0}
                   <span class="sidebar-collection-meta">No saved requests yet.</span>
                 {:else}
-                  {#each $collectionsState.savedRequestsByCollection[collection.id] ?? [] as item (item.id)}
+                  {#each collections.savedRequestsByCollection[collection.id] ?? [] as item (item.id)}
                     <button
-                      class:sidebar-request-active={$page.url.searchParams.get("savedRequestId") === item.id}
-                      class="sidebar-request-link"
+                      class={["sidebar-request-link", page.url.searchParams.get("savedRequestId") === item.id && "sidebar-request-active"]}
                       type="button"
-                      on:click={() => openSavedRequest(collection.id, item.id)}
+                      onclick={() => openSavedRequest(collection.id, item.id)}
                     >
                       <strong class="sidebar-request-name">{item.name || `${item.method} ${item.url}`}</strong>
                       <span class="sidebar-request-url">{item.method} {item.url}</span>

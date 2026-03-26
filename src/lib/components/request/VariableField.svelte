@@ -15,45 +15,64 @@
     tooltip: string;
   };
 
-  export let value = "";
-  export let variables: KeyValueRow[] = [];
-  export let onValueInput: (value: string) => void = () => {};
-  export let className = "";
-  export let placeholder = "";
-  export let id = "";
-  export let type = "text";
-  export let spellcheck = true;
-  export let multiline = false;
-  export let disabled = false;
+  let {
+    value = "",
+    variables = [],
+    onValueInput = () => {},
+    className = "",
+    placeholder = "",
+    id = "",
+    type = "text",
+    spellcheck = true,
+    multiline = false,
+    disabled = false
+  }: {
+    value?: string;
+    variables?: KeyValueRow[];
+    onValueInput?: (value: string) => void;
+    className?: string;
+    placeholder?: string;
+    id?: string;
+    type?: string;
+    spellcheck?: boolean;
+    multiline?: boolean;
+    disabled?: boolean;
+  } = $props();
 
-  let fieldElement: HTMLInputElement | HTMLTextAreaElement | null = null;
-  let mirrorElement: HTMLDivElement | null = null;
-  let mirrorTextElement: HTMLSpanElement | null = null;
-  let mirrorCaretElement: HTMLSpanElement | null = null;
-  let isSuggestionsOpen = false;
-  let activeSuggestionIndex = 0;
-  let currentQuery = "";
-  let replacementStart = -1;
-  let replacementEnd = -1;
-  let suggestionLeft = 12;
-  let suggestionTop = 0;
-  let suggestionPlacement: "above" | "below" = "above";
-  let hasMeasuredSuggestionPosition = false;
-  let blurTimeout: ReturnType<typeof setTimeout> | null = null;
+  let fieldElement: HTMLInputElement | HTMLTextAreaElement | null = $state(null);
+  let mirrorElement: HTMLDivElement | null = $state(null);
+  let mirrorTextElement: HTMLSpanElement | null = $state(null);
+  let mirrorCaretElement: HTMLSpanElement | null = $state(null);
+  let isSuggestionsOpen = $state(false);
+  let activeSuggestionIndex = $state(0);
+  let currentQuery = $state("");
+  let replacementStart = $state(-1);
+  let replacementEnd = $state(-1);
+  let suggestionLeft = $state(12);
+  let suggestionTop = $state(0);
+  let suggestionPlacement: "above" | "below" = $state("above");
+  let hasMeasuredSuggestionPosition = $state(false);
+  let blurTimeout: ReturnType<typeof setTimeout> | null = $state(null);
 
   const variablePattern = /{{\s*([A-Za-z0-9_.-]+)\s*}}/g;
 
-  $: availableVariables = getAvailableVariables(variables);
-  $: filteredVariables = getFilteredVariables(availableVariables, currentQuery);
-  $: if (!filteredVariables.length) {
-    activeSuggestionIndex = 0;
-  } else if (activeSuggestionIndex >= filteredVariables.length) {
-    activeSuggestionIndex = 0;
-  }
-  $: usedVariables = getUsedVariables(value, availableVariables);
-  $: if (isSuggestionsOpen) {
-    void tick().then(() => updateSuggestionAnchor());
-  }
+  let availableVariables = $derived(getAvailableVariables(variables));
+  let filteredVariables = $derived(getFilteredVariables(availableVariables, currentQuery));
+  let usedVariables = $derived(getUsedVariables(value, availableVariables));
+
+  $effect(() => {
+    if (!filteredVariables.length) {
+      activeSuggestionIndex = 0;
+    } else if (activeSuggestionIndex >= filteredVariables.length) {
+      activeSuggestionIndex = 0;
+    }
+  });
+
+  $effect(() => {
+    if (isSuggestionsOpen) {
+      void tick().then(() => updateSuggestionAnchor());
+    }
+  });
 
   function getAvailableVariables(rows: KeyValueRow[]): VariableOption[] {
     const seen = new Set<string>();
@@ -349,12 +368,12 @@
         {spellcheck}
         {disabled}
         value={value}
-        on:blur={handleBlur}
-        on:click={handleCursorMovement}
-        on:focus={handleFocus}
-        on:input={handleInput}
-        on:keydown={handleKeydown}
-        on:keyup={handleCursorMovement}
+        onblur={handleBlur}
+        onclick={handleCursorMovement}
+        onfocus={handleFocus}
+        oninput={handleInput}
+        onkeydown={handleKeydown}
+        onkeyup={handleCursorMovement}
       ></textarea>
     {:else}
       <input
@@ -366,20 +385,18 @@
         {disabled}
         {type}
         value={value}
-        on:blur={handleBlur}
-        on:click={handleCursorMovement}
-        on:focus={handleFocus}
-        on:input={handleInput}
-        on:keydown={handleKeydown}
-        on:keyup={handleCursorMovement}
+        onblur={handleBlur}
+        onclick={handleCursorMovement}
+        onfocus={handleFocus}
+        oninput={handleInput}
+        onkeydown={handleKeydown}
+        onkeyup={handleCursorMovement}
       />
     {/if}
 
     {#if isSuggestionsOpen}
       <div
-        class:variable-suggestions-hidden={!hasMeasuredSuggestionPosition}
-        class:variable-suggestions-below={suggestionPlacement === "below"}
-        class="variable-suggestions"
+        class={["variable-suggestions", !hasMeasuredSuggestionPosition && "variable-suggestions-hidden", suggestionPlacement === "below" && "variable-suggestions-below"]}
         role="listbox"
         aria-label="Environment variable suggestions"
         style={getSuggestionStyle()}
@@ -387,11 +404,10 @@
         {#if filteredVariables.length}
           {#each filteredVariables as variable, index (variable.key)}
             <button
-              class:variable-suggestion-active={index === activeSuggestionIndex}
-              class="variable-suggestion"
+              class={["variable-suggestion", index === activeSuggestionIndex && "variable-suggestion-active"]}
               type="button"
-              on:click={() => applySuggestion(variable.key)}
-              on:mousedown={handleSuggestionPointerDown}
+              onclick={() => applySuggestion(variable.key)}
+              onmousedown={handleSuggestionPointerDown}
             >
               <strong>{variable.key}</strong>
               <span>{variable.value || "(empty value)"}</span>
@@ -403,7 +419,7 @@
       </div>
     {/if}
 
-    <div aria-hidden="true" class:variable-input-mirror-multiline={multiline} class="variable-input-mirror" bind:this={mirrorElement}>
+    <div aria-hidden="true" class={["variable-input-mirror", multiline && "variable-input-mirror-multiline"]} bind:this={mirrorElement}>
       <span bind:this={mirrorTextElement}></span><span bind:this={mirrorCaretElement} class="variable-input-caret-marker"></span>
     </div>
   </div>
@@ -412,8 +428,7 @@
     <div class="variable-pill-list">
       {#each usedVariables as variable (variable.key)}
         <span
-          class:variable-pill-unresolved={!variable.isResolved}
-          class="variable-pill"
+          class={["variable-pill", !variable.isResolved && "variable-pill-unresolved"]}
           title={variable.tooltip}
         >
           {variable.key}

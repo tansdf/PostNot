@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { ResponsePayload } from "$lib/api/types";
 
-  export let response: ResponsePayload | null = null;
+  let { response = null }: { response?: ResponsePayload | null } = $props();
 
   function formatBody(bodyText: string) {
     if (!bodyText) {
@@ -15,7 +15,7 @@
     }
   }
 
-  $: prettyBody = response ? formatBody(response.bodyText) : "";
+  let prettyBody = $derived(response ? formatBody(response.bodyText) : "");
 </script>
 
 <section class="panel response-panel">

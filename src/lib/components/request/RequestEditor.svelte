@@ -2,20 +2,35 @@
   import { createKeyValueRow, type AuthType, type BodyMode, type KeyValueRow, type RequestDraft } from "$lib/api/types";
   import VariableField from "$lib/components/request/VariableField.svelte";
 
-  export let request: RequestDraft;
-  export let isSending = false;
-  export let isCanceling = false;
-  export let isSaving = false;
-  export let saveLabel = "Save";
-  export let saveDisabled = false;
-  export let environmentVariables: KeyValueRow[] = [];
-  export let onNewRequest: () => Promise<void> | void = () => {};
-  export let onOpenCurlImport: () => Promise<void> | void = () => {};
-  export let onSend: () => Promise<void> | void = () => {};
-  export let onCancel: () => Promise<void> | void = () => {};
-  export let onSave: () => Promise<void> | void = () => {};
+  let {
+    request = $bindable(),
+    isSending = false,
+    isCanceling = false,
+    isSaving = false,
+    saveLabel = "Save",
+    saveDisabled = false,
+    environmentVariables = [],
+    onNewRequest = () => {},
+    onOpenCurlImport = () => {},
+    onSend = () => {},
+    onCancel = () => {},
+    onSave = () => {}
+  }: {
+    request: RequestDraft;
+    isSending?: boolean;
+    isCanceling?: boolean;
+    isSaving?: boolean;
+    saveLabel?: string;
+    saveDisabled?: boolean;
+    environmentVariables?: KeyValueRow[];
+    onNewRequest?: () => Promise<void> | void;
+    onOpenCurlImport?: () => Promise<void> | void;
+    onSend?: () => Promise<void> | void;
+    onCancel?: () => Promise<void> | void;
+    onSave?: () => Promise<void> | void;
+  } = $props();
 
-  let activePanel: "query" | "headers" | "body" | "auth" = "query";
+  let activePanel: "query" | "headers" | "body" | "auth" = $state("query");
 
   const panels = [
     { id: "query", label: "Query" },
@@ -105,7 +120,7 @@
     updateFormRow(index, { enabled });
   }
 
-  $: displayUrl = buildDisplayUrl(request.url, request.queryParams);
+  let displayUrl = $derived(buildDisplayUrl(request.url, request.queryParams));
 
   function updateRows(kind: "queryParams" | "headers", index: number, patch: Partial<KeyValueRow>) {
     const nextRows = request[kind].map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row));
@@ -188,8 +203,8 @@
   <div class="request-section-header">
     <div class="request-section-title">
       <h2>Request</h2>
-      <button class="ghost-button request-header-button" type="button" on:click={onNewRequest}>New</button>
-      <button class="ghost-button request-header-button" type="button" on:click={onOpenCurlImport}>Import</button>
+      <button class="ghost-button request-header-button" type="button" onclick={onNewRequest}>New</button>
+      <button class="ghost-button request-header-button" type="button" onclick={onOpenCurlImport}>Import</button>
     </div>
   </div>
 
@@ -203,7 +218,7 @@
       />
     </div>
 
-    <button class="ghost-button request-save-control" type="button" on:click={onSave} disabled={saveDisabled || isSaving}>
+    <button class="ghost-button request-save-control" type="button" onclick={onSave} disabled={saveDisabled || isSaving}>
       {isSaving ? "Saving..." : saveLabel}
     </button>
 
@@ -229,10 +244,9 @@
     </div>
 
     <button
-      class:cancel-button={isSending}
-      class="send-button request-send-control"
+      class={["send-button request-send-control", isSending && "cancel-button"]}
       type="button"
-      on:click={() => (isSending ? onCancel() : onSend())}
+      onclick={() => (isSending ? onCancel() : onSend())}
       disabled={isCanceling}
     >
       {#if isSending}
@@ -244,12 +258,11 @@
   </div>
 
   <div class="panel-tabs">
-    {#each panels as panel}
+    {#each panels as panel (panel.id)}
       <button
-        class:active={activePanel === panel.id}
-        class="tab-button"
+        class={["tab-button", activePanel === panel.id && "active"]}
         type="button"
-        on:click={() => (activePanel = panel.id)}
+        onclick={() => (activePanel = panel.id)}
       >
         {panel.label}
       </button>
@@ -260,7 +273,7 @@
     <div class="editor-block">
       <div class="editor-header">
         <h2>Query Parameters</h2>
-        <button class="ghost-button" type="button" on:click={() => addRow("queryParams")}>Add row</button>
+        <button class="ghost-button" type="button" onclick={() => addRow("queryParams")}>Add row</button>
       </div>
 
       <div class="row-list">
@@ -271,9 +284,9 @@
               type="checkbox"
               checked={row.enabled}
               aria-label="Enable query parameter row"
-              on:change={(event) => toggleRow("queryParams", index, event.currentTarget.checked)}
+              onchange={(event) => toggleRow("queryParams", index, event.currentTarget.checked)}
             />
-            <input class="text-input" value={row.key} placeholder="Key" on:input={(event) => updateRows("queryParams", index, { key: event.currentTarget.value })} />
+            <input class="text-input" value={row.key} placeholder="Key" oninput={(event) => updateRows("queryParams", index, { key: event.currentTarget.value })} />
             <VariableField
               className="text-input"
               value={row.value}
@@ -281,7 +294,7 @@
               placeholder="Value"
               onValueInput={(nextValue) => updateRows("queryParams", index, { value: nextValue })}
             />
-            <button class="icon-button" type="button" on:click={() => removeRow("queryParams", row.id)}>Remove</button>
+            <button class="icon-button" type="button" onclick={() => removeRow("queryParams", row.id)}>Remove</button>
           </div>
         {/each}
       </div>
@@ -292,7 +305,7 @@
     <div class="editor-block">
       <div class="editor-header">
         <h2>Headers</h2>
-        <button class="ghost-button" type="button" on:click={() => addRow("headers")}>Add row</button>
+        <button class="ghost-button" type="button" onclick={() => addRow("headers")}>Add row</button>
       </div>
 
       <div class="row-list">
@@ -303,9 +316,9 @@
               type="checkbox"
               checked={row.enabled}
               aria-label="Enable header row"
-              on:change={(event) => toggleRow("headers", index, event.currentTarget.checked)}
+              onchange={(event) => toggleRow("headers", index, event.currentTarget.checked)}
             />
-            <input class="text-input" value={row.key} placeholder="Header" on:input={(event) => updateRows("headers", index, { key: event.currentTarget.value })} />
+            <input class="text-input" value={row.key} placeholder="Header" oninput={(event) => updateRows("headers", index, { key: event.currentTarget.value })} />
             <VariableField
               className="text-input"
               value={row.value}
@@ -313,7 +326,7 @@
               placeholder="Value"
               onValueInput={(nextValue) => updateRows("headers", index, { value: nextValue })}
             />
-            <button class="icon-button" type="button" on:click={() => removeRow("headers", row.id)}>Remove</button>
+            <button class="icon-button" type="button" onclick={() => removeRow("headers", row.id)}>Remove</button>
           </div>
         {/each}
       </div>
@@ -326,7 +339,7 @@
         <h2>Body</h2>
         <label class="body-mode-control">
           <span class="sr-only">Body type</span>
-          <select class="body-mode-select" value={request.body.mode} on:change={(event) => updateBodyMode(event.currentTarget.value as BodyMode)}>
+          <select class="body-mode-select" value={request.body.mode} onchange={(event) => updateBodyMode(event.currentTarget.value as BodyMode)}>
             <option value="none">None</option>
             <option value="json">JSON</option>
             <option value="raw">Raw</option>
@@ -362,9 +375,9 @@
                 type="checkbox"
                 checked={row.enabled}
                 aria-label="Enable form field row"
-                on:change={(event) => toggleFormEnabled(index, event.currentTarget.checked)}
+                onchange={(event) => toggleFormEnabled(index, event.currentTarget.checked)}
               />
-              <input class="text-input" value={row.key} placeholder="Field" on:input={(event) => updateFormRow(index, { key: event.currentTarget.value })} />
+              <input class="text-input" value={row.key} placeholder="Field" oninput={(event) => updateFormRow(index, { key: event.currentTarget.value })} />
               <VariableField
                 className="text-input"
                 value={row.value}
@@ -372,11 +385,11 @@
                 placeholder="Value"
                 onValueInput={(nextValue) => updateFormRow(index, { value: nextValue })}
               />
-              <button class="icon-button" type="button" on:click={() => removeFormRow(row.id)}>Remove</button>
+              <button class="icon-button" type="button" onclick={() => removeFormRow(row.id)}>Remove</button>
             </div>
           {/each}
 
-          <button class="ghost-button" type="button" on:click={addFormRow}>Add field</button>
+          <button class="ghost-button" type="button" onclick={addFormRow}>Add field</button>
         </div>
       {/if}
 
@@ -394,7 +407,7 @@
         <h2>Auth</h2>
         <label class="body-mode-control">
           <span class="sr-only">Auth type</span>
-          <select class="body-mode-select" value={request.auth.type} on:change={(event) => updateAuthType(event.currentTarget.value as AuthType)}>
+          <select class="body-mode-select" value={request.auth.type} onchange={(event) => updateAuthType(event.currentTarget.value as AuthType)}>
             <option value="none">None</option>
             <option value="basic">Basic</option>
             <option value="bearer">Bearer</option>

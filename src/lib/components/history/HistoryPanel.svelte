@@ -2,17 +2,31 @@
   import type { HistoryEntryDetail, HistoryEntrySummary } from "$lib/api/types";
   import HistoryDetail from "$lib/components/history/HistoryDetail.svelte";
 
-  export let items: HistoryEntrySummary[] = [];
-  export let isLoading = false;
-  export let errorText = "";
-  export let selectedId = "";
-  export let detail: HistoryEntryDetail | null = null;
-  export let detailErrorText = "";
-  export let isDetailLoading = false;
-  export let isClearing = false;
-  export let onInspect: (id: string) => Promise<void> | void = () => {};
-  export let onClear: () => Promise<void> | void = () => {};
-  export let onCloseDetail: () => void = () => {};
+  let {
+    items = [],
+    isLoading = false,
+    errorText = "",
+    selectedId = "",
+    detail = null,
+    detailErrorText = "",
+    isDetailLoading = false,
+    isClearing = false,
+    onInspect = () => {},
+    onClear = () => {},
+    onCloseDetail = () => {},
+  }: {
+    items?: HistoryEntrySummary[];
+    isLoading?: boolean;
+    errorText?: string;
+    selectedId?: string;
+    detail?: HistoryEntryDetail | null;
+    detailErrorText?: string;
+    isDetailLoading?: boolean;
+    isClearing?: boolean;
+    onInspect?: (id: string) => Promise<void> | void;
+    onClear?: () => Promise<void> | void;
+    onCloseDetail?: () => void;
+  } = $props();
 
   function handleInspect(event: MouseEvent, id: string) {
     (event.currentTarget as HTMLButtonElement | null)?.blur();
@@ -30,7 +44,7 @@
     }
   }
 
-  $: hasActiveDetail = Boolean(detail || isDetailLoading || detailErrorText);
+  let hasActiveDetail = $derived(Boolean(detail || isDetailLoading || detailErrorText));
 </script>
 
 <section class="panel history-panel">
@@ -43,7 +57,7 @@
         <span class="history-meta">{items.length} entries</span>
       {/if}
 
-      <button class="ghost-button" type="button" disabled={isClearing || items.length === 0} on:click={() => onClear()}>
+      <button class="ghost-button" type="button" disabled={isClearing || items.length === 0} onclick={() => onClear()}>
         {isClearing ? "Clearing..." : "Clear history"}
       </button>
     </div>
@@ -54,17 +68,17 @@
   {:else if items.length === 0 && !isLoading}
     <div class="empty-state">Request history will appear here after the first send.</div>
   {:else}
-    <div class:history-content-detail-open={hasActiveDetail} class="history-content">
+    <div class={["history-content", hasActiveDetail && "history-content-detail-open"]}>
       <div class="history-list-column">
         <div class="history-list">
           {#each items as item (item.id)}
-            <article class:history-item-active={selectedId === item.id} class="history-item">
+            <article class={["history-item", selectedId === item.id && "history-item-active"]}>
               <div class="history-item-top">
                 <div class="history-item-summary">
                   <strong>{item.requestName || item.url}</strong>
                   <div class="history-url" title={`${item.method} ${item.url}`}>{item.method} {item.url}</div>
                 </div>
-                <div class:history-status-error={item.statusCode === null || !!item.errorText} class="history-status">
+                <div class={["history-status", (item.statusCode === null || !!item.errorText) && "history-status-error"]}>
                   {#if item.statusCode !== null}
                     {item.statusCode}
                   {:else}
@@ -80,10 +94,9 @@
 
               <div class="history-row-actions">
                 <button
-                  class:active={selectedId === item.id}
-                  class="tab-button"
+                  class={["tab-button", selectedId === item.id && "active"]}
                   type="button"
-                  on:click={(event) => handleInspect(event, item.id)}
+                  onclick={(event) => handleInspect(event, item.id)}
                 >
                   {selectedId === item.id ? "Inspecting" : "Inspect"}
                 </button>
@@ -99,7 +112,7 @@
         </div>
       </div>
 
-      <div class:history-detail-column-empty={!hasActiveDetail} class="history-detail-column">
+      <div class={["history-detail-column", !hasActiveDetail && "history-detail-column-empty"]}>
         <HistoryDetail
           {detail}
           errorText={detailErrorText}

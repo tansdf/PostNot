@@ -1,10 +1,17 @@
 <script lang="ts">
   import type { HistoryEntryDetail, KeyValueRow } from "$lib/api/types";
 
-  export let detail: HistoryEntryDetail | null = null;
-  export let isLoading = false;
-  export let errorText = "";
-  export let onClose: () => void = () => {};
+  let {
+    detail = null,
+    isLoading = false,
+    errorText = "",
+    onClose = () => {}
+  }: {
+    detail?: HistoryEntryDetail | null;
+    isLoading?: boolean;
+    errorText?: string;
+    onClose?: () => void;
+  } = $props();
 
   function formatExecutedAt(value: string) {
     try {
@@ -33,18 +40,18 @@
     }
   }
 
-  $: queryParams = detail ? filterEnabled(detail.requestSnapshot.queryParams) : [];
-  $: requestHeaders = detail ? filterEnabled(detail.requestSnapshot.headers) : [];
-  $: responseHeaders = detail ? filterEnabled(detail.responseHeaders) : [];
-  $: requestBody = detail ? formatBody(detail.requestSnapshot.body.raw) : "";
-  $: responseBody = detail ? formatBody(detail.responseBodyText) : "";
+  let queryParams = $derived(detail ? filterEnabled(detail.requestSnapshot.queryParams) : []);
+  let requestHeaders = $derived(detail ? filterEnabled(detail.requestSnapshot.headers) : []);
+  let responseHeaders = $derived(detail ? filterEnabled(detail.responseHeaders) : []);
+  let requestBody = $derived(detail ? formatBody(detail.requestSnapshot.body.raw) : "");
+  let responseBody = $derived(detail ? formatBody(detail.responseBodyText) : "");
 </script>
 
 {#if detail || isLoading || errorText}
   <section class="history-detail history-detail-filled">
     <div class="editor-header">
       <h3>History Detail</h3>
-      <button class="ghost-button" type="button" on:click={() => onClose()} disabled={!detail && !errorText}>
+      <button class="ghost-button" type="button" onclick={() => onClose()} disabled={!detail && !errorText}>
         Close
       </button>
     </div>

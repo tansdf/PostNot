@@ -1,45 +1,36 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import { page } from "$app/stores";
-  import { get } from "svelte/store";
+  import { page } from "$app/state";
 
   import CollectionsPanel from "$lib/components/collections/CollectionsPanel.svelte";
   import { importRequests } from "$lib/api/commands";
   import AppShell from "$lib/components/layout/AppShell.svelte";
-  import {
-    collectionsState,
-    ensureCollectionsLoaded,
-    loadCollections,
-    removeCollection,
-    removeSavedRequestItem,
-    saveCollectionDetails,
-    selectCollection,
-    selectedCollection,
-    selectedSavedRequests
-  } from "$lib/stores/collections";
-  let isSavingCollection = false;
-  let requestedCollectionId = "";
-  let importSource = "";
-  let isImporting = false;
-  let importErrorText = "";
-  let importSuccessText = "";
-  let isImportModalOpen = false;
-  let importFileInput: HTMLInputElement | null = null;
+  import { collections } from "$lib/stores/collections.svelte";
 
-  $: requestedCollectionId = $page.url.searchParams.get("collectionId") ?? "";
+  let isSavingCollection = $state(false);
+  let importSource = $state("");
+  let isImporting = $state(false);
+  let importErrorText = $state("");
+  let importSuccessText = $state("");
+  let isImportModalOpen = $state(false);
+  let importFileInput: HTMLInputElement | null = $state(null);
 
-  $: void syncCollectionFromRoute(requestedCollectionId);
+  let requestedCollectionId = $derived(page.url.searchParams.get("collectionId") ?? "");
+
+  $effect(() => {
+    void syncCollectionFromRoute(requestedCollectionId);
+  });
 
   async function syncCollectionFromRoute(collectionId: string) {
-    await ensureCollectionsLoaded(collectionId);
+    await collections.ensureLoaded(collectionId);
 
-    if (collectionId && get(collectionsState).selectedCollectionId !== collectionId) {
-      await selectCollection(collectionId);
+    if (collectionId && collections.selectedCollectionId !== collectionId) {
+      await collections.selectCollection(collectionId);
       return;
     }
 
     if (!collectionId) {
-      const fallbackCollectionId = get(collectionsState).selectedCollectionId;
+      const fallbackCollectionId = collections.selectedCollectionId;
       if (fallbackCollectionId) {
         await goto(`/collections?collectionId=${encodeURIComponent(fallbackCollectionId)}`, {
           replaceState: true,
@@ -51,7 +42,7 @@
   }
 
   async function handleSaveCollection(name: string, description: string) {
-    const collection = get(selectedCollection);
+    const collection = collections.selectedCollection;
     if (!collection) {
       return false;
     }
@@ -59,7 +50,7 @@
     isSavingCollection = true;
 
     try {
-      const saved = await saveCollectionDetails(collection.id, {
+      const saved = await collections.saveDetails(collection.id, {
         name: name.trim(),
         description: description.trim()
       });
@@ -75,9 +66,9 @@
       return;
     }
 
-    await removeCollection(collectionId);
+    await collections.removeCollection(collectionId);
 
-    const nextCollectionId = get(collectionsState).selectedCollectionId;
+    const nextCollectionId = collections.selectedCollectionId;
     await goto(nextCollectionId ? `/collections?collectionId=${encodeURIComponent(nextCollectionId)}` : "/collections", {
       replaceState: true,
       noScroll: true,
@@ -90,7 +81,7 @@
   }
 
   async function handleDeleteSavedRequest(itemId: string) {
-    const collection = get(selectedCollection);
+    const collection = collections.selectedCollection;
     if (!collection) {
       return;
     }
@@ -99,8 +90,8 @@
       return;
     }
 
-    await removeSavedRequestItem(collection.id, itemId);
-    await loadCollections(collection.id);
+    await collections.removeSavedRequestItem(collection.id, itemId);
+    await collections.loadCollections(collection.id);
   }
 
   async function handleImportRequests() {
@@ -122,7 +113,7 @@
         targetCollectionId: null
       });
 
-      await loadCollections(result.collectionId);
+      await collections.loadCollections(result.collectionId);
 
       await goto(`/collections?collectionId=${encodeURIComponent(result.collectionId)}`, {
         replaceState: true,
@@ -158,14 +149,14 @@
 
 <AppShell title="PostNot" subtitle="Organize saved requests and keep them ready for reuse.">
   <CollectionsPanel
-    collection={$selectedCollection}
-    savedRequests={$selectedSavedRequests}
-    isCollectionsLoading={$collectionsState.isCollectionsLoading}
-    isSavedRequestsLoading={$collectionsState.isSavedRequestsLoading}
+    collection={collections.selectedCollection}
+    savedRequests={collections.selectedSavedRequests}
+    isCollectionsLoading={collections.isCollectionsLoading}
+    isSavedRequestsLoading={collections.isSavedRequestsLoading}
     {isSavingCollection}
-    pendingDeleteCollectionId={$collectionsState.pendingDeleteCollectionId}
-    pendingDeleteSavedRequestId={$collectionsState.pendingDeleteSavedRequestId}
-    errorText={$collectionsState.errorText}
+    pendingDeleteCollectionId={collections.pendingDeleteCollectionId}
+    pendingDeleteSavedRequestId={collections.pendingDeleteSavedRequestId}
+    errorText={collections.errorText}
     {isImporting}
     {importSuccessText}
     onOpenImport={openImportModal}
@@ -181,8 +172,8 @@
       role="button"
       tabindex="0"
       aria-label="Close import dialog"
-      on:click|self={closeImportModal}
-      on:keydown={(event) => {
+      onclick={(e) => { if (e.target === e.currentTarget) closeImportModal(); }}
+      onkeydown={(event) => {
         if (event.key === "Escape" || event.key === "Enter" || event.key === " ") {
           event.preventDefault();
           closeImportModal();
@@ -212,7 +203,7 @@
             class="sr-only"
             type="file"
             accept=".json,application/json"
-            on:change={async (event) => {
+            onchange={async (event: Event & { currentTarget: HTMLInputElement }) => {
               const file = event.currentTarget.files?.[0];
               if (!file) {
                 return;
@@ -228,13 +219,13 @@
           {/if}
 
           <div class="collections-page-actions">
-            <button class="ghost-button" type="button" on:click={() => importFileInput?.click()}>
+            <button class="ghost-button" type="button" onclick={() => importFileInput?.click()}>
               Open JSON file
             </button>
             <button
               class="send-button"
               type="button"
-              on:click={async () => {
+              onclick={async () => {
                 await handleImportRequests();
                 if (!importErrorText) {
                   closeImportModal();
@@ -244,7 +235,7 @@
             >
               {isImporting ? "Importing..." : "Import"}
             </button>
-            <button class="ghost-button" type="button" on:click={closeImportModal}>
+            <button class="ghost-button" type="button" onclick={closeImportModal}>
               Cancel
             </button>
           </div>

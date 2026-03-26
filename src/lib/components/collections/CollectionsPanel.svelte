@@ -1,37 +1,59 @@
 <script lang="ts">
   import type { CollectionSummary, SavedRequestSummary } from "$lib/api/types";
 
-  export let collection: CollectionSummary | null = null;
-  export let savedRequests: SavedRequestSummary[] = [];
-  export let isCollectionsLoading = false;
-  export let isSavedRequestsLoading = false;
-  export let isSavingCollection = false;
-  export let pendingDeleteCollectionId = "";
-  export let pendingDeleteSavedRequestId = "";
-  export let errorText = "";
-  export let isImporting = false;
-  export let importSuccessText = "";
-  export let onOpenImport: () => Promise<void> | void = () => {};
-  export let onSaveCollection: (name: string, description: string) => Promise<boolean> | boolean = () => false;
-  export let onDeleteCollection: (collectionId: string) => Promise<void> | void = () => {};
-  export let onOpenSavedRequest: (itemId: string) => Promise<void> | void = () => {};
-  export let onDeleteSavedRequest: (itemId: string) => Promise<void> | void = () => {};
+  let {
+    collection = null,
+    savedRequests = [],
+    isCollectionsLoading = false,
+    isSavedRequestsLoading = false,
+    isSavingCollection = false,
+    pendingDeleteCollectionId = "",
+    pendingDeleteSavedRequestId = "",
+    errorText = "",
+    isImporting = false,
+    importSuccessText = "",
+    onOpenImport = () => {},
+    onSaveCollection = () => false,
+    onDeleteCollection = () => {},
+    onOpenSavedRequest = () => {},
+    onDeleteSavedRequest = () => {},
+  }: {
+    collection?: CollectionSummary | null;
+    savedRequests?: SavedRequestSummary[];
+    isCollectionsLoading?: boolean;
+    isSavedRequestsLoading?: boolean;
+    isSavingCollection?: boolean;
+    pendingDeleteCollectionId?: string;
+    pendingDeleteSavedRequestId?: string;
+    errorText?: string;
+    isImporting?: boolean;
+    importSuccessText?: string;
+    onOpenImport?: () => Promise<void> | void;
+    onSaveCollection?: (name: string, description: string) => Promise<boolean> | boolean;
+    onDeleteCollection?: (collectionId: string) => Promise<void> | void;
+    onOpenSavedRequest?: (itemId: string) => Promise<void> | void;
+    onDeleteSavedRequest?: (itemId: string) => Promise<void> | void;
+  } = $props();
 
-  let editableCollectionId = "";
-  let draftName = "";
-  let draftDescription = "";
+  let editableCollectionId = $state("");
+  let draftName = $state("");
+  let draftDescription = $state("");
 
-  $: if (collection && collection.id !== editableCollectionId) {
-    editableCollectionId = collection.id;
-    draftName = collection.name;
-    draftDescription = collection.description;
-  }
+  $effect(() => {
+    if (collection && collection.id !== editableCollectionId) {
+      editableCollectionId = collection.id;
+      draftName = collection.name;
+      draftDescription = collection.description;
+    }
+  });
 
-  $: if (!collection) {
-    editableCollectionId = "";
-    draftName = "";
-    draftDescription = "";
-  }
+  $effect(() => {
+    if (!collection) {
+      editableCollectionId = "";
+      draftName = "";
+      draftDescription = "";
+    }
+  });
 
   function formatUpdatedAt(value: string) {
     try {
@@ -68,7 +90,7 @@
         {:else if isCollectionsLoading}
           <span class="history-meta">Loading...</span>
         {/if}
-        <button class="ghost-button" type="button" on:click={onOpenImport}>Import</button>
+        <button class="ghost-button" type="button" onclick={onOpenImport}>Import</button>
       </div>
     </div>
 
@@ -77,7 +99,7 @@
     {/if}
 
     {#if collection}
-      <form class="collections-detail-form" on:submit|preventDefault={handleSubmit}>
+      <form class="collections-detail-form" onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
         <div class="detail-facts">
           <div class="detail-kv-item">
             <span class="field-label">Saved requests</span>
@@ -110,7 +132,7 @@
           <button
             class="icon-button"
             type="button"
-            on:click={() => collection && onDeleteCollection(collection.id)}
+            onclick={() => collection && onDeleteCollection(collection.id)}
             disabled={pendingDeleteCollectionId === collection.id}
           >
             {pendingDeleteCollectionId === collection.id ? "Deleting..." : "Delete collection"}
@@ -145,13 +167,13 @@
             </div>
 
             <div class="saved-request-actions">
-              <button class="tab-button" type="button" on:click={() => onOpenSavedRequest(item.id)}>
+              <button class="tab-button" type="button" onclick={() => onOpenSavedRequest(item.id)}>
                 Open in Requests
               </button>
               <button
                 class="icon-button"
                 type="button"
-                on:click={() => onDeleteSavedRequest(item.id)}
+                onclick={() => onDeleteSavedRequest(item.id)}
                 disabled={pendingDeleteSavedRequestId === item.id}
               >
                 {pendingDeleteSavedRequestId === item.id ? "Deleting..." : "Delete"}

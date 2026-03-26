@@ -18,11 +18,11 @@
     { value: 1.2, label: "120%" }
   ];
 
-  let settings: AppSettings = createDefaultSettings();
-  let isLoading = true;
-  let isSaving = false;
-  let errorText = "";
-  let saveMessage = "";
+  let settings: AppSettings = $state(createDefaultSettings());
+  let isLoading = $state(true);
+  let isSaving = $state(false);
+  let errorText = $state("");
+  let saveMessage = $state("");
 
   onMount(loadSettings);
 
@@ -72,7 +72,7 @@
       {/if}
     </div>
 
-    <form class="settings-form" on:submit|preventDefault={handleSubmit}>
+    <form class="settings-form" onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
       <label>
         <span class="field-label">Theme</span>
         <select class="text-input" bind:value={settings.theme}>

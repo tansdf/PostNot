@@ -1,9 +1,11 @@
 <script lang="ts">
+  import type { Snippet } from "svelte";
   import { onMount } from "svelte";
-
   import { getSettings } from "$lib/api/commands";
   import "$lib/styles/app.css";
   import { applyTheme, applyUiScale, watchSystemTheme } from "$lib/theme";
+
+  let { children }: { children?: Snippet } = $props();
 
   onMount(() => {
     let themePreference = "system";
@@ -34,4 +36,4 @@
   });
 </script>
 
-<slot />
+{@render children?.()}

@@ -1,10 +1,17 @@
 <script lang="ts">
-  import { page } from "$app/stores";
-
+  import type { Snippet } from "svelte";
+  import { page } from "$app/state";
   import SidebarCollections from "$lib/components/layout/SidebarCollections.svelte";
 
-  export let title = "PostNot";
-  export let subtitle = "A local-first desktop API client.";
+  let {
+    title = "PostNot",
+    subtitle = "A local-first desktop API client.",
+    children
+  }: {
+    title?: string;
+    subtitle?: string;
+    children?: Snippet;
+  } = $props();
 </script>
 
 <div class="app-viewport">
@@ -17,17 +24,17 @@
       </div>
 
       <nav class="sidebar-nav" aria-label="Primary">
-        <a class:sidebar-link-active={$page.url.pathname === "/"} class="sidebar-link" href="/">Requests</a>
-        <a class:sidebar-link-active={$page.url.pathname.startsWith("/collections")} class="sidebar-link" href="/collections">Collections</a>
-        <a class:sidebar-link-active={$page.url.pathname.startsWith("/environments")} class="sidebar-link" href="/environments">Environments</a>
-        <a class:sidebar-link-active={$page.url.pathname.startsWith("/settings")} class="sidebar-link" href="/settings">Settings</a>
+        <a class={["sidebar-link", page.url.pathname === "/" && "sidebar-link-active"]} href="/">Requests</a>
+        <a class={["sidebar-link", page.url.pathname.startsWith("/collections") && "sidebar-link-active"]} href="/collections">Collections</a>
+        <a class={["sidebar-link", page.url.pathname.startsWith("/environments") && "sidebar-link-active"]} href="/environments">Environments</a>
+        <a class={["sidebar-link", page.url.pathname.startsWith("/settings") && "sidebar-link-active"]} href="/settings">Settings</a>
       </nav>
 
       <SidebarCollections />
     </aside>
 
     <main class="workspace">
-      <slot />
+      {@render children?.()}
     </main>
   </div>
 </div>

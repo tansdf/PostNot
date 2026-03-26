@@ -1,6 +1,6 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import { page } from "$app/stores";
+  import { page } from "$app/state";
   import { onMount } from "svelte";
   import { createKeyValueRow, type EnvironmentDetail, type EnvironmentSummary } from "$lib/api/types";
   import {
@@ -13,27 +13,29 @@
   } from "$lib/api/commands";
   import AppShell from "$lib/components/layout/AppShell.svelte";
 
-  let environments: EnvironmentSummary[] = [];
-  let selectedEnvironmentId = "";
-  let environmentDetail: EnvironmentDetail | null = null;
-  let isLoading = true;
-  let isDetailLoading = false;
-  let isSaving = false;
-  let isCreating = false;
-  let pendingDeleteId = "";
-  let pendingActivateId = "";
-  let errorText = "";
-  let requestedEnvironmentId = "";
+  let environments: EnvironmentSummary[] = $state([]);
+  let selectedEnvironmentId = $state("");
+  let environmentDetail: EnvironmentDetail | null = $state(null);
+  let isLoading = $state(true);
+  let isDetailLoading = $state(false);
+  let isSaving = $state(false);
+  let isCreating = $state(false);
+  let pendingDeleteId = $state("");
+  let pendingActivateId = $state("");
+  let errorText = $state("");
   type EnvironmentVariable = NonNullable<EnvironmentDetail["variables"]>[number];
 
-  $: requestedEnvironmentId = $page.url.searchParams.get("environmentId") ?? "";
+  let requestedEnvironmentId = $derived(page.url.searchParams.get("environmentId") ?? "");
+
   onMount(() => {
     void loadEnvironments(requestedEnvironmentId);
   });
 
-  $: if (!isLoading) {
-    void syncEnvironmentFromRoute(requestedEnvironmentId);
-  }
+  $effect(() => {
+    if (!isLoading) {
+      void syncEnvironmentFromRoute(requestedEnvironmentId);
+    }
+  });
 
   async function syncEnvironmentFromRoute(environmentId: string) {
     if (isLoading) {
@@ -229,7 +231,7 @@
     <section class="panel collections-page-panel">
       <div class="editor-header">
         <h1>Environments</h1>
-        <button class="ghost-button" type="button" on:click={handleCreateEnvironment} disabled={isCreating}>
+        <button class="ghost-button" type="button" onclick={handleCreateEnvironment} disabled={isCreating}>
           {isCreating ? "Creating..." : "New environment"}
         </button>
       </div>
@@ -243,8 +245,8 @@
       {:else}
         <div class="collections-list">
           {#each environments as environment (environment.id)}
-            <article class:collection-item-active={selectedEnvironmentId === environment.id} class="collection-item">
-              <button class="collection-select" type="button" on:click={() => loadEnvironmentDetail(environment.id)}>
+            <article class={["collection-item", selectedEnvironmentId === environment.id && "collection-item-active"]}>
+              <button class="collection-select" type="button" onclick={() => loadEnvironmentDetail(environment.id)}>
                 <strong>{environment.name}</strong>
                 <span>{environment.variableCount} variable{environment.variableCount === 1 ? "" : "s"}</span>
                 <span class="history-meta">Updated {formatUpdatedAt(environment.updatedAt)}</span>
@@ -257,7 +259,7 @@
                 <button
                   class="tab-button"
                   type="button"
-                  on:click={() => handleActivate(environment.isActive ? null : environment.id)}
+                  onclick={() => handleActivate(environment.isActive ? null : environment.id)}
                   disabled={pendingActivateId === environment.id || pendingActivateId === "__none__"}
                 >
                   {environment.isActive ? "Deactivate" : "Set active"}
@@ -265,7 +267,7 @@
                 <button
                   class="icon-button"
                   type="button"
-                  on:click={() => handleDelete(environment.id)}
+                  onclick={() => handleDelete(environment.id)}
                   disabled={pendingDeleteId === environment.id}
                 >
                   {pendingDeleteId === environment.id ? "Deleting..." : "Delete"}
@@ -296,7 +298,7 @@
 
           <div class="editor-header">
             <h2>Variables</h2>
-            <button class="ghost-button" type="button" on:click={addVariable}>Add variable</button>
+            <button class="ghost-button" type="button" onclick={addVariable}>Add variable</button>
           </div>
 
           <div class="row-list">
@@ -306,21 +308,21 @@
                   class="row-toggle"
                   type="checkbox"
                   checked={row.enabled}
-                  on:change={(event) => updateVariable(index, { enabled: event.currentTarget.checked })}
+                  onchange={(event) => updateVariable(index, { enabled: event.currentTarget.checked })}
                 />
                 <input
                   class="text-input"
                   value={row.key}
                   placeholder="Variable name"
-                  on:input={(event) => updateVariable(index, { key: event.currentTarget.value })}
+                  oninput={(event) => updateVariable(index, { key: event.currentTarget.value })}
                 />
                 <input
                   class="text-input"
                   value={row.value}
                   placeholder="Value"
-                  on:input={(event) => updateVariable(index, { value: event.currentTarget.value })}
+                  oninput={(event) => updateVariable(index, { value: event.currentTarget.value })}
                 />
-                <button class="icon-button" type="button" on:click={() => removeVariable(row.id)}>Remove</button>
+                <button class="icon-button" type="button" onclick={() => removeVariable(row.id)}>Remove</button>
               </div>
             {/each}
           </div>
@@ -331,7 +333,7 @@
           </div>
 
           <div class="collections-page-actions">
-            <button class="send-button" type="button" on:click={handleSave} disabled={isSaving}>
+            <button class="send-button" type="button" onclick={handleSave} disabled={isSaving}>
               {isSaving ? "Saving..." : "Save environment"}
             </button>
           </div>

@@ -1,7 +1,6 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import { page } from "$app/stores";
-  import { get } from "svelte/store";
+  import { page } from "$app/state";
   import { onMount, tick } from "svelte";
 
   import {
@@ -30,61 +29,51 @@
   import AppShell from "$lib/components/layout/AppShell.svelte";
   import RequestEditor from "$lib/components/request/RequestEditor.svelte";
   import ResponseViewer from "$lib/components/response/ResponseViewer.svelte";
-  import {
-    collectionsState,
-    ensureCollectionsLoaded,
-    resetCollectionsError,
-    saveNewRequest,
-    selectCollection,
-    updateExistingSavedRequest
-  } from "$lib/stores/collections";
+  import { collections } from "$lib/stores/collections.svelte";
 
-  let request = createRequestDraft();
-  let response: ResponsePayload | null = null;
-  let settings: AppSettings = createDefaultSettings();
-  let history: HistoryEntrySummary[] = [];
-  let isSending = false;
-  let isCancelingRequest = false;
-  let isHistoryLoading = true;
-  let isHistoryDetailLoading = false;
-  let isClearingHistory = false;
-  let historyErrorText = "";
-  let historyDetailErrorText = "";
-  let settingsErrorText = "";
-  let requestSaveErrorText = "";
-  let environments: EnvironmentSummary[] = [];
-  let activeEnvironmentId = "";
-  let activeEnvironmentDetail: EnvironmentDetail | null = null;
-  let isEnvironmentsLoading = true;
-  let isEnvironmentChanging = false;
-  let environmentsErrorText = "";
-  let selectedHistoryId = "";
-  let selectedHistoryDetail: HistoryEntryDetail | null = null;
-  let activeSavedRequestId = "";
-  let activeSavedRequestCollectionId = "";
-  let isSaveDialogOpen = false;
-  let isCurlImportDialogOpen = false;
-  let curlImportSource = "";
-  let isImportingCurl = false;
-  let curlImportErrorText = "";
-  let saveTargetCollectionId = "";
-  let lastLoadedSavedRequestId = "";
-  let isLoadingSavedRequest = false;
-  let requestedSavedRequestId = "";
+  let request = $state(createRequestDraft());
+  let response: ResponsePayload | null = $state(null);
+  let settings: AppSettings = $state(createDefaultSettings());
+  let history: HistoryEntrySummary[] = $state([]);
+  let isSending = $state(false);
+  let isCancelingRequest = $state(false);
+  let isHistoryLoading = $state(true);
+  let isHistoryDetailLoading = $state(false);
+  let isClearingHistory = $state(false);
+  let historyErrorText = $state("");
+  let historyDetailErrorText = $state("");
+  let settingsErrorText = $state("");
+  let requestSaveErrorText = $state("");
+  let environments: EnvironmentSummary[] = $state([]);
+  let activeEnvironmentId = $state("");
+  let activeEnvironmentDetail: EnvironmentDetail | null = $state(null);
+  let isEnvironmentsLoading = $state(true);
+  let isEnvironmentChanging = $state(false);
+  let environmentsErrorText = $state("");
+  let selectedHistoryId = $state("");
+  let selectedHistoryDetail: HistoryEntryDetail | null = $state(null);
+  let activeSavedRequestId = $state("");
+  let activeSavedRequestCollectionId = $state("");
+  let isSaveDialogOpen = $state(false);
+  let isCurlImportDialogOpen = $state(false);
+  let curlImportSource = $state("");
+  let isImportingCurl = $state(false);
+  let curlImportErrorText = $state("");
+  let saveTargetCollectionId = $state("");
+  let lastLoadedSavedRequestId = $state("");
+  let isLoadingSavedRequest = $state(false);
+
+  let requestedSavedRequestId = $derived(page.url.searchParams.get("savedRequestId") ?? "");
 
   onMount(async () => {
-    await Promise.all([loadSettings(), loadHistory(), ensureCollectionsLoaded(), loadEnvironments()]);
+    await Promise.all([loadSettings(), loadHistory(), collections.ensureLoaded(), loadEnvironments()]);
   });
 
-  $: requestedSavedRequestId = $page.url.searchParams.get("savedRequestId") ?? "";
-
-  $: if (
-    requestedSavedRequestId &&
-    requestedSavedRequestId !== lastLoadedSavedRequestId &&
-    !isLoadingSavedRequest
-  ) {
-    void loadSavedRequestFromRoute(requestedSavedRequestId);
-  }
+  $effect(() => {
+    if (requestedSavedRequestId && requestedSavedRequestId !== lastLoadedSavedRequestId && !isLoadingSavedRequest) {
+      void loadSavedRequestFromRoute(requestedSavedRequestId);
+    }
+  });
 
   async function loadSettings() {
     try {
@@ -249,15 +238,15 @@
 
     try {
       const savedRequest = await getSavedRequest(itemId);
-      await ensureCollectionsLoaded(savedRequest.collectionId);
+      await collections.ensureLoaded(savedRequest.collectionId);
       request = structuredClone(savedRequest.request);
       response = null;
       activeSavedRequestId = savedRequest.id;
       activeSavedRequestCollectionId = savedRequest.collectionId;
       lastLoadedSavedRequestId = savedRequest.id;
       requestSaveErrorText = "";
-      resetCollectionsError();
-      await selectCollection(savedRequest.collectionId);
+      collections.resetError();
+      await collections.selectCollection(savedRequest.collectionId);
     } catch (error) {
       requestSaveErrorText = error instanceof Error ? error.message : String(error);
     } finally {
@@ -267,19 +256,18 @@
 
   async function handleSaveRequest() {
     requestSaveErrorText = "";
-    resetCollectionsError();
+    collections.resetError();
 
-    const collectionState = get(collectionsState);
     const hasActiveSavedRequest =
       activeSavedRequestId &&
       activeSavedRequestCollectionId &&
-      collectionState.collections.some((collection) => collection.id === activeSavedRequestCollectionId);
+      collections.collections.some((collection) => collection.id === activeSavedRequestCollectionId);
 
     if (hasActiveSavedRequest) {
-      const savedRequest = await updateExistingSavedRequest(activeSavedRequestId, activeSavedRequestCollectionId, request);
+      const savedRequest = await collections.updateExistingSavedRequest(activeSavedRequestId, activeSavedRequestCollectionId, request);
 
       if (!savedRequest) {
-        requestSaveErrorText = get(collectionsState).errorText;
+        requestSaveErrorText = collections.errorText;
         return;
       }
 
@@ -292,13 +280,13 @@
       return;
     }
 
-    if (collectionState.collections.length === 0) {
+    if (collections.collections.length === 0) {
       requestSaveErrorText = "Create a collection first from the sidebar.";
       return;
     }
 
     saveTargetCollectionId =
-      collectionState.selectedCollectionId || activeSavedRequestCollectionId || collectionState.collections[0].id;
+      collections.selectedCollectionId || activeSavedRequestCollectionId || collections.collections[0].id;
     isSaveDialogOpen = true;
   }
 
@@ -308,10 +296,10 @@
       return;
     }
 
-    const savedRequest = await saveNewRequest(saveTargetCollectionId, request);
+    const savedRequest = await collections.saveNewRequest(saveTargetCollectionId, request);
 
     if (!savedRequest) {
-      requestSaveErrorText = get(collectionsState).errorText;
+      requestSaveErrorText = collections.errorText;
       return;
     }
 
@@ -320,7 +308,7 @@
     lastLoadedSavedRequestId = savedRequest.id;
     requestSaveErrorText = "";
     isSaveDialogOpen = false;
-    await selectCollection(savedRequest.collectionId);
+    await collections.selectCollection(savedRequest.collectionId);
     await goto(`/?savedRequestId=${encodeURIComponent(savedRequest.id)}`, {
       replaceState: true,
       noScroll: true,
@@ -438,7 +426,7 @@
           <select
             class="text-input"
             value={activeEnvironmentId}
-            on:change={(event) => handleEnvironmentChange(event.currentTarget.value)}
+            onchange={(event) => handleEnvironmentChange(event.currentTarget.value)}
             disabled={isEnvironmentChanging}
           >
             <option value="">No environment</option>
@@ -476,7 +464,7 @@
       environmentVariables={activeEnvironmentDetail?.variables ?? []}
       {isSending}
       isCanceling={isCancelingRequest}
-      isSaving={$collectionsState.isSavingRequest}
+      isSaving={collections.isSavingRequest}
       saveLabel={activeSavedRequestId ? "Update" : "Save"}
       saveDisabled={isSending}
       onNewRequest={handleNewRequest}
@@ -512,8 +500,8 @@
       role="button"
       tabindex="0"
       aria-label="Close save request dialog"
-      on:click|self={closeSaveDialog}
-      on:keydown={handleSaveDialogBackdropKeydown}
+      onclick={(e) => { if (e.target === e.currentTarget) closeSaveDialog(); }}
+      onkeydown={handleSaveDialogBackdropKeydown}
     >
       <div
         class="panel save-dialog"
@@ -530,14 +518,13 @@
           <div>
             <span class="field-label">Choose a collection</span>
             <div class="save-target-list" role="listbox" aria-label="Choose a collection">
-              {#each $collectionsState.collections as collection (collection.id)}
+              {#each collections.collections as collection (collection.id)}
                 <button
-                  class:save-target-active={saveTargetCollectionId === collection.id}
-                  class="save-target-button"
+                  class={["save-target-button", saveTargetCollectionId === collection.id && "save-target-active"]}
                   type="button"
                   role="option"
                   aria-selected={saveTargetCollectionId === collection.id}
-                  on:click={() => (saveTargetCollectionId = collection.id)}
+                  onclick={() => (saveTargetCollectionId = collection.id)}
                 >
                   <strong>{collection.name}</strong>
                   <span>{collection.requestCount} request{collection.requestCount === 1 ? "" : "s"}</span>
@@ -547,10 +534,10 @@
           </div>
 
           <div class="collections-page-actions">
-            <button class="send-button" type="button" on:click={confirmSaveRequest} disabled={$collectionsState.isSavingRequest}>
-              {$collectionsState.isSavingRequest ? "Saving..." : "Save request"}
+            <button class="send-button" type="button" onclick={confirmSaveRequest} disabled={collections.isSavingRequest}>
+              {collections.isSavingRequest ? "Saving..." : "Save request"}
             </button>
-            <button class="ghost-button" type="button" on:click={closeSaveDialog}>
+            <button class="ghost-button" type="button" onclick={closeSaveDialog}>
               Cancel
             </button>
           </div>
@@ -565,8 +552,8 @@
       role="button"
       tabindex="0"
       aria-label="Close cURL import dialog"
-      on:click|self={closeCurlImportDialog}
-      on:keydown={(event) => {
+      onclick={(e) => { if (e.target === e.currentTarget) closeCurlImportDialog(); }}
+      onkeydown={(event) => {
         if (event.key === "Escape" || event.key === "Enter" || event.key === " ") {
           event.preventDefault();
           closeCurlImportDialog();
@@ -584,7 +571,7 @@
             <textarea
               class="text-input collections-import-source"
               bind:value={curlImportSource}
-              placeholder={'curl --request GET https://api.example.com/items -H "Authorization: Bearer token"'}
+              placeholder='curl --request GET https://api.example.com/items -H "Authorization: Bearer token"'
             ></textarea>
           </label>
 
@@ -593,10 +580,10 @@
           {/if}
 
           <div class="collections-page-actions">
-            <button class="send-button" type="button" on:click={handleImportCurl} disabled={isImportingCurl}>
+            <button class="send-button" type="button" onclick={handleImportCurl} disabled={isImportingCurl}>
               {isImportingCurl ? "Importing..." : "Import request"}
             </button>
-            <button class="ghost-button" type="button" on:click={closeCurlImportDialog}>
+            <button class="ghost-button" type="button" onclick={closeCurlImportDialog}>
               Cancel
             </button>
           </div>
