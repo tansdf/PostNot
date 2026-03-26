@@ -4,6 +4,19 @@ This changelog was reconstructed from the project chat history and is now the tr
 
 The project currently uses pre-1.0 semantic versioning. Minor versions mark meaningful product milestones, while patch versions should be used for smaller fixes and polish.
 
+## [0.6.2] - 2026-03-26
+
+### Added
+
+- JSON body validation on blur: when the editor loses focus, invalid JSON is flagged with a compact error message below the editor that clears on re-focus.
+- JSON syntax highlighting in the body editor using a transparent-textarea overlay technique with token-level coloring for keys, strings, numbers, booleans, null, and punctuation.
+- Auto-indent on Enter and Tab indentation support in the JSON body editor.
+- Format button for the JSON body that pretty-prints with two-space indentation.
+
+### Fixed
+
+- Eliminated doubled rounded corners on the JSON body editor by removing the overlay's inherited border and making the textarea the sole border source.
+
 ## [0.6.1] - 2026-03-26
 
 ### Changed

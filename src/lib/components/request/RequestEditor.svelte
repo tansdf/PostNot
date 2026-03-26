@@ -2,6 +2,22 @@
   import { createKeyValueRow, type AuthType, type BodyMode, type KeyValueRow, type RequestDraft } from "$lib/api/types";
   import VariableField from "$lib/components/request/VariableField.svelte";
 
+  let jsonEditorShellElement: HTMLDivElement | null = $state(null);
+
+  $effect(() => {
+    if (request.body.mode !== "json" || !jsonEditorShellElement || !jsonOverlayElement) return;
+    const textarea = jsonEditorShellElement.querySelector<HTMLTextAreaElement>("textarea");
+    if (!textarea) return;
+    const handler = () => {
+      if (jsonOverlayElement) {
+        jsonOverlayElement.scrollTop = textarea.scrollTop;
+        jsonOverlayElement.scrollLeft = textarea.scrollLeft;
+      }
+    };
+    textarea.addEventListener("scroll", handler);
+    return () => textarea.removeEventListener("scroll", handler);
+  });
+
   let {
     request = $bindable(),
     isSending = false,
@@ -156,14 +172,144 @@
     };
   }
 
+  let jsonValidationError = $state("");
+
   function formatJsonBody() {
     try {
       const parsed = JSON.parse(request.body.raw);
       updateBodyField("raw", JSON.stringify(parsed, null, 2));
+      jsonValidationError = "";
     } catch {
       // not valid JSON, do nothing
     }
   }
+
+  function validateJsonOnBlur() {
+    const raw = request.body.raw.trim();
+    if (!raw) {
+      jsonValidationError = "";
+      return;
+    }
+    try {
+      JSON.parse(raw);
+      jsonValidationError = "";
+    } catch (error) {
+      jsonValidationError = error instanceof SyntaxError ? error.message : "Invalid JSON";
+    }
+  }
+
+  $effect(() => {
+    if (request.body.mode !== "json") {
+      jsonValidationError = "";
+    }
+  });
+
+  let jsonOverlayElement: HTMLPreElement | null = $state(null);
+
+  type JsonToken = { type: string; value: string };
+
+  function tokenizeJson(json: string): JsonToken[] {
+    const tokens: JsonToken[] = [];
+    let i = 0;
+    while (i < json.length) {
+      const ch = json[i];
+      if (ch === '"') {
+        const start = i;
+        i++;
+        while (i < json.length && json[i] !== '"') { if (json[i] === '\\') i++; i++; }
+        i++;
+        const raw = json.slice(start, i);
+        let j = i;
+        while (j < json.length && (json[j] === ' ' || json[j] === '\t')) j++;
+        tokens.push({ type: json[j] === ':' ? "key" : "string", value: raw });
+        continue;
+      }
+      if (ch === '-' || (ch >= '0' && ch <= '9')) {
+        const start = i;
+        while (i < json.length && /[0-9.eE+\-]/.test(json[i])) i++;
+        tokens.push({ type: "number", value: json.slice(start, i) });
+        continue;
+      }
+      if (json.startsWith("true", i)) { tokens.push({ type: "boolean", value: "true" }); i += 4; continue; }
+      if (json.startsWith("false", i)) { tokens.push({ type: "boolean", value: "false" }); i += 5; continue; }
+      if (json.startsWith("null", i)) { tokens.push({ type: "null", value: "null" }); i += 4; continue; }
+      if ('{}[]'.includes(ch)) { tokens.push({ type: "bracket", value: ch }); i++; continue; }
+      if (ch === ':') { tokens.push({ type: "colon", value: ": " }); i++; if (json[i] === ' ') i++; continue; }
+      if (ch === ',') { tokens.push({ type: "comma", value: "," }); i++; continue; }
+      if (ch === '\n') { tokens.push({ type: "newline", value: "\n" }); i++; continue; }
+      if (ch === ' ' || ch === '\t') {
+        const start = i;
+        while (i < json.length && (json[i] === ' ' || json[i] === '\t')) i++;
+        tokens.push({ type: "indent", value: json.slice(start, i) });
+        continue;
+      }
+      tokens.push({ type: "text", value: ch });
+      i++;
+    }
+    return tokens;
+  }
+
+  let jsonTokens = $derived(
+    request.body.mode === "json" ? tokenizeJson(request.body.raw) : []
+  );
+
+  function handleJsonKeydown(event: KeyboardEvent) {
+    if (request.body.mode !== "json") return;
+    const textarea = event.target as HTMLTextAreaElement;
+    if (textarea.tagName !== "TEXTAREA") return;
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const { selectionStart } = textarea;
+      const val = textarea.value;
+      const lineStart = val.lastIndexOf('\n', selectionStart - 1) + 1;
+      const currentLine = val.slice(lineStart, selectionStart);
+      const indent = currentLine.match(/^(\s*)/)?.[1] ?? "";
+      const charBefore = val[selectionStart - 1];
+      const charAfter = val[selectionStart];
+      let insert: string;
+
+      if ((charBefore === '{' || charBefore === '[') && (charAfter === '}' || charAfter === ']')) {
+        insert = `\n${indent}  \n${indent}`;
+        const next = val.slice(0, selectionStart) + insert + val.slice(selectionStart);
+        updateBodyField("raw", next);
+        requestAnimationFrame(() => {
+          const pos = selectionStart + indent.length + 3;
+          textarea.setSelectionRange(pos, pos);
+        });
+      } else if (charBefore === '{' || charBefore === '[') {
+        insert = `\n${indent}  `;
+        const next = val.slice(0, selectionStart) + insert + val.slice(selectionStart);
+        updateBodyField("raw", next);
+        requestAnimationFrame(() => {
+          const pos = selectionStart + insert.length;
+          textarea.setSelectionRange(pos, pos);
+        });
+      } else {
+        insert = `\n${indent}`;
+        const next = val.slice(0, selectionStart) + insert + val.slice(selectionStart);
+        updateBodyField("raw", next);
+        requestAnimationFrame(() => {
+          const pos = selectionStart + insert.length;
+          textarea.setSelectionRange(pos, pos);
+        });
+      }
+      return;
+    }
+
+    if (event.key === "Tab") {
+      event.preventDefault();
+      const { selectionStart, selectionEnd } = textarea;
+      const insert = "  ";
+      const next = textarea.value.slice(0, selectionStart) + insert + textarea.value.slice(selectionEnd);
+      updateBodyField("raw", next);
+      requestAnimationFrame(() => {
+        const pos = selectionStart + 2;
+        textarea.setSelectionRange(pos, pos);
+      });
+    }
+  }
+
 
   function updateFormRow(index: number, patch: Partial<KeyValueRow>) {
     const nextRows = request.body.form.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row));
@@ -367,13 +513,34 @@
         </div>
       {/if}
 
-      {#if request.body.mode === "json" || request.body.mode === "raw"}
+      {#if request.body.mode === "json"}
+        <div class="json-editor-shell" bind:this={jsonEditorShellElement} onfocusout={validateJsonOnBlur} onfocusin={() => { jsonValidationError = ""; }}>
+          <pre
+            class="json-editor-overlay"
+            aria-hidden="true"
+            bind:this={jsonOverlayElement}
+          >{#each jsonTokens as token, i (i)}{#if token.type === "key"}<span class="jt-key">{token.value}</span>{:else if token.type === "string"}<span class="jt-string">{token.value}</span>{:else if token.type === "number"}<span class="jt-number">{token.value}</span>{:else if token.type === "boolean"}<span class="jt-bool">{token.value}</span>{:else if token.type === "null"}<span class="jt-null">{token.value}</span>{:else if token.type === "bracket"}<span class="jt-bracket">{token.value}</span>{:else if token.type === "colon"}<span class="jt-colon">{token.value}</span>{:else if token.type === "comma"}<span class="jt-comma">{token.value}</span>{:else}{token.value}{/if}{/each}
+</pre>
+          <VariableField
+            className="body-textarea json-editor-textarea"
+            multiline={true}
+            value={request.body.raw}
+            variables={environmentVariables}
+            placeholder={'{"hello":"world"}'}
+            onValueInput={(nextValue) => updateBodyField("raw", nextValue)}
+            onExtraKeydown={handleJsonKeydown}
+          />
+        </div>
+        {#if jsonValidationError}
+          <p class="json-validation-error">{jsonValidationError}</p>
+        {/if}
+      {:else if request.body.mode === "raw"}
         <VariableField
           className="body-textarea"
           multiline={true}
           value={request.body.raw}
           variables={environmentVariables}
-          placeholder={request.body.mode === "json" ? '{"hello":"world"}' : "Raw request body"}
+          placeholder="Raw request body"
           onValueInput={(nextValue) => updateBodyField("raw", nextValue)}
         />
       {/if}

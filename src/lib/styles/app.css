@@ -1855,6 +1855,47 @@ select option {
 :root[data-theme="light"] .jt-bool { color: #3b6ea5; }
 :root[data-theme="light"] .jt-null { color: #a83232; }
 
+.json-editor-shell {
+  position: relative;
+}
+
+.json-editor-shell .json-editor-overlay {
+  border: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.json-editor-shell textarea.json-editor-textarea {
+  color: transparent !important;
+  caret-color: var(--text-primary);
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.json-editor-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  margin: 0;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: var(--font-mono);
+  font-size: inherit;
+  line-height: inherit;
+  color: var(--text-primary);
+  z-index: 0;
+}
+
+.json-editor-shell .variable-field {
+  position: relative;
+  z-index: 1;
+}
+
 .profile-bar {
   display: flex;
   gap: 10px;
@@ -1922,4 +1963,16 @@ select option {
   color: var(--text-muted);
   font-size: 0.82rem;
   white-space: nowrap;
+}
+
+.json-validation-error {
+  margin: 4px 0 0;
+  padding: 4px 8px;
+  font-size: 0.78rem;
+  font-family: var(--font-mono);
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  border-radius: var(--radius-sm);
+  line-height: 1.4;
+  word-break: break-word;
 }

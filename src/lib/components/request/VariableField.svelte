@@ -25,7 +25,8 @@
     type = "text",
     spellcheck = true,
     multiline = false,
-    disabled = false
+    disabled = false,
+    onExtraKeydown = undefined
   }: {
     value?: string;
     variables?: KeyValueRow[];
@@ -37,6 +38,7 @@
     spellcheck?: boolean;
     multiline?: boolean;
     disabled?: boolean;
+    onExtraKeydown?: ((event: KeyboardEvent) => void) | undefined;
   } = $props();
 
   let fieldElement: HTMLInputElement | HTMLTextAreaElement | null = $state(null);
@@ -315,32 +317,33 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
-    if (!isSuggestionsOpen || !filteredVariables.length) {
-      return;
+    if (isSuggestionsOpen && filteredVariables.length) {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        activeSuggestionIndex = (activeSuggestionIndex + 1) % filteredVariables.length;
+        return;
+      }
+
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        activeSuggestionIndex = (activeSuggestionIndex - 1 + filteredVariables.length) % filteredVariables.length;
+        return;
+      }
+
+      if (event.key === "Enter" || event.key === "Tab") {
+        event.preventDefault();
+        void applySuggestion(filteredVariables[activeSuggestionIndex].key);
+        return;
+      }
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeSuggestions();
+        return;
+      }
     }
 
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      activeSuggestionIndex = (activeSuggestionIndex + 1) % filteredVariables.length;
-      return;
-    }
-
-    if (event.key === "ArrowUp") {
-      event.preventDefault();
-      activeSuggestionIndex = (activeSuggestionIndex - 1 + filteredVariables.length) % filteredVariables.length;
-      return;
-    }
-
-    if (event.key === "Enter" || event.key === "Tab") {
-      event.preventDefault();
-      void applySuggestion(filteredVariables[activeSuggestionIndex].key);
-      return;
-    }
-
-    if (event.key === "Escape") {
-      event.preventDefault();
-      closeSuggestions();
-    }
+    onExtraKeydown?.(event);
   }
 
   function handleSuggestionPointerDown(event: MouseEvent) {
