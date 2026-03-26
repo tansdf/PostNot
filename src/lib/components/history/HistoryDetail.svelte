@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { HistoryEntryDetail, KeyValueRow } from "$lib/api/types";
+  import JsonViewer from "$lib/components/response/JsonViewer.svelte";
 
   let {
     detail = null,
@@ -28,23 +29,9 @@
     return rows.filter((row) => row.enabled && (row.key.trim() || row.value.trim()));
   }
 
-  function formatBody(bodyText: string) {
-    if (!bodyText) {
-      return "";
-    }
-
-    try {
-      return JSON.stringify(JSON.parse(bodyText), null, 2);
-    } catch {
-      return bodyText;
-    }
-  }
-
   let queryParams = $derived(detail ? filterEnabled(detail.requestSnapshot.queryParams) : []);
   let requestHeaders = $derived(detail ? filterEnabled(detail.requestSnapshot.headers) : []);
   let responseHeaders = $derived(detail ? filterEnabled(detail.responseHeaders) : []);
-  let requestBody = $derived(detail ? formatBody(detail.requestSnapshot.body.raw) : "");
-  let responseBody = $derived(detail ? formatBody(detail.responseBodyText) : "");
 </script>
 
 {#if detail || isLoading || errorText}
@@ -142,8 +129,8 @@
 
             <div class="detail-response-column">
               <h5 class="detail-subtitle">Body</h5>
-              {#if requestBody}
-                <pre class="detail-code-block">{requestBody}</pre>
+              {#if detail.requestSnapshot.body.raw}
+                <JsonViewer source={detail.requestSnapshot.body.raw} maxHeight="clamp(12rem, 40vh, 28rem)" />
               {:else}
                 <div class="empty-state">No request body was stored for this entry.</div>
               {/if}
@@ -177,8 +164,8 @@
 
             <div class="detail-response-column">
               <h5 class="detail-subtitle">Body</h5>
-              {#if responseBody}
-                <pre class="detail-code-block">{responseBody}</pre>
+              {#if detail.responseBodyText}
+                <JsonViewer source={detail.responseBodyText} maxHeight="clamp(12rem, 40vh, 28rem)" />
               {:else if !detail.errorText}
                 <div class="empty-state">No response preview was stored for this history entry.</div>
               {/if}

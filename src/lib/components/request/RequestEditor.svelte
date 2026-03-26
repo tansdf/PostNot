@@ -156,6 +156,15 @@
     };
   }
 
+  function formatJsonBody() {
+    try {
+      const parsed = JSON.parse(request.body.raw);
+      updateBodyField("raw", JSON.stringify(parsed, null, 2));
+    } catch {
+      // not valid JSON, do nothing
+    }
+  }
+
   function updateFormRow(index: number, patch: Partial<KeyValueRow>) {
     const nextRows = request.body.form.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row));
     request = {
@@ -347,6 +356,9 @@
             <option value="multipart">Multipart</option>
           </select>
         </label>
+        {#if request.body.mode === "json"}
+          <button class="ghost-button" type="button" onclick={formatJsonBody}>Format</button>
+        {/if}
       </div>
 
       {#if request.body.mode === "none"}

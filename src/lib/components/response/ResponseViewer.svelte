@@ -1,21 +1,8 @@
 <script lang="ts">
   import type { ResponsePayload } from "$lib/api/types";
+  import JsonViewer from "$lib/components/response/JsonViewer.svelte";
 
   let { response = null }: { response?: ResponsePayload | null } = $props();
-
-  function formatBody(bodyText: string) {
-    if (!bodyText) {
-      return "";
-    }
-
-    try {
-      return JSON.stringify(JSON.parse(bodyText), null, 2);
-    } catch {
-      return bodyText;
-    }
-  }
-
-  let prettyBody = $derived(response ? formatBody(response.bodyText) : "");
 </script>
 
 <section class="panel response-panel">
@@ -51,7 +38,7 @@
 
       <div class="response-column response-body-column">
         <h3>Body</h3>
-        <pre class="response-body">{prettyBody}</pre>
+        <JsonViewer source={response.bodyText} />
       </div>
     </div>
   {:else}
