@@ -1,7 +1,7 @@
 const DARK_MEDIA_QUERY = "(prefers-color-scheme: dark)";
 const DEFAULT_UI_SCALE = 1;
-const MIN_UI_SCALE = 0.8;
-const MAX_UI_SCALE = 1.2;
+const MIN_UI_SCALE = 0.6;
+const MAX_UI_SCALE = 1.5;
 
 function resolveTheme(theme: string) {
   if (theme === "dark" || theme === "light") {
