@@ -4,6 +4,18 @@ This changelog was reconstructed from the project chat history and is now the tr
 
 The project currently uses pre-1.0 semantic versioning. Minor versions mark meaningful product milestones, while patch versions should be used for smaller fixes and polish.
 
+## [0.6.1] - 2026-03-26
+
+### Changed
+
+- Moved the AppShell wrapper into the root layout so the sidebar stays mounted across page navigations, preserving expanded collection state and scroll position.
+- Applied HTTP method color badges to fallback request names in the sidebar and collections list when no custom name is set.
+- Extended the interface zoom range from 80-120% to 60-150% for better flexibility on high-DPI and large displays.
+
+### Fixed
+
+- Sidebar method badge colors were overridden by the sidebar link span styles; added higher-specificity selectors with brighter tones tuned for the dark sidebar background.
+
 ## [0.6.0] - 2026-03-26
 
 ### Changed

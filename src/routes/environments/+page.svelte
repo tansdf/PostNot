@@ -11,8 +11,6 @@
     setActiveEnvironment,
     updateEnvironment
   } from "$lib/api/commands";
-  import AppShell from "$lib/components/layout/AppShell.svelte";
-
   let environments: EnvironmentSummary[] = $state([]);
   let selectedEnvironmentId = $state("");
   let environmentDetail: EnvironmentDetail | null = $state(null);
@@ -226,8 +224,7 @@
   <title>PostNot Environments</title>
 </svelte:head>
 
-<AppShell>
-  <div class="workspace-grid">
+<div class="workspace-grid">
     <section class="panel collections-page-panel">
       <div class="editor-header">
         <h1>Environments</h1>
@@ -341,4 +338,3 @@
       {/if}
     </section>
   </div>
-</AppShell>

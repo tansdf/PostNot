@@ -161,7 +161,7 @@
         {#each savedRequests as item (item.id)}
           <article class="collection-item">
             <div class="saved-request-meta">
-              <strong>{item.name || `${item.method} ${item.url}`}</strong>
+              <strong>{#if item.name}{item.name}{:else}<span class={`method-badge method-${item.method.toLowerCase()}`}>{item.method}</span> {item.url}{/if}</strong>
               <span><span class={`method-badge method-${item.method.toLowerCase()}`}>{item.method}</span> {item.url}</span>
               <span class="history-meta">Updated {formatUpdatedAt(item.updatedAt)}</span>
             </div>

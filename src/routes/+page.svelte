@@ -26,7 +26,6 @@
   } from "$lib/api/types";
   import { createDefaultSettings, createRequestDraft } from "$lib/api/types";
   import HistoryPanel from "$lib/components/history/HistoryPanel.svelte";
-  import AppShell from "$lib/components/layout/AppShell.svelte";
   import RequestEditor from "$lib/components/request/RequestEditor.svelte";
   import ResponseViewer from "$lib/components/response/ResponseViewer.svelte";
   import { collections } from "$lib/stores/collections.svelte";
@@ -390,8 +389,7 @@
   <title>PostNot</title>
 </svelte:head>
 
-<AppShell>
-  <div class="workspace-grid">
+<div class="workspace-grid">
     <div class="profile-bar">
       <div class="profile-facts">
         <span class="profile-fact">Timeout <strong>{settings.requestTimeoutMs} ms</strong></span>
@@ -568,4 +566,3 @@
       </div>
     </div>
   {/if}
-</AppShell>

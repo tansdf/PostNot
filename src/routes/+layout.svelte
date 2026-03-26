@@ -4,6 +4,7 @@
   import { getSettings } from "$lib/api/commands";
   import "$lib/styles/app.css";
   import { applyTheme, applyUiScale, watchSystemTheme } from "$lib/theme";
+  import AppShell from "$lib/components/layout/AppShell.svelte";
 
   let { children }: { children?: Snippet } = $props();
 
@@ -36,4 +37,6 @@
   });
 </script>
 
-{@render children?.()}
+<AppShell>
+  {@render children?.()}
+</AppShell>

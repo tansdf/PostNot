@@ -1753,6 +1753,14 @@ select option {
 .method-head { color: #4eca8b; }
 .method-options { color: #8fa19a; }
 
+.sidebar-request-link .method-badge.method-get { color: #78d5ab; }
+.sidebar-request-link .method-badge.method-post { color: #f0a45d; }
+.sidebar-request-link .method-badge.method-put { color: #72b2e8; }
+.sidebar-request-link .method-badge.method-patch { color: #c49cde; }
+.sidebar-request-link .method-badge.method-delete { color: #ff8b8b; }
+.sidebar-request-link .method-badge.method-head { color: #78d5ab; }
+.sidebar-request-link .method-badge.method-options { color: #a7b7b0; }
+
 .method-select.method-get { color: #2a9d61; }
 .method-select.method-post { color: #c07a2e; }
 .method-select.method-put { color: #3b8ac4; }

@@ -4,7 +4,6 @@
 
   import CollectionsPanel from "$lib/components/collections/CollectionsPanel.svelte";
   import { importRequests } from "$lib/api/commands";
-  import AppShell from "$lib/components/layout/AppShell.svelte";
   import { collections } from "$lib/stores/collections.svelte";
 
   let isSavingCollection = $state(false);
@@ -147,8 +146,7 @@
   <title>PostNot Collections</title>
 </svelte:head>
 
-<AppShell>
-  <CollectionsPanel
+<CollectionsPanel
     collection={collections.selectedCollection}
     savedRequests={collections.selectedSavedRequests}
     isCollectionsLoading={collections.isCollectionsLoading}
@@ -243,4 +241,3 @@
       </div>
     </div>
   {/if}
-</AppShell>

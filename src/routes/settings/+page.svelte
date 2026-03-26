@@ -1,12 +1,15 @@
 <script lang="ts">
   import { onMount } from "svelte";
 
-  import AppShell from "$lib/components/layout/AppShell.svelte";
   import { getSettings, updateSettings } from "$lib/api/commands";
   import { createDefaultSettings, type AppSettings } from "$lib/api/types";
   import { applyTheme, applyUiScale } from "$lib/theme";
 
   const uiScaleOptions = [
+    { value: 0.6, label: "60%" },
+    { value: 0.65, label: "65%" },
+    { value: 0.7, label: "70%" },
+    { value: 0.75, label: "75%" },
     { value: 0.8, label: "80%" },
     { value: 0.85, label: "85%" },
     { value: 0.9, label: "90%" },
@@ -15,7 +18,11 @@
     { value: 1.05, label: "105%" },
     { value: 1.1, label: "110%" },
     { value: 1.15, label: "115%" },
-    { value: 1.2, label: "120%" }
+    { value: 1.2, label: "120%" },
+    { value: 1.25, label: "125%" },
+    { value: 1.3, label: "130%" },
+    { value: 1.4, label: "140%" },
+    { value: 1.5, label: "150%" }
   ];
 
   let settings: AppSettings = $state(createDefaultSettings());
@@ -63,8 +70,7 @@
   <title>PostNot Settings</title>
 </svelte:head>
 
-<AppShell>
-  <section class="settings-page panel">
+<section class="settings-page panel">
     <div class="editor-header">
       <h1>Settings</h1>
       {#if isLoading}
@@ -125,4 +131,3 @@
       <div class="response-error">{errorText}</div>
     {/if}
   </section>
-</AppShell>
