@@ -4,6 +4,19 @@ This changelog was reconstructed from the project chat history and is now the tr
 
 The project currently uses pre-1.0 semantic versioning. Minor versions mark meaningful product milestones, while patch versions should be used for smaller fixes and polish.
 
+## [0.6.0] - 2026-03-26
+
+### Changed
+
+- Migrated all Svelte components and stores from Svelte 4 patterns to Svelte 5 runes (`$state`, `$derived`, `$effect`, `$props`, `$bindable`), `onevent` attributes, `{@render}` snippets, and `$app/state`.
+- Replaced the writable/derived collections store with a reactive `$state` class in a `.svelte.ts` module.
+- Compacted the Request Profile panel into a slim horizontal summary bar above the request editor, freeing vertical space for the main workflow.
+- Tightened desktop density across the entire UI: reduced border radii, panel padding, grid gaps, button heights, and input padding.
+- Added HTTP method color coding (GET green, POST orange, PUT blue, PATCH purple, DELETE red) across history entries, sidebar collections, saved request lists, and the method selector.
+- Strengthened the sidebar active navigation state with a filled background and left accent border replacing the previous subtle box-shadow.
+- Compacted the sidebar brand block by removing the subtitle and reducing the heading size.
+- Loaded IBM Plex Sans and JetBrains Mono from Google Fonts instead of relying on system fallbacks.
+
 ## [0.5.4] - 2026-03-25
 
 ### Added

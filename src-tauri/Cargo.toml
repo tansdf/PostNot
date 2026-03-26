@@ -1,6 +1,6 @@
 [package]
 name = "postnot"
-version = "0.5.4"
+version = "0.6.0"
 description = "Local-first desktop API client"
 authors = ["PostNot"]
 edition = "2021"
