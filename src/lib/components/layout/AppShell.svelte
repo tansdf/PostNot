@@ -5,11 +5,9 @@
 
   let {
     title = "PostNot",
-    subtitle = "A local-first desktop API client.",
     children
   }: {
     title?: string;
-    subtitle?: string;
     children?: Snippet;
   } = $props();
 </script>
@@ -20,7 +18,6 @@
       <div class="brand-block">
         <p class="eyebrow">Desktop API Client</p>
         <h1>{title}</h1>
-        <p>{subtitle}</p>
       </div>
 
       <nav class="sidebar-nav" aria-label="Primary">

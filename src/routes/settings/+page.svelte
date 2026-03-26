@@ -63,7 +63,7 @@
   <title>PostNot Settings</title>
 </svelte:head>
 
-<AppShell title="PostNot" subtitle="Local settings are stored in SQLite and applied on send.">
+<AppShell>
   <section class="settings-page panel">
     <div class="editor-header">
       <h1>Settings</h1>

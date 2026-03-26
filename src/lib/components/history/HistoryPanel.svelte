@@ -76,7 +76,7 @@
               <div class="history-item-top">
                 <div class="history-item-summary">
                   <strong>{item.requestName || item.url}</strong>
-                  <div class="history-url" title={`${item.method} ${item.url}`}>{item.method} {item.url}</div>
+                  <div class="history-url" title={`${item.method} ${item.url}`}><span class={`method-badge method-${item.method.toLowerCase()}`}>{item.method}</span> {item.url}</div>
                 </div>
                 <div class={["history-status", (item.statusCode === null || !!item.errorText) && "history-status-error"]}>
                   {#if item.statusCode !== null}

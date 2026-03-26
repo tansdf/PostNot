@@ -147,7 +147,7 @@
   <title>PostNot Collections</title>
 </svelte:head>
 
-<AppShell title="PostNot" subtitle="Organize saved requests and keep them ready for reuse.">
+<AppShell>
   <CollectionsPanel
     collection={collections.selectedCollection}
     savedRequests={collections.selectedSavedRequests}

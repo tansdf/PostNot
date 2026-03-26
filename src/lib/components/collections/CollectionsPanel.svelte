@@ -162,7 +162,7 @@
           <article class="collection-item">
             <div class="saved-request-meta">
               <strong>{item.name || `${item.method} ${item.url}`}</strong>
-              <span>{item.method} {item.url}</span>
+              <span><span class={`method-badge method-${item.method.toLowerCase()}`}>{item.method}</span> {item.url}</span>
               <span class="history-meta">Updated {formatUpdatedAt(item.updatedAt)}</span>
             </div>
 

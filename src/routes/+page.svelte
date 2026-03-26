@@ -392,39 +392,21 @@
 
 <AppShell>
   <div class="workspace-grid">
-    <section class="panel status-panel">
-      <div class="editor-header">
-        <h2>Request Profile</h2>
+    <div class="profile-bar">
+      <div class="profile-facts">
+        <span class="profile-fact">Timeout <strong>{settings.requestTimeoutMs} ms</strong></span>
+        <span class="profile-fact">Redirects <strong>{settings.followRedirects ? "Follow" : "Off"}</strong></span>
+        <span class="profile-fact">TLS <strong>{settings.validateTls ? "Validated" : "Relaxed"}</strong></span>
+        <span class="profile-fact">History <strong>{settings.historyLimit}</strong></span>
       </div>
 
-      <div class="status-grid">
-        <div class="status-item">
-          <span class="status-label">Timeout</span>
-          <strong>{settings.requestTimeoutMs} ms</strong>
-        </div>
-        <div class="status-item">
-          <span class="status-label">Redirects</span>
-          <strong>{settings.followRedirects ? "Follow" : "Disabled"}</strong>
-        </div>
-        <div class="status-item">
-          <span class="status-label">TLS</span>
-          <strong>{settings.validateTls ? "Validated" : "Relaxed"}</strong>
-        </div>
-        <div class="status-item">
-          <span class="status-label">History limit</span>
-          <strong>{settings.historyLimit}</strong>
-        </div>
-        <div class="status-item">
-          <span class="status-label">Environment</span>
-          <strong>{activeEnvironmentDetail?.name ?? "None"}</strong>
-        </div>
-      </div>
+      <span class="profile-divider"></span>
 
-      <div class="environment-toolbar">
-        <label class="environment-select-field">
-          <span class="field-label">Active environment</span>
+      <div class="profile-env-section">
+        <label>
+          <span class="sr-only">Active environment</span>
           <select
-            class="text-input"
+            class="text-input profile-env-select"
             value={activeEnvironmentId}
             onchange={(event) => handleEnvironmentChange(event.currentTarget.value)}
             disabled={isEnvironmentChanging}
@@ -436,28 +418,23 @@
           </select>
         </label>
 
-        <div class="environment-summary">
-          {#if isEnvironmentsLoading}
-            <span class="history-meta">Loading environments...</span>
-          {:else if activeEnvironmentDetail}
-            <span class="history-meta">
-              {activeEnvironmentDetail.variables.filter((item) => item.enabled && item.key.trim()).length}
-              active variable{activeEnvironmentDetail.variables.filter((item) => item.enabled && item.key.trim()).length === 1 ? "" : "s"}
-            </span>
-          {:else}
-            <span class="history-meta">Requests will be sent without variable substitution.</span>
-          {/if}
-        </div>
+        {#if isEnvironmentsLoading}
+          <span class="profile-env-hint">Loading...</span>
+        {:else if activeEnvironmentDetail}
+          <span class="profile-env-hint">
+            {activeEnvironmentDetail.variables.filter((item) => item.enabled && item.key.trim()).length} var{activeEnvironmentDetail.variables.filter((item) => item.enabled && item.key.trim()).length === 1 ? "" : "s"}
+          </span>
+        {/if}
       </div>
 
       {#if settingsErrorText}
-        <div class="response-error">{settingsErrorText}</div>
+        <span class="profile-env-hint" style="color: var(--danger)">{settingsErrorText}</span>
       {/if}
 
       {#if environmentsErrorText}
-        <div class="response-error">{environmentsErrorText}</div>
+        <span class="profile-env-hint" style="color: var(--danger)">{environmentsErrorText}</span>
       {/if}
-    </section>
+    </div>
 
     <RequestEditor
       bind:request

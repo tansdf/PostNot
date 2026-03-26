@@ -226,7 +226,7 @@
   <title>PostNot Environments</title>
 </svelte:head>
 
-<AppShell title="PostNot" subtitle="Define reusable variables and choose which environment is active on send.">
+<AppShell>
   <div class="workspace-grid">
     <section class="panel collections-page-panel">
       <div class="editor-header">

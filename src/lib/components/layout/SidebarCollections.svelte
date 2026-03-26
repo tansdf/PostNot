@@ -120,7 +120,7 @@
                       onclick={() => openSavedRequest(collection.id, item.id)}
                     >
                       <strong class="sidebar-request-name">{item.name || `${item.method} ${item.url}`}</strong>
-                      <span class="sidebar-request-url">{item.method} {item.url}</span>
+                      <span class="sidebar-request-url"><span class={`method-badge method-${item.method.toLowerCase()}`}>{item.method}</span> {item.url}</span>
                     </button>
                   {/each}
                 {/if}

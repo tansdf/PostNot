@@ -71,7 +71,7 @@
             </div>
             <div class="status-item">
               <span class="status-label">Method</span>
-              <strong>{detail.method}</strong>
+              <strong class={`method-badge method-${detail.method.toLowerCase()}`}>{detail.method}</strong>
             </div>
             <div class="status-item">
               <span class="status-label">Status</span>

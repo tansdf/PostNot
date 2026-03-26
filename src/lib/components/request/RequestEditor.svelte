@@ -222,7 +222,7 @@
       {isSaving ? "Saving..." : saveLabel}
     </button>
 
-    <select class="method-select" bind:value={request.method}>
+    <select class={`method-select method-${request.method.toLowerCase()}`} bind:value={request.method}>
       <option value="GET">GET</option>
       <option value="POST">POST</option>
       <option value="PUT">PUT</option>
