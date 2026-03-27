@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { HistoryEntryDetail, KeyValueRow } from "$lib/api/types";
+  import type { FileRow, HistoryEntryDetail, KeyValueRow } from "$lib/api/types";
   import JsonViewer from "$lib/components/response/JsonViewer.svelte";
 
   let {
@@ -29,8 +29,14 @@
     return rows.filter((row) => row.enabled && (row.key.trim() || row.value.trim()));
   }
 
+  function filterEnabledFiles(rows: FileRow[]) {
+    return rows.filter((row) => row.enabled && (row.name.trim() || row.path.trim()));
+  }
+
   let queryParams = $derived(detail ? filterEnabled(detail.requestSnapshot.queryParams) : []);
   let requestHeaders = $derived(detail ? filterEnabled(detail.requestSnapshot.headers) : []);
+  let requestBodyFields = $derived(detail ? filterEnabled(detail.requestSnapshot.body.form) : []);
+  let requestFiles = $derived(detail ? filterEnabledFiles(detail.requestSnapshot.body.files) : []);
   let responseHeaders = $derived(detail ? filterEnabled(detail.responseHeaders) : []);
 </script>
 
@@ -129,7 +135,54 @@
 
             <div class="detail-response-column">
               <h5 class="detail-subtitle">Body</h5>
-              {#if detail.requestSnapshot.body.raw}
+              {#if detail.requestSnapshot.body.mode === "multipart"}
+                {#if requestBodyFields.length || requestFiles.length}
+                  <div class="detail-stack">
+                    {#if requestBodyFields.length}
+                      <div class="detail-block">
+                        <h6 class="detail-micro-title">Text Fields</h6>
+                        <div class="detail-kv-list">
+                          {#each requestBodyFields as row (row.id)}
+                            <div class="detail-kv-item">
+                              <strong>{row.key || "(empty field)"}</strong>
+                              <span>{row.value || "(empty value)"}</span>
+                            </div>
+                          {/each}
+                        </div>
+                      </div>
+                    {/if}
+
+                    {#if requestFiles.length}
+                      <div class="detail-block">
+                        <h6 class="detail-micro-title">Files</h6>
+                        <div class="detail-kv-list">
+                          {#each requestFiles as file (file.id)}
+                            <div class="detail-kv-item">
+                              <strong>{file.name || "(empty field)"}</strong>
+                              <span>{file.path || "(empty path)"}</span>
+                            </div>
+                          {/each}
+                        </div>
+                      </div>
+                    {/if}
+                  </div>
+                {:else}
+                  <div class="empty-state">No multipart fields or files were stored for this entry.</div>
+                {/if}
+              {:else if detail.requestSnapshot.body.mode === "form-urlencoded"}
+                {#if requestBodyFields.length}
+                  <div class="detail-kv-list">
+                    {#each requestBodyFields as row (row.id)}
+                      <div class="detail-kv-item">
+                        <strong>{row.key || "(empty field)"}</strong>
+                        <span>{row.value || "(empty value)"}</span>
+                      </div>
+                    {/each}
+                  </div>
+                {:else}
+                  <div class="empty-state">No form fields were stored for this entry.</div>
+                {/if}
+              {:else if detail.requestSnapshot.body.raw}
                 <JsonViewer source={detail.requestSnapshot.body.raw} maxHeight="clamp(12rem, 40vh, 28rem)" />
               {:else}
                 <div class="empty-state">No request body was stored for this entry.</div>

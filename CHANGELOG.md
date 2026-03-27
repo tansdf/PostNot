@@ -4,6 +4,17 @@ This changelog was reconstructed from the project chat history and is now the tr
 
 The project currently uses pre-1.0 semantic versioning. Minor versions mark meaningful product milestones, while patch versions should be used for smaller fixes and polish.
 
+## [0.7.0] - 2026-03-27
+
+### Added
+
+- Multipart request composition with text fields plus local file attachments selected through a native picker or entered as file paths.
+
+### Changed
+
+- History detail inspection now renders stored `form-urlencoded` and multipart request bodies as structured fields instead of falling back to the raw-body empty state.
+- Updated the project docs to reflect that manual `tauri dev` verification has already been completed and multipart uploads are now part of the implemented request surface.
+
 ## [0.6.2] - 2026-03-26
 
 ### Added

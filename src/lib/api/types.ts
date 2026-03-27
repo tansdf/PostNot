@@ -14,6 +14,7 @@ export type FileRow = {
   id: string;
   name: string;
   path: string;
+  enabled: boolean;
 };
 
 export type RequestBody = {
@@ -176,6 +177,15 @@ export function createKeyValueRow(): KeyValueRow {
     id: createId(),
     key: "",
     value: "",
+    enabled: true
+  };
+}
+
+export function createFileRow(): FileRow {
+  return {
+    id: createId(),
+    name: "file",
+    path: "",
     enabled: true
   };
 }

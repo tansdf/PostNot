@@ -33,6 +33,7 @@ pub fn run() -> Result<(), String> {
         .invoke_handler(tauri::generate_handler![
             commands::requests::send_request,
             commands::requests::cancel_active_request,
+            commands::requests::pick_multipart_files,
             commands::settings::get_settings,
             commands::settings::update_settings,
             commands::history::list_history,

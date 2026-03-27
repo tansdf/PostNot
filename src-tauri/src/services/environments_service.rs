@@ -7,7 +7,7 @@ use uuid::Uuid;
 use crate::{
     domain::{
         environments::{EnvironmentDetail, EnvironmentInput, EnvironmentSummary},
-        requests::{KeyValueRow, RequestAuth, RequestBody, SendRequestPayload},
+        requests::{FileRow, KeyValueRow, RequestAuth, RequestBody, SendRequestPayload},
     },
     error::{AppError, AppResult},
 };
@@ -196,7 +196,17 @@ pub fn resolve_request(
                     enabled: item.enabled,
                 })
                 .collect(),
-            files: payload.body.files.clone(),
+            files: payload
+                .body
+                .files
+                .iter()
+                .map(|file| FileRow {
+                    id: file.id.clone(),
+                    name: resolve_string(&file.name, &variables),
+                    path: resolve_string(&file.path, &variables),
+                    enabled: file.enabled,
+                })
+                .collect(),
         },
         auth: RequestAuth {
             auth_type: payload.auth.auth_type.clone(),

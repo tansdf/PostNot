@@ -223,6 +223,14 @@ export async function cancelActiveRequest(): Promise<boolean> {
   return invoke<boolean>("cancel_active_request");
 }
 
+export async function pickMultipartFiles(): Promise<string[]> {
+  if (!hasTauriRuntime()) {
+    return [];
+  }
+
+  return invoke<string[]>("pick_multipart_files");
+}
+
 export async function getSettings(): Promise<AppSettings> {
   if (!hasTauriRuntime()) {
     return createDefaultSettings();

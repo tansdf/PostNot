@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { createKeyValueRow, type AuthType, type BodyMode, type KeyValueRow, type RequestDraft } from "$lib/api/types";
+  import { pickMultipartFiles } from "$lib/api/commands";
+  import { createFileRow, createKeyValueRow, type AuthType, type BodyMode, type FileRow, type KeyValueRow, type RequestDraft } from "$lib/api/types";
   import VariableField from "$lib/components/request/VariableField.svelte";
 
   let jsonEditorShellElement: HTMLDivElement | null = $state(null);
@@ -173,6 +174,8 @@
   }
 
   let jsonValidationError = $state("");
+  let multipartErrorText = $state("");
+  let isPickingMultipartFiles = $state(false);
 
   function formatJsonBody() {
     try {
@@ -201,6 +204,12 @@
   $effect(() => {
     if (request.body.mode !== "json") {
       jsonValidationError = "";
+    }
+  });
+
+  $effect(() => {
+    if (request.body.mode !== "multipart") {
+      multipartErrorText = "";
     }
   });
 
@@ -341,6 +350,81 @@
         form: nextRows
       }
     };
+  }
+
+  function toggleFileEnabled(index: number, enabled: boolean) {
+    updateFileRow(index, { enabled });
+  }
+
+  function updateFileRow(index: number, patch: Partial<FileRow>) {
+    const nextRows = request.body.files.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row));
+    request = {
+      ...request,
+      body: {
+        ...request.body,
+        files: nextRows
+      }
+    };
+  }
+
+  function addFileRow() {
+    request = {
+      ...request,
+      body: {
+        ...request.body,
+        files: [...request.body.files, createFileRow()]
+      }
+    };
+  }
+
+  function appendPickedFiles(paths: string[]) {
+    if (paths.length === 0) {
+      return;
+    }
+
+    request = {
+      ...request,
+      body: {
+        ...request.body,
+        files: [
+          ...request.body.files,
+          ...paths.map((path) => ({
+            ...createFileRow(),
+            path
+          }))
+        ]
+      }
+    };
+  }
+
+  function removeFileRow(id: string) {
+    request = {
+      ...request,
+      body: {
+        ...request.body,
+        files: request.body.files.filter((row) => row.id !== id)
+      }
+    };
+  }
+
+  function getFileName(path: string) {
+    const normalized = path.replace(/\\/g, "/");
+    const segments = normalized.split("/");
+    return segments[segments.length - 1] || path;
+  }
+
+  async function handlePickMultipartFiles() {
+    isPickingMultipartFiles = true;
+
+    try {
+      const paths = await pickMultipartFiles();
+      appendPickedFiles(paths);
+      multipartErrorText = "";
+    } catch (error) {
+      multipartErrorText = error instanceof Error ? error.message : String(error);
+    } finally {
+      isPickingMultipartFiles = false;
+    }
   }
 
   function updateAuthType(type: AuthType) {
@@ -573,8 +657,94 @@
       {/if}
 
       {#if request.body.mode === "multipart"}
-        <div class="callout">
-          Multipart request composition will be wired to the native file picker in the next pass.
+        <div class="multipart-editor">
+          <section class="multipart-section">
+            <div class="editor-header">
+              <h3>Fields</h3>
+              <button class="ghost-button" type="button" onclick={addFormRow}>Add field</button>
+            </div>
+
+            <div class="row-list">
+              {#each request.body.form as row, index (row.id)}
+                <div class="kv-row">
+                  <input
+                    class="row-toggle"
+                    type="checkbox"
+                    checked={row.enabled}
+                    aria-label="Enable multipart field row"
+                    onchange={(event) => toggleFormEnabled(index, event.currentTarget.checked)}
+                  />
+                  <input class="text-input" value={row.key} placeholder="Field" oninput={(event) => updateFormRow(index, { key: event.currentTarget.value })} />
+                  <VariableField
+                    className="text-input"
+                    value={row.value}
+                    variables={environmentVariables}
+                    placeholder="Value"
+                    onValueInput={(nextValue) => updateFormRow(index, { value: nextValue })}
+                  />
+                  <button class="icon-button" type="button" onclick={() => removeFormRow(row.id)}>Remove</button>
+                </div>
+              {/each}
+            </div>
+          </section>
+
+          <section class="multipart-section">
+            <div class="editor-header">
+              <h3>Files</h3>
+              <div class="multipart-actions">
+                <button class="ghost-button" type="button" onclick={addFileRow}>Add path</button>
+                <button class="ghost-button" type="button" onclick={handlePickMultipartFiles} disabled={isPickingMultipartFiles}>
+                  {isPickingMultipartFiles ? "Picking..." : "Pick files"}
+                </button>
+              </div>
+            </div>
+
+            {#if request.body.files.length === 0}
+              <div class="empty-state body-empty-state">
+                Add file rows or pick files to send them as multipart form parts.
+              </div>
+            {:else}
+              <div class="row-list">
+                {#each request.body.files as file, index (file.id)}
+                  <div class="multipart-file-card">
+                    <div class="kv-row">
+                      <input
+                        class="row-toggle"
+                        type="checkbox"
+                        checked={file.enabled}
+                        aria-label="Enable multipart file row"
+                        onchange={(event) => toggleFileEnabled(index, event.currentTarget.checked)}
+                      />
+                      <input
+                        class="text-input"
+                        value={file.name}
+                        placeholder="Field name"
+                        oninput={(event) => updateFileRow(index, { name: event.currentTarget.value })}
+                      />
+                      <VariableField
+                        className="text-input"
+                        value={file.path}
+                        variables={environmentVariables}
+                        placeholder="/path/to/file"
+                        onValueInput={(nextValue) => updateFileRow(index, { path: nextValue })}
+                      />
+                      <button class="icon-button" type="button" onclick={() => removeFileRow(file.id)}>Remove</button>
+                    </div>
+                    <div class="multipart-file-meta">
+                      <span class="multipart-file-name">{file.path ? getFileName(file.path) : "No file selected yet"}</span>
+                      {#if file.path}
+                        <span class="multipart-file-path" title={file.path}>{file.path}</span>
+                      {/if}
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </section>
+
+          {#if multipartErrorText}
+            <div class="response-error">{multipartErrorText}</div>
+          {/if}
         </div>
       {/if}
     </div>

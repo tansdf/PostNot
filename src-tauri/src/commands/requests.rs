@@ -47,3 +47,20 @@ pub async fn send_request(
 pub fn cancel_active_request(state: State<'_, AppState>) -> AppResult<bool> {
     state.cancel_active_request()
 }
+
+#[tauri::command]
+pub async fn pick_multipart_files() -> AppResult<Vec<String>> {
+    let files = tauri::async_runtime::spawn_blocking(|| {
+        rfd::FileDialog::new()
+            .set_title("Select files for multipart upload")
+            .pick_files()
+    })
+    .await
+    .map_err(|error| crate::error::AppError::Message(error.to_string()))?;
+
+    Ok(files
+        .unwrap_or_default()
+        .into_iter()
+        .map(|path| path.to_string_lossy().to_string())
+        .collect())
+}

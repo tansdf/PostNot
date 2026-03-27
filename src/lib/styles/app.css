@@ -503,6 +503,46 @@ select option {
   gap: 16px;
 }
 
+.multipart-editor,
+.multipart-section {
+  display: grid;
+  gap: 14px;
+}
+
+.multipart-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.multipart-file-card {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
+  border: 1px solid var(--border-soft);
+}
+
+.multipart-file-meta {
+  display: grid;
+  gap: 4px;
+  padding-left: 34px;
+}
+
+.multipart-file-name {
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.multipart-file-path {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .row-list {
   display: grid;
   gap: 10px;

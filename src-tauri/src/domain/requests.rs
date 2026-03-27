@@ -15,6 +15,8 @@ pub struct FileRow {
     pub id: String,
     pub name: String,
     pub path: String,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,4 +64,8 @@ pub struct ResponsePayload {
     pub body_text: String,
     pub error_text: String,
     pub executed_at: String,
+}
+
+fn default_true() -> bool {
+    true
 }

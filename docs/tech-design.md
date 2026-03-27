@@ -47,7 +47,7 @@ This section reflects the code currently implemented in the repository.
   - query parameters
   - headers
   - auth: none, basic, bearer, API key
-  - body: none, JSON, raw, form-urlencoded, multipart placeholder
+  - body: none, JSON, raw, form-urlencoded, multipart with file uploads
 - Native request execution through Rust
 - Response viewer with:
   - status
@@ -62,6 +62,7 @@ This section reflects the code currently implemented in the repository.
 - Environments and variable resolution
 - Postman collection JSON import
 - cURL command import
+- Multipart request composition with native file selection
 - Settings page wired to backend persistence
 - History panel wired to backend persistence
 - History detail inspection from persisted snapshots
@@ -380,6 +381,7 @@ Commands currently exposed to the frontend:
 
 - `send_request`
 - `cancel_active_request`
+- `pick_multipart_files`
 - `get_settings`
 - `update_settings`
 - `list_history`
@@ -400,11 +402,14 @@ Commands currently exposed to the frontend:
 - `update_environment`
 - `delete_environment`
 - `set_active_environment`
+- `import_requests`
+- `import_curl_request_to_draft`
 
 ### Command Roles
 
 - `send_request`: executes the request using persisted settings and records history
 - `cancel_active_request`: aborts the currently active native request, if one exists
+- `pick_multipart_files`: opens a native file picker and returns selected local file paths for multipart requests
 - `get_settings`: loads current settings from SQLite
 - `update_settings`: persists settings and returns the saved values
 - `list_history`: returns recent history entries ordered by execution time descending
@@ -425,6 +430,8 @@ Commands currently exposed to the frontend:
 - `update_environment`: persists environment name and variables
 - `delete_environment`: removes one environment
 - `set_active_environment`: marks one environment active or clears the active environment
+- `import_requests`: imports requests from Postman collection JSON or cURL into PostNot collections
+- `import_curl_request_to_draft`: parses a cURL command into an editable request draft without saving it yet
 
 ## 10. Frontend Screens
 
@@ -501,6 +508,7 @@ Ship a usable desktop app that can compose and execute HTTP requests locally, pe
 - environments and variable resolution
 - Postman collection JSON import
 - cURL command import
+- multipart request composition with local file uploads
 - response viewer
 - SQLite initialization and migrations
 - persisted settings
@@ -512,19 +520,19 @@ Ship a usable desktop app that can compose and execute HTTP requests locally, pe
 
 ### Milestone 1 Remaining
 
-- better multipart/file workflow
-- actual runtime verification via `tauri dev`
 - tighter error handling and UX polish
+
+Manual end-to-end verification via `tauri dev` has already been completed for the current milestone state.
 
 ## 13. Next Recommended Steps
 
 Recommended implementation order from the current state:
 
-1. Run the app with `tauri dev` and verify end-to-end behavior manually
-2. Add Postman environment import and export
-3. Improve multipart and native file workflows
-4. Add Tauri updater integration
-5. Add collection folders and richer request organization
+1. Add Postman environment import and export
+2. Add Tauri updater integration
+3. Add collection folders and richer request organization
+4. Continue tightening error handling and desktop UX polish
+5. Plan the move of secrets out of SQLite and into OS-backed secure storage
 
 ## 14. Open Decisions
 
@@ -539,4 +547,4 @@ These are still unresolved:
 
 Treat the repository as being in an active Milestone 1 state, not full MVP completion.
 
-The design is now grounded in what the code actually does: persisted settings influence request execution, history is stored in SQLite, environments resolve variables at send time, collections are part of the working UI, and import can pull requests in from Postman collections and cURL. The next work should stay focused on completing the remaining import/export surface, updater work, and remaining UX polish.
+The design is now grounded in what the code actually does: persisted settings influence request execution, history is stored in SQLite, environments resolve variables at send time, collections are part of the working UI, import can pull requests in from Postman collections and cURL, and multipart requests can now attach local files. The next work should stay focused on completing the remaining environment/export surface, updater work, request organization, and remaining UX polish.

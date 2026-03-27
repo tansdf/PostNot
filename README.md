@@ -43,6 +43,7 @@ Implemented now:
 - environments and variable resolution
 - Postman collection JSON import
 - cURL command import
+- multipart request composition with file uploads
 - settings page wired to SQLite
 - history panel wired to SQLite
 - history detail inspection
@@ -70,6 +71,8 @@ source "$HOME/.cargo/env"
 cargo check --manifest-path src-tauri/Cargo.toml
 ```
 
+Manual end-to-end verification in `tauri dev` has already been completed for the current milestone state.
+
 ## Runtime Notes
 
 - The app stores SQLite data under the Tauri app data directory.
@@ -91,8 +94,8 @@ cargo check --manifest-path src-tauri/Cargo.toml
 
 ## Recommended Next Steps
 
-1. Run the app with `tauri dev` and verify end-to-end behavior.
-2. Add Postman environment import and export.
-3. Tighten multipart/file workflow.
-4. Add Tauri updater integration.
-5. Add collection folders and richer request organization.
+1. Add Postman environment import and export.
+2. Add Tauri updater integration.
+3. Add collection folders and richer request organization.
+4. Continue tightening error handling and desktop UX polish.
+5. Plan the move of secrets out of SQLite and into OS-backed secure storage.

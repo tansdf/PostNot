@@ -1,4 +1,7 @@
-use std::{time::{Duration, Instant}};
+use std::{
+    path::Path,
+    time::{Duration, Instant},
+};
 
 use chrono::Utc;
 use reqwest::header::{HeaderName, HeaderValue};
@@ -90,7 +93,17 @@ pub async fn send_request(
                 form = form.text(item.key.clone(), item.value.clone());
             }
 
-            for file in &payload.body.files {
+            for file in payload
+                .body
+                .files
+                .iter()
+                .filter(|file| file.enabled && !file.path.trim().is_empty())
+            {
+                let field_name = match file.name.trim() {
+                    "" => "file",
+                    value => value,
+                };
+
                 if file.path.trim().is_empty() {
                     continue;
                 }
@@ -99,8 +112,14 @@ pub async fn send_request(
                     bytes = tokio::fs::read(&file.path) => bytes?,
                     _ = wait_for_cancellation(&mut cancel_rx) => return Err(AppError::Cancelled),
                 };
-                let part = multipart::Part::bytes(bytes).file_name(file.name.clone());
-                form = form.part(file.name.clone(), part);
+                let file_name = Path::new(&file.path)
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .filter(|name| !name.trim().is_empty())
+                    .unwrap_or(field_name)
+                    .to_string();
+                let part = multipart::Part::bytes(bytes).file_name(file_name);
+                form = form.part(field_name.to_string(), part);
             }
 
             request = request.multipart(form);
