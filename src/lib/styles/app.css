@@ -1794,10 +1794,19 @@ select option {
 
 .json-viewer-wrap {
   position: relative;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  overflow: hidden;
 }
 
 .json-viewer {
   margin: 0;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
   font-family: var(--font-mono);
   font-size: 0.88rem;
   line-height: 1.55;
