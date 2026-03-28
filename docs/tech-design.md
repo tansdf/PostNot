@@ -61,6 +61,7 @@ This section reflects the code currently implemented in the repository.
 - Collections and saved requests
 - Environments and variable resolution
 - Postman collection JSON import
+- Postman environment JSON import
 - cURL command import
 - Multipart request composition with native file selection
 - Settings page wired to backend persistence
@@ -70,7 +71,6 @@ This section reflects the code currently implemented in the repository.
 
 ### Not Yet Implemented
 
-- Postman environment import
 - Postman export
 - Tauri updater integration
 - Multi-tab workflow
@@ -402,6 +402,7 @@ Commands currently exposed to the frontend:
 - `update_environment`
 - `delete_environment`
 - `set_active_environment`
+- `import_postman_environment`
 - `import_requests`
 - `import_curl_request_to_draft`
 
@@ -430,6 +431,7 @@ Commands currently exposed to the frontend:
 - `update_environment`: persists environment name and variables
 - `delete_environment`: removes one environment
 - `set_active_environment`: marks one environment active or clears the active environment
+- `import_postman_environment`: imports a Postman environment JSON file or payload into a new PostNot environment
 - `import_requests`: imports requests from Postman collection JSON or cURL into PostNot collections
 - `import_curl_request_to_draft`: parses a cURL command into an editable request draft without saving it yet
 
@@ -474,6 +476,7 @@ Current UI sections:
 - environment list
 - active/inactive environment controls
 - environment variable editor
+- Postman environment import
 - variable usage hint for `{{name}}` syntax
 
 ## 11. Security and Persistence Notes
@@ -507,6 +510,7 @@ Ship a usable desktop app that can compose and execute HTTP requests locally, pe
 - sidebar-first collection browsing and dedicated collection editing
 - environments and variable resolution
 - Postman collection JSON import
+- Postman environment JSON import
 - cURL command import
 - multipart request composition with local file uploads
 - response viewer

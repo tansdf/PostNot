@@ -6,11 +6,12 @@ use uuid::Uuid;
 use crate::{
     domain::{
         collections::CreateCollectionInput,
+        environments::{EnvironmentInput, ImportEnvironmentInput, ImportEnvironmentResult},
         imports::{ImportRequestInput, ImportResult, ImportedRequestDraft},
         requests::{KeyValueRow, RequestAuth, RequestBody, SendRequestPayload},
     },
     error::{AppError, AppResult},
-    services::collections_service,
+    services::{collections_service, environments_service},
 };
 
 #[derive(Debug, Deserialize)]
@@ -133,6 +134,24 @@ struct PostmanQueryParam {
     disabled: Option<bool>,
 }
 
+#[derive(Debug, Deserialize)]
+struct PostmanEnvironment {
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    values: Vec<PostmanEnvironmentValue>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PostmanEnvironmentValue {
+    #[serde(default)]
+    key: String,
+    #[serde(default)]
+    value: serde_json::Value,
+    enabled: Option<bool>,
+    disabled: Option<bool>,
+}
+
 pub async fn import_requests(pool: &SqlitePool, input: &ImportRequestInput) -> AppResult<ImportResult> {
     let source = input.source.trim();
     if source.is_empty() {
@@ -154,6 +173,54 @@ pub fn import_curl_to_draft(source: &str) -> AppResult<ImportedRequestDraft> {
 
     Ok(ImportedRequestDraft {
         request: parse_curl_command(source)?,
+    })
+}
+
+pub async fn import_postman_environment(
+    pool: &SqlitePool,
+    input: &ImportEnvironmentInput,
+) -> AppResult<ImportEnvironmentResult> {
+    let source = input.source.trim();
+    if source.is_empty() {
+        return Err(AppError::Message("Import source cannot be empty.".to_string()));
+    }
+
+    let environment: PostmanEnvironment = serde_json::from_str(source)
+        .map_err(|error| AppError::Message(format!("Invalid Postman environment JSON: {}", error)))?;
+
+    let name = if environment.name.trim().is_empty() {
+        "Imported Postman environment".to_string()
+    } else {
+        environment.name.trim().to_string()
+    };
+
+    let variables = environment
+        .values
+        .into_iter()
+        .map(|item| KeyValueRow {
+            id: Uuid::new_v4().to_string(),
+            key: item.key,
+            value: stringify_postman_value(&item.value),
+            enabled: !item.disabled.unwrap_or(false) && item.enabled.unwrap_or(true),
+        })
+        .collect();
+
+    let environment = environments_service::create_environment_from_input(
+        pool,
+        &EnvironmentInput { name, variables },
+        input.set_active,
+    )
+    .await?;
+
+    Ok(ImportEnvironmentResult {
+        environment_id: environment.id,
+        environment_name: environment.name,
+        imported_variable_count: environment
+            .variables
+            .iter()
+            .filter(|item| !item.key.trim().is_empty())
+            .count(),
+        activated: environment.is_active,
     })
 }
 
@@ -509,6 +576,16 @@ fn normalize_method(method: &str) -> String {
     match uppercase.as_str() {
         "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS" => uppercase,
         _ => "GET".to_string(),
+    }
+}
+
+fn stringify_postman_value(value: &serde_json::Value) -> String {
+    match value {
+        serde_json::Value::Null => String::new(),
+        serde_json::Value::String(value) => value.clone(),
+        serde_json::Value::Bool(value) => value.to_string(),
+        serde_json::Value::Number(value) => value.to_string(),
+        _ => value.to_string(),
     }
 }
 

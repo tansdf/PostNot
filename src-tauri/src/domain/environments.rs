@@ -28,3 +28,19 @@ pub struct EnvironmentInput {
     pub name: String,
     pub variables: Vec<KeyValueRow>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportEnvironmentInput {
+    pub source: String,
+    pub set_active: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportEnvironmentResult {
+    pub environment_id: String,
+    pub environment_name: String,
+    pub imported_variable_count: usize,
+    pub activated: bool,
+}

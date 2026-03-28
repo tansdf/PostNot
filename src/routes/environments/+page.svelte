@@ -7,6 +7,7 @@
     createEnvironment,
     deleteEnvironment,
     getEnvironment,
+    importPostmanEnvironment,
     listEnvironments,
     setActiveEnvironment,
     updateEnvironment
@@ -18,9 +19,16 @@
   let isDetailLoading = $state(false);
   let isSaving = $state(false);
   let isCreating = $state(false);
+  let isImporting = $state(false);
   let pendingDeleteId = $state("");
   let pendingActivateId = $state("");
   let errorText = $state("");
+  let importSource = $state("");
+  let importErrorText = $state("");
+  let importSuccessText = $state("");
+  let importSetActive = $state(false);
+  let isImportModalOpen = $state(false);
+  let importFileInput: HTMLInputElement | null = $state(null);
   type EnvironmentVariable = NonNullable<EnvironmentDetail["variables"]>[number];
 
   let requestedEnvironmentId = $derived(page.url.searchParams.get("environmentId") ?? "");
@@ -104,6 +112,7 @@
   }
 
   async function handleCreateEnvironment() {
+    importSuccessText = "";
     isCreating = true;
 
     try {
@@ -160,6 +169,7 @@
   }
 
   async function handleActivate(environmentId: string | null) {
+    importSuccessText = "";
     pendingActivateId = environmentId ?? "__none__";
 
     try {
@@ -218,6 +228,52 @@
       return value;
     }
   }
+
+  async function handleImportEnvironment() {
+    importErrorText = "";
+    importSuccessText = "";
+
+    const source = importSource.trim();
+    if (!source) {
+      importErrorText = "Open a Postman environment JSON file or paste its JSON payload to import.";
+      return;
+    }
+
+    isImporting = true;
+
+    try {
+      const result = await importPostmanEnvironment({
+        source,
+        setActive: importSetActive
+      });
+
+      importSuccessText = `${result.importedVariableCount} variable${
+        result.importedVariableCount === 1 ? "" : "s"
+      } imported into ${result.environmentName}.${result.activated ? " Environment is now active." : ""}`;
+      importSource = "";
+      await loadEnvironments(result.environmentId);
+      await goto(`/environments?environmentId=${encodeURIComponent(result.environmentId)}`, {
+        replaceState: true,
+        noScroll: true,
+        keepFocus: true
+      });
+    } catch (error) {
+      importErrorText = error instanceof Error ? error.message : String(error);
+    } finally {
+      isImporting = false;
+    }
+  }
+
+  function openImportModal() {
+    importErrorText = "";
+    importSetActive = false;
+    isImportModalOpen = true;
+  }
+
+  function closeImportModal() {
+    isImportModalOpen = false;
+    importErrorText = "";
+  }
 </script>
 
 <svelte:head>
@@ -226,15 +282,24 @@
 
 <div class="workspace-grid">
     <section class="panel collections-page-panel">
-      <div class="editor-header">
-        <h1>Environments</h1>
-        <button class="ghost-button" type="button" onclick={handleCreateEnvironment} disabled={isCreating}>
-          {isCreating ? "Creating..." : "New environment"}
-        </button>
+      <div class="request-section-header">
+        <div class="request-section-title">
+          <h1>Environments</h1>
+          <button class="system-button" type="button" onclick={openImportModal}>
+            Import
+          </button>
+          <button class="system-button" type="button" onclick={handleCreateEnvironment} disabled={isCreating}>
+            {isCreating ? "Creating..." : "New"}
+          </button>
+        </div>
       </div>
 
       {#if errorText}
         <div class="response-error">{errorText}</div>
+      {/if}
+
+      {#if importSuccessText}
+        <div class="collections-import-success">{importSuccessText}</div>
       {/if}
 
       {#if environments.length === 0 && !isLoading}
@@ -338,3 +403,86 @@
       {/if}
     </section>
   </div>
+
+  {#if isImportModalOpen}
+    <div
+      class="modal-backdrop"
+      role="button"
+      tabindex="0"
+      aria-label="Close import dialog"
+      onclick={(e) => { if (e.target === e.currentTarget) closeImportModal(); }}
+      onkeydown={(event) => {
+        if (event.key === "Escape" || event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          closeImportModal();
+        }
+      }}
+    >
+      <div class="panel save-dialog" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="import-environment-title">
+        <div class="editor-header import-dialog-header">
+          <h2 id="import-environment-title">Import</h2>
+          <span class="history-meta">Postman Environment JSON</span>
+        </div>
+
+        <div class="editor-block">
+          <p class="field-help">Import a Postman environment by opening a JSON file or pasting the environment payload directly.</p>
+
+          <label>
+            <span class="field-label">Paste source</span>
+            <textarea
+              class="text-input collections-import-source"
+              bind:value={importSource}
+              placeholder={'{ "name": "Local", "values": [{ "key": "base_url", "value": "https://api.example.com" }] }'}
+            ></textarea>
+          </label>
+
+          <label class="checkbox-label">
+            <input class="row-toggle" type="checkbox" bind:checked={importSetActive} />
+            <span>Set imported environment as active</span>
+          </label>
+
+          <input
+            bind:this={importFileInput}
+            class="sr-only"
+            type="file"
+            accept=".json,application/json"
+            onchange={async (event: Event & { currentTarget: HTMLInputElement }) => {
+              const file = event.currentTarget.files?.[0];
+              if (!file) {
+                return;
+              }
+
+              importSource = await file.text();
+              event.currentTarget.value = "";
+            }}
+          />
+
+          {#if importErrorText}
+            <div class="response-error">{importErrorText}</div>
+          {/if}
+
+          <div class="collections-page-actions">
+            <button class="ghost-button" type="button" onclick={() => importFileInput?.click()}>
+              Open JSON file
+            </button>
+            <button
+              class="send-button"
+              type="button"
+              onclick={async () => {
+                await handleImportEnvironment();
+                if (!importErrorText) {
+                  closeImportModal();
+                }
+              }}
+              disabled={isImporting}
+            >
+              {isImporting ? "Importing..." : "Import"}
+            </button>
+            <button class="ghost-button" type="button" onclick={closeImportModal}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  {/if}

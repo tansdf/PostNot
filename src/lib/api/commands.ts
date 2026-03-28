@@ -7,6 +7,8 @@ import {
   type AppSettings,
   type EnvironmentDetail,
   type EnvironmentInput,
+  type ImportEnvironmentInput,
+  type ImportEnvironmentResult,
   type EnvironmentSummary,
   type HistoryEntryDetail,
   type HistoryEntrySummary,
@@ -487,4 +489,17 @@ export async function setActiveEnvironment(environmentId: string | null): Promis
   }
 
   await invoke("set_active_environment", { environmentId });
+}
+
+export async function importPostmanEnvironment(input: ImportEnvironmentInput): Promise<ImportEnvironmentResult> {
+  if (!hasTauriRuntime()) {
+    return {
+      environmentId: `mock-environment-${Date.now()}`,
+      environmentName: "Imported Postman environment",
+      importedVariableCount: 2,
+      activated: input.setActive
+    };
+  }
+
+  return invoke<ImportEnvironmentResult>("import_postman_environment", { input });
 }

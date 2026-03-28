@@ -80,18 +80,19 @@
 
 <div class="workspace-grid">
   <section class="panel collections-page-panel">
-    <div class="editor-header">
-      <h1>Collection View</h1>
-      <div class="collections-page-actions">
-        {#if isImporting}
-          <span class="history-meta">Importing...</span>
-        {:else if importSuccessText}
-          <span class="history-meta">{importSuccessText}</span>
-        {:else if isCollectionsLoading}
-          <span class="history-meta">Loading...</span>
-        {/if}
-        <button class="ghost-button" type="button" onclick={onOpenImport}>Import</button>
+    <div class="request-section-header">
+      <div class="request-section-title">
+        <h1>Collection View</h1>
+        <button class="system-button" type="button" onclick={onOpenImport}>Import</button>
       </div>
+
+      {#if isImporting}
+        <span class="history-meta">Importing...</span>
+      {:else if importSuccessText}
+        <span class="history-meta">{importSuccessText}</span>
+      {:else if isCollectionsLoading}
+        <span class="history-meta">Loading...</span>
+      {/if}
     </div>
 
     {#if errorText}

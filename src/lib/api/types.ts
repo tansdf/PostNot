@@ -164,6 +164,18 @@ export type EnvironmentInput = {
   variables: KeyValueRow[];
 };
 
+export type ImportEnvironmentInput = {
+  source: string;
+  setActive: boolean;
+};
+
+export type ImportEnvironmentResult = {
+  environmentId: string;
+  environmentName: string;
+  importedVariableCount: number;
+  activated: boolean;
+};
+
 function createId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();

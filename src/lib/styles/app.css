@@ -244,17 +244,13 @@ button:disabled {
   flex-wrap: wrap;
 }
 
+.request-section-header h1,
 .request-section-header h2 {
   margin: 0;
-  font-size: 1rem;
 }
 
-.request-header-button {
-  min-width: 0;
-  min-height: 2.1rem;
-  padding: 0.35rem 0.75rem;
-  font-size: 0.92rem;
-  line-height: 1.1;
+.request-section-header h2 {
+  font-size: 1rem;
 }
 
 .request-header-grid {
@@ -422,6 +418,7 @@ select option {
 
 .send-button,
 .ghost-button,
+.system-button,
 .icon-button,
 .tab-button {
   box-sizing: border-box;
@@ -474,6 +471,7 @@ select option {
 }
 
 .ghost-button,
+.system-button,
 .icon-button,
 .tab-button {
   background: var(--control-bg);
@@ -482,9 +480,18 @@ select option {
 }
 
 .ghost-button:hover,
+.system-button:hover,
 .icon-button:hover,
 .tab-button:hover {
   background: var(--control-hover-bg);
+}
+
+.system-button {
+  height: 32px;
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 0.82rem;
+  letter-spacing: 0;
 }
 
 .tab-button.active {
@@ -1671,6 +1678,18 @@ select option {
 }
 
 .settings-checkbox {
+  margin: 0;
+}
+
+.checkbox-label {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  color: var(--text-secondary);
+}
+
+.checkbox-label .row-toggle,
+.checkbox-label input[type="checkbox"] {
   margin: 0;
 }
 

@@ -42,6 +42,7 @@ Implemented now:
 - collections sidebar and dedicated collection view
 - environments and variable resolution
 - Postman collection JSON import
+- Postman environment JSON import
 - cURL command import
 - multipart request composition with file uploads
 - settings page wired to SQLite
@@ -51,7 +52,6 @@ Implemented now:
 
 Not implemented yet:
 
-- Postman environment import
 - Postman export
 - Tauri updater integration
 - scripts
@@ -82,6 +82,7 @@ Manual end-to-end verification in `tauri dev` has already been completed for the
 - Request cancellation is available while a request is in flight and canceled requests are not written to history.
 - Collections are browsed from the sidebar, edited on `/collections`, and the request editor can save new requests or update the currently loaded saved request.
 - Environments are managed on `/environments`, one environment can be active at a time, and `{{variable}}` placeholders are resolved during request execution.
+- `/environments` also supports paste-based and file-based import of Postman environment JSON with an option to activate the imported environment immediately.
 - `/collections` also supports paste-based import of Postman Collection v2.1 JSON and single cURL commands into PostNot collections.
 
 ## Versioning Policy
@@ -94,7 +95,7 @@ Manual end-to-end verification in `tauri dev` has already been completed for the
 
 ## Recommended Next Steps
 
-1. Add Postman environment import and export.
+1. Add Postman export.
 2. Add Tauri updater integration.
 3. Add collection folders and richer request organization.
 4. Continue tightening error handling and desktop UX polish.

@@ -2,9 +2,11 @@ use tauri::State;
 
 use crate::{
     app_state::AppState,
-    domain::environments::{EnvironmentDetail, EnvironmentInput, EnvironmentSummary},
+    domain::environments::{
+        EnvironmentDetail, EnvironmentInput, EnvironmentSummary, ImportEnvironmentInput, ImportEnvironmentResult,
+    },
     error::AppResult,
-    services::environments_service,
+    services::{environments_service, imports_service},
 };
 
 #[tauri::command]
@@ -42,4 +44,12 @@ pub async fn set_active_environment(
     environment_id: Option<String>,
 ) -> AppResult<()> {
     environments_service::set_active_environment(state.db(), environment_id.as_deref()).await
+}
+
+#[tauri::command]
+pub async fn import_postman_environment(
+    state: State<'_, AppState>,
+    input: ImportEnvironmentInput,
+) -> AppResult<ImportEnvironmentResult> {
+    imports_service::import_postman_environment(state.db(), &input).await
 }

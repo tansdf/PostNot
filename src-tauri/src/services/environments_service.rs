@@ -104,6 +104,21 @@ pub async fn update_environment(
     get_environment(pool, environment_id).await
 }
 
+pub async fn create_environment_from_input(
+    pool: &SqlitePool,
+    input: &EnvironmentInput,
+    set_active: bool,
+) -> AppResult<EnvironmentDetail> {
+    let created = create_environment(pool).await?;
+    update_environment(pool, &created.id, input).await?;
+
+    if set_active {
+        set_active_environment(pool, Some(&created.id)).await?;
+    }
+
+    get_environment(pool, &created.id).await
+}
+
 pub async fn delete_environment(pool: &SqlitePool, environment_id: &str) -> AppResult<()> {
     sqlx::query("DELETE FROM environments WHERE id = ?1")
         .bind(environment_id)

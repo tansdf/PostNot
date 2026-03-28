@@ -442,8 +442,8 @@
   <div class="request-section-header">
     <div class="request-section-title">
       <h2>Request</h2>
-      <button class="ghost-button request-header-button" type="button" onclick={onNewRequest}>New</button>
-      <button class="ghost-button request-header-button" type="button" onclick={onOpenCurlImport}>Import</button>
+      <button class="system-button" type="button" onclick={onNewRequest}>New</button>
+      <button class="system-button" type="button" onclick={onOpenCurlImport}>Import</button>
     </div>
   </div>
 
