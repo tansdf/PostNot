@@ -1,10 +1,13 @@
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use sqlx::SqlitePool;
 use tokio::sync::watch;
 use uuid::Uuid;
 
-use crate::error::{AppError, AppResult};
+use crate::{
+    error::{AppError, AppResult},
+    services::secret_store_service::SecretStore,
+};
 
 struct InFlightRequest {
     id: String,
@@ -13,19 +16,25 @@ struct InFlightRequest {
 
 pub struct AppState {
     db: SqlitePool,
+    secret_store: Arc<dyn SecretStore>,
     in_flight_request: Mutex<Option<InFlightRequest>>,
 }
 
 impl AppState {
-    pub fn new(db: SqlitePool) -> Self {
+    pub fn new(db: SqlitePool, secret_store: Arc<dyn SecretStore>) -> Self {
         Self {
             db,
+            secret_store,
             in_flight_request: Mutex::new(None),
         }
     }
 
     pub fn db(&self) -> &SqlitePool {
         &self.db
+    }
+
+    pub fn secret_store(&self) -> Arc<dyn SecretStore> {
+        Arc::clone(&self.secret_store)
     }
 
     pub fn start_request(&self) -> AppResult<(String, watch::Receiver<bool>)> {

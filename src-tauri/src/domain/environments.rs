@@ -1,7 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-use crate::domain::requests::KeyValueRow;
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EnvironmentSummary {
@@ -14,11 +12,22 @@ pub struct EnvironmentSummary {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct EnvironmentVariable {
+    pub id: String,
+    pub key: String,
+    pub value: String,
+    pub enabled: bool,
+    #[serde(default)]
+    pub is_secret: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct EnvironmentDetail {
     pub id: String,
     pub name: String,
     pub is_active: bool,
-    pub variables: Vec<KeyValueRow>,
+    pub variables: Vec<EnvironmentVariable>,
     pub updated_at: String,
 }
 
@@ -26,7 +35,7 @@ pub struct EnvironmentDetail {
 #[serde(rename_all = "camelCase")]
 pub struct EnvironmentInput {
     pub name: String,
-    pub variables: Vec<KeyValueRow>,
+    pub variables: Vec<EnvironmentVariable>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

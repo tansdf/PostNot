@@ -22,7 +22,8 @@ pub fn run() -> Result<(), String> {
         .setup(|app| {
             let database = tauri::async_runtime::block_on(db::init(app.handle()))?;
             tauri::async_runtime::block_on(services::settings_service::ensure_defaults(&database))?;
-            app.manage(app_state::AppState::new(database));
+            let secret_store = services::secret_store_service::default_secret_store();
+            app.manage(app_state::AppState::new(database, secret_store));
             if let Some(window) = app.get_webview_window("main") {
                 services::window_state_service::restore_and_track_main_window(&window);
             }

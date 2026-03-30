@@ -60,6 +60,7 @@ This section reflects the code currently implemented in the repository.
 - Cancel in-flight request
 - Collections and saved requests
 - Environments and variable resolution
+- OS-backed secret storage for secret environment variables
 - Postman collection JSON import
 - Postman environment JSON import
 - Postman collection JSON export
@@ -78,7 +79,6 @@ This section reflects the code currently implemented in the repository.
 - Multi-tab workflow
 - Pre-request scripts
 - Test scripts
-- Secret storage outside SQLite
 
 ## 4. High-Level Architecture
 
@@ -104,6 +104,7 @@ Responsibilities:
 - Execute HTTP requests
 - Load and persist settings
 - Persist request history
+- Load environment metadata from SQLite while storing secret environment values in the OS credential store
 - Resolve app data paths
 - Expose a stable Tauri command surface to the UI
 
@@ -115,7 +116,7 @@ Responsibilities:
 4. Rust loads persisted request settings from SQLite
 5. Rust executes the request with `reqwest`
 6. Rust returns response metadata and body to the UI
-7. Rust writes a history entry to SQLite
+7. Rust writes a history entry to SQLite, redacting secret-derived environment substitutions back to their original `{{variable}}` form
 8. Frontend reloads history and renders the latest response
 
 ## 5. Actual Folder Structure
@@ -494,13 +495,10 @@ Current state:
 
 - the app is fully local
 - requests are executed in Rust, not the browser
-- sensitive values may still be stored in SQLite as plain application data
+- secret environment values are stored in the OS credential store, while SQLite keeps only non-secret environment metadata
+- history snapshots redact resolved values that came from secret environment variables
 
-This is acceptable for the current milestone but not the final security posture.
-
-Planned improvement:
-
-- move secrets to OS keychain storage while leaving non-secret metadata in SQLite
+This is the current security posture for environment variables; broader secret handling beyond environment-backed values remains future work.
 
 ## 12. Milestone Status
 
@@ -547,7 +545,7 @@ Recommended implementation order from the current state:
 2. Add Tauri updater integration
 3. Add collection folders and richer request organization
 4. Continue tightening error handling and desktop UX polish
-5. Plan the move of secrets out of SQLite and into OS-backed secure storage
+5. Improve import/export compatibility and remaining desktop polish
 
 ## 14. Open Decisions
 
@@ -556,10 +554,10 @@ These are still unresolved:
 - whether large response bodies should spill to files instead of SQLite preview-only storage
 - whether tabs should persist in SQLite or only in frontend state at first
 - exact import/export format for PostNot bundles
-- how to model secrets before keychain integration
+- how far secret redaction should extend beyond environment-backed variables
 
 ## 15. Recommendation
 
 Treat the repository as being in an active Milestone 1 state, not full MVP completion.
 
-The design is now grounded in what the code actually does: persisted settings influence request execution, history is stored in SQLite, environments resolve variables at send time, collections are part of the working UI, import can pull requests in from Postman collections and cURL, and multipart requests can now attach local files. The next work should stay focused on completing the remaining environment/export surface, updater work, request organization, and remaining UX polish.
+The design is now grounded in what the code actually does: persisted settings influence request execution, history is stored in SQLite with secret-derived environment values redacted, secret environment values live in the OS credential store, environments resolve variables at send time, collections are part of the working UI, import can pull requests in from Postman collections and cURL, and multipart requests can now attach local files. The next work should stay focused on updater work, request organization, multi-tab decisions, and remaining UX polish.

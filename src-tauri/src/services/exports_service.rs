@@ -1,14 +1,17 @@
+use std::sync::Arc;
+
 use serde::Serialize;
 use sqlx::SqlitePool;
 
 use crate::{
     domain::{
         collections::SavedRequestDetail,
+        environments::EnvironmentVariable,
         exports::ExportResult,
         requests::{FileRow, KeyValueRow, RequestAuth, RequestBody},
     },
     error::{AppError, AppResult},
-    services::{collections_service, environments_service},
+    services::{collections_service, environments_service, secret_store_service::SecretStore},
 };
 
 pub async fn export_collection(
@@ -44,9 +47,11 @@ pub async fn export_collection(
 
 pub async fn export_environment(
     pool: &SqlitePool,
+    secret_store: Arc<dyn SecretStore>,
     environment_id: &str,
 ) -> AppResult<Option<ExportResult>> {
-    let environment = environments_service::get_environment(pool, environment_id).await?;
+    let environment =
+        environments_service::get_environment(pool, secret_store, environment_id).await?;
     let payload = PostmanEnvironmentExport {
         id: environment.id.clone(),
         name: environment.name.clone(),
@@ -271,12 +276,20 @@ fn build_formdata(body: &RequestBody) -> Vec<PostmanFormDataValueExport> {
     form_fields.chain(files).collect()
 }
 
-fn map_environment_value(item: &KeyValueRow) -> PostmanEnvironmentValueExport {
+fn map_environment_value(item: &EnvironmentVariable) -> PostmanEnvironmentValueExport {
     PostmanEnvironmentValueExport {
         key: item.key.clone(),
-        value: item.value.clone(),
+        value: if item.is_secret {
+            String::new()
+        } else {
+            item.value.clone()
+        },
         enabled: item.enabled,
-        value_type: "any".to_string(),
+        value_type: if item.is_secret {
+            "secret".to_string()
+        } else {
+            "any".to_string()
+        },
     }
 }
 

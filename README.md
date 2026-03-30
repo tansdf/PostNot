@@ -40,7 +40,7 @@ Implemented now:
 - request cancellation
 - collections and saved requests
 - collections sidebar and dedicated collection view
-- environments and variable resolution
+- environments, variable resolution, and OS-backed secret storage for secret environment values
 - Postman collection JSON import
 - Postman environment JSON import
 - Postman collection JSON export
@@ -84,8 +84,10 @@ Manual end-to-end verification in `tauri dev` has already been completed for the
 - Request cancellation is available while a request is in flight and canceled requests are not written to history.
 - Collections are browsed from the sidebar, edited on `/collections`, and the request editor can save new requests or update the currently loaded saved request.
 - Environments are managed on `/environments`, one environment can be active at a time, and `{{variable}}` placeholders are resolved during request execution.
+- Environment variables marked as secret are stored in the OS credential store instead of SQLite, stay masked in the editor by default, and export with blank placeholder values instead of plaintext.
 - `/environments` also supports paste-based and file-based import of Postman environment JSON, optional activation during import, and one-click export back to Postman environment JSON.
 - `/collections` also supports paste-based import of Postman Collection v2.1 JSON, one-click export back to Postman Collection v2.1 JSON, and single cURL commands into PostNot collections.
+- Request history still records requests that use secret environment variables, but the stored snapshot keeps the original unresolved `{{variable}}` text instead of persisting the resolved secret value.
 
 ## Versioning Policy
 
@@ -100,5 +102,5 @@ Manual end-to-end verification in `tauri dev` has already been completed for the
 1. Add Tauri updater integration.
 2. Add collection folders and richer request organization.
 3. Continue tightening error handling and desktop UX polish.
-4. Plan the move of secrets out of SQLite and into OS-backed secure storage.
-5. Evaluate multi-tab workflow and request-level productivity features.
+4. Evaluate multi-tab workflow and request-level productivity features.
+5. Keep tightening import/export compatibility and desktop UX polish.

@@ -1,17 +1,20 @@
 use serde::Deserialize;
 use sqlx::SqlitePool;
+use std::sync::Arc;
 use url::Url;
 use uuid::Uuid;
 
 use crate::{
     domain::{
         collections::CreateCollectionInput,
-        environments::{EnvironmentInput, ImportEnvironmentInput, ImportEnvironmentResult},
+        environments::{
+            EnvironmentInput, EnvironmentVariable, ImportEnvironmentInput, ImportEnvironmentResult,
+        },
         imports::{ImportRequestInput, ImportResult, ImportedRequestDraft},
         requests::{FileRow, KeyValueRow, RequestAuth, RequestBody, SendRequestPayload},
     },
     error::{AppError, AppResult},
-    services::{collections_service, environments_service},
+    services::{collections_service, environments_service, secret_store_service::SecretStore},
 };
 
 #[derive(Debug, Deserialize)]
@@ -187,6 +190,8 @@ struct PostmanEnvironmentValue {
     key: String,
     #[serde(default)]
     value: serde_json::Value,
+    #[serde(rename = "type", default)]
+    value_type: String,
     enabled: Option<bool>,
     disabled: Option<bool>,
 }
@@ -224,6 +229,7 @@ pub fn import_curl_to_draft(source: &str) -> AppResult<ImportedRequestDraft> {
 
 pub async fn import_postman_environment(
     pool: &SqlitePool,
+    secret_store: Arc<dyn SecretStore>,
     input: &ImportEnvironmentInput,
 ) -> AppResult<ImportEnvironmentResult> {
     let source = input.source.trim();
@@ -246,16 +252,18 @@ pub async fn import_postman_environment(
     let variables = environment
         .values
         .into_iter()
-        .map(|item| KeyValueRow {
+        .map(|item| EnvironmentVariable {
             id: Uuid::new_v4().to_string(),
             key: item.key,
             value: stringify_postman_value(&item.value),
             enabled: !item.disabled.unwrap_or(false) && item.enabled.unwrap_or(true),
+            is_secret: item.value_type.eq_ignore_ascii_case("secret"),
         })
         .collect();
 
     let environment = environments_service::create_environment_from_input(
         pool,
+        secret_store,
         &EnvironmentInput { name, variables },
         input.set_active,
     )

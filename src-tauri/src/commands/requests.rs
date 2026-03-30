@@ -15,15 +15,22 @@ pub async fn send_request(
 ) -> AppResult<ResponsePayload> {
     let (request_id, cancel_rx) = state.start_request()?;
     let settings = settings_service::get_settings(state.db()).await?;
-    let active_environment = environments_service::get_active_environment(state.db()).await?;
-    let resolved_payload =
+    let active_environment =
+        environments_service::get_active_environment(state.db(), state.secret_store()).await?;
+    let resolved_request =
         environments_service::resolve_request(&payload, active_environment.as_ref());
+    let history_payload = environments_service::redact_secret_history_payload(
+        &payload,
+        &resolved_request.payload,
+        &resolved_request.secret_usage,
+    );
 
-    let request_result = http_client::send_request(&resolved_payload, &settings, cancel_rx).await;
+    let request_result =
+        http_client::send_request(&resolved_request.payload, &settings, cancel_rx).await;
 
     let result = match request_result {
         Ok(response) => {
-            match history_service::record_success(state.db(), &resolved_payload, &response, &app)
+            match history_service::record_success(state.db(), &history_payload, &response, &app)
                 .await
             {
                 Ok(()) => Ok(response),
@@ -35,7 +42,7 @@ pub async fn send_request(
             false => {
                 let history_result = history_service::record_failure(
                     state.db(),
-                    &resolved_payload,
+                    &history_payload,
                     &error.to_string(),
                 )
                 .await;

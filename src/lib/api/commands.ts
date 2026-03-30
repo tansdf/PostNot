@@ -7,6 +7,7 @@ import {
   type AppSettings,
   type EnvironmentDetail,
   type EnvironmentInput,
+  type EnvironmentVariable,
   type ExportResult,
   type ImportEnvironmentInput,
   type ImportEnvironmentResult,
@@ -107,25 +108,29 @@ function createMockEnvironments(): EnvironmentSummary[] {
 }
 
 function createMockEnvironmentDetail(id: string): EnvironmentDetail {
+  const variables: EnvironmentVariable[] = [
+    {
+      id: "env-1",
+      key: "base_url",
+      value: "https://jsonplaceholder.typicode.com",
+      enabled: true,
+      isSecret: false
+    },
+    {
+      id: "env-2",
+      key: "api_token",
+      value: "demo-token",
+      enabled: true,
+      isSecret: true
+    }
+  ];
+
   return {
     id,
     name: "Local",
     isActive: true,
     updatedAt: new Date().toISOString(),
-    variables: [
-      {
-        id: "env-1",
-        key: "base_url",
-        value: "https://jsonplaceholder.typicode.com",
-        enabled: true
-      },
-      {
-        id: "env-2",
-        key: "api_token",
-        value: "demo-token",
-        enabled: true
-      }
-    ]
+    variables
   };
 }
 

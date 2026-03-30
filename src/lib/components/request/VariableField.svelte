@@ -1,11 +1,12 @@
 <script lang="ts">
   import { tick } from "svelte";
 
-  import type { KeyValueRow } from "$lib/api/types";
+  import type { EnvironmentVariable } from "$lib/api/types";
 
   type VariableOption = {
     key: string;
     value: string;
+    isSecret: boolean;
   };
 
   type UsedVariable = {
@@ -29,7 +30,7 @@
     onExtraKeydown = undefined
   }: {
     value?: string;
-    variables?: KeyValueRow[];
+    variables?: EnvironmentVariable[];
     onValueInput?: (value: string) => void;
     className?: string;
     placeholder?: string;
@@ -76,14 +77,15 @@
     }
   });
 
-  function getAvailableVariables(rows: KeyValueRow[]): VariableOption[] {
+  function getAvailableVariables(rows: EnvironmentVariable[]): VariableOption[] {
     const seen = new Set<string>();
 
     return rows
       .filter((row) => row.enabled && row.key.trim())
       .map((row) => ({
         key: row.key.trim(),
-        value: row.value
+        value: row.value,
+        isSecret: row.isSecret
       }))
       .filter((row) => {
         const lookupKey = row.key.toLowerCase();
@@ -107,7 +109,7 @@
   }
 
   function getUsedVariables(fieldValue: string, rows: VariableOption[]): UsedVariable[] {
-    const variableLookup = new Map(rows.map((row) => [row.key, row.value]));
+    const variableLookup = new Map(rows.map((row) => [row.key, row]));
     const seen = new Set<string>();
     const result: UsedVariable[] = [];
 
@@ -121,12 +123,15 @@
       seen.add(key);
 
       if (variableLookup.has(key)) {
-        const resolvedValue = variableLookup.get(key) ?? "";
+        const resolvedVariable = variableLookup.get(key);
+        const resolvedValue = resolvedVariable?.value ?? "";
         result.push({
           key,
-          value: resolvedValue,
+          value: resolvedVariable?.isSecret ? null : resolvedValue,
           isResolved: true,
-          tooltip: `${key}: ${resolvedValue || "(empty value)"}`
+          tooltip: resolvedVariable?.isSecret
+            ? `${key}: secret value`
+            : `${key}: ${resolvedValue || "(empty value)"}`
         });
       } else {
         result.push({
@@ -413,7 +418,7 @@
               onmousedown={handleSuggestionPointerDown}
             >
               <strong>{variable.key}</strong>
-              <span>{variable.value || "(empty value)"}</span>
+              <span>{variable.isSecret ? "secret value" : variable.value || "(empty value)"}</span>
             </button>
           {/each}
         {:else}

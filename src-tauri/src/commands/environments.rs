@@ -26,7 +26,7 @@ pub async fn get_environment(
     state: State<'_, AppState>,
     environment_id: String,
 ) -> AppResult<EnvironmentDetail> {
-    environments_service::get_environment(state.db(), &environment_id).await
+    environments_service::get_environment(state.db(), state.secret_store(), &environment_id).await
 }
 
 #[tauri::command]
@@ -35,7 +35,13 @@ pub async fn update_environment(
     environment_id: String,
     input: EnvironmentInput,
 ) -> AppResult<EnvironmentDetail> {
-    environments_service::update_environment(state.db(), &environment_id, &input).await
+    environments_service::update_environment(
+        state.db(),
+        state.secret_store(),
+        &environment_id,
+        &input,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -43,7 +49,8 @@ pub async fn delete_environment(
     state: State<'_, AppState>,
     environment_id: String,
 ) -> AppResult<()> {
-    environments_service::delete_environment(state.db(), &environment_id).await
+    environments_service::delete_environment(state.db(), state.secret_store(), &environment_id)
+        .await
 }
 
 #[tauri::command]
@@ -59,7 +66,7 @@ pub async fn import_postman_environment(
     state: State<'_, AppState>,
     input: ImportEnvironmentInput,
 ) -> AppResult<ImportEnvironmentResult> {
-    imports_service::import_postman_environment(state.db(), &input).await
+    imports_service::import_postman_environment(state.db(), state.secret_store(), &input).await
 }
 
 #[tauri::command]
@@ -67,5 +74,5 @@ pub async fn export_environment(
     state: State<'_, AppState>,
     environment_id: String,
 ) -> AppResult<Option<ExportResult>> {
-    exports_service::export_environment(state.db(), &environment_id).await
+    exports_service::export_environment(state.db(), state.secret_store(), &environment_id).await
 }

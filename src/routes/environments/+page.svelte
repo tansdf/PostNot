@@ -2,7 +2,7 @@
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import { onMount } from "svelte";
-  import { createKeyValueRow, type EnvironmentDetail, type EnvironmentSummary } from "$lib/api/types";
+  import { createEnvironmentVariable, type EnvironmentDetail, type EnvironmentSummary } from "$lib/api/types";
   import {
     createEnvironment,
     deleteEnvironment,
@@ -32,6 +32,7 @@
   let isImportModalOpen = $state(false);
   let importFileInput: HTMLInputElement | null = $state(null);
   type EnvironmentVariable = NonNullable<EnvironmentDetail["variables"]>[number];
+  let revealedSecretRowIds = $state<string[]>([]);
 
   let requestedEnvironmentId = $derived(page.url.searchParams.get("environmentId") ?? "");
 
@@ -90,9 +91,11 @@
         await loadEnvironmentDetail(nextEnvironmentId);
       } else {
         environmentDetail = null;
+        revealedSecretRowIds = [];
       }
     } catch (error) {
       errorText = error instanceof Error ? error.message : String(error);
+      revealedSecretRowIds = [];
     } finally {
       isLoading = false;
     }
@@ -101,6 +104,7 @@
   async function loadEnvironmentDetail(environmentId: string) {
     selectedEnvironmentId = environmentId;
     isDetailLoading = true;
+    revealedSecretRowIds = [];
 
     try {
       environmentDetail = await getEnvironment(environmentId);
@@ -210,7 +214,7 @@
 
     environmentDetail = {
       ...environmentDetail,
-      variables: [...environmentDetail.variables, createKeyValueRow()]
+      variables: [...environmentDetail.variables, createEnvironmentVariable()]
     };
   }
 
@@ -223,9 +227,11 @@
       ...environmentDetail,
       variables:
         environmentDetail.variables.length === 1
-          ? [createKeyValueRow()]
+          ? [createEnvironmentVariable()]
           : environmentDetail.variables.filter((row) => row.id !== id)
     };
+
+    revealedSecretRowIds = revealedSecretRowIds.filter((rowId) => rowId !== id);
   }
 
   function formatUpdatedAt(value: string) {
@@ -236,6 +242,25 @@
       }).format(new Date(value));
     } catch {
       return value;
+    }
+  }
+
+  function toggleSecretVisibility(id: string) {
+    revealedSecretRowIds = revealedSecretRowIds.includes(id)
+      ? revealedSecretRowIds.filter((rowId) => rowId !== id)
+      : [...revealedSecretRowIds, id];
+  }
+
+  function isSecretVisible(id: string) {
+    return revealedSecretRowIds.includes(id);
+  }
+
+  async function copyVariableValue(row: EnvironmentVariable) {
+    try {
+      await navigator.clipboard.writeText(row.value);
+      notifications.success(row.key || "Environment variable value", "Value copied");
+    } catch (error) {
+      errorText = error instanceof Error ? error.message : String(error);
     }
   }
 
@@ -393,7 +418,7 @@
 
           <div class="row-list">
             {#each environmentDetail.variables as row, index (row.id)}
-              <div class="kv-row">
+              <div class="kv-row environment-kv-row">
                 <input
                   class="row-toggle"
                   type="checkbox"
@@ -406,12 +431,70 @@
                   placeholder="Variable name"
                   oninput={(event) => updateVariable(index, { key: event.currentTarget.value })}
                 />
-                <input
-                  class="text-input"
-                  value={row.value}
-                  placeholder="Value"
-                  oninput={(event) => updateVariable(index, { value: event.currentTarget.value })}
-                />
+                <div class="environment-variable-value">
+                  <div class="environment-variable-input-shell">
+                    <input
+                      class="text-input environment-variable-input"
+                      type={row.isSecret && !isSecretVisible(row.id) ? "password" : "text"}
+                      value={row.value}
+                      placeholder={row.isSecret ? "Secret value" : "Value"}
+                      oninput={(event) => updateVariable(index, { value: event.currentTarget.value })}
+                    />
+                    <div class="environment-variable-icon-actions">
+                      {#if row.isSecret}
+                        <button
+                          class={["environment-variable-icon-button", isSecretVisible(row.id) && "environment-variable-icon-button-active"]}
+                          type="button"
+                          title={isSecretVisible(row.id) ? "Hide secret value" : "Show secret value"}
+                          aria-label={isSecretVisible(row.id) ? "Hide secret value" : "Show secret value"}
+                          onclick={() => toggleSecretVisibility(row.id)}
+                        >
+                          {#if isSecretVisible(row.id)}
+                            <svg viewBox="0 0 20 20" aria-hidden="true">
+                              <path d="M1.5 10s3.2-5 8.5-5 8.5 5 8.5 5-3.2 5-8.5 5-8.5-5-8.5-5Z" />
+                              <circle cx="10" cy="10" r="2.5" />
+                            </svg>
+                          {:else}
+                            <svg viewBox="0 0 20 20" aria-hidden="true">
+                              <path d="M1.5 10s3.2-5 8.5-5 8.5 5 8.5 5-3.2 5-8.5 5-8.5-5-8.5-5Z" />
+                              <circle cx="10" cy="10" r="2.5" />
+                              <path d="M3 3 17 17" />
+                            </svg>
+                          {/if}
+                        </button>
+                      {/if}
+                      <button
+                        class="environment-variable-icon-button"
+                        type="button"
+                        title="Copy value"
+                        aria-label="Copy value"
+                        onclick={() => copyVariableValue(row)}
+                      >
+                        <svg viewBox="0 0 20 20" aria-hidden="true">
+                          <rect x="7" y="3" width="9" height="11" rx="2" />
+                          <rect x="4" y="6" width="9" height="11" rx="2" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  class={["environment-variable-icon-button", row.isSecret && "environment-variable-icon-button-active"]}
+                  type="button"
+                  title={row.isSecret ? "Secret variable" : "Plain variable"}
+                  aria-label={row.isSecret ? "Secret variable" : "Plain variable"}
+                  onclick={() => {
+                    updateVariable(index, { isSecret: !row.isSecret });
+                    revealedSecretRowIds = revealedSecretRowIds.filter((rowId) => rowId !== row.id);
+                  }}
+                >
+                  <svg viewBox="0 0 20 20" aria-hidden="true">
+                    <circle cx="6.5" cy="10" r="3.25" />
+                    <path d="M9.75 10H17" />
+                    <path d="M13.4 10V7.9" />
+                    <path d="M15.9 10V8.8" />
+                  </svg>
+                </button>
                 <button class="icon-button" type="button" onclick={() => removeVariable(row.id)}>Remove</button>
               </div>
             {/each}

@@ -560,6 +560,20 @@ select option {
   align-items: flex-start;
 }
 
+.environment-kv-row {
+  align-items: center;
+}
+
+.environment-kv-row .row-toggle {
+  margin-top: 0;
+  align-self: center;
+}
+
+.environment-kv-row > .icon-button,
+.environment-kv-row > .environment-variable-icon-button {
+  align-self: center;
+}
+
 .row-toggle {
   appearance: none;
   width: 18px;
@@ -619,6 +633,85 @@ select option {
 .kv-row .variable-field,
 .kv-row .variable-input-shell {
   min-width: 0;
+}
+
+.environment-variable-value {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.environment-variable-input-shell {
+  position: relative;
+  min-width: 0;
+}
+
+.environment-variable-input {
+  padding-right: 78px;
+}
+
+.environment-variable-icon-actions {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.environment-variable-icon-actions .environment-variable-icon-button {
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  min-height: 30px;
+}
+
+.environment-variable-icon-button {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid var(--border-soft);
+  background: var(--control-bg);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: 180ms ease;
+}
+
+.environment-variable-icon-button:hover {
+  background: var(--control-hover-bg);
+  color: var(--text-primary);
+}
+
+.environment-variable-icon-button svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.environment-variable-icon-actions .environment-variable-icon-button svg {
+  width: 15px;
+  height: 15px;
+}
+
+.environment-variable-icon-button-active {
+  background: var(--control-selected-bg);
+  color: var(--control-selected-text);
+  border-color: var(--control-selected-border);
+}
+
+.environment-variable-icon-button-active:hover {
+  background: var(--control-selected-bg);
+  color: var(--control-selected-text);
+  border-color: var(--control-selected-border);
 }
 
 .variable-field {

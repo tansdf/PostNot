@@ -10,6 +10,14 @@ export type KeyValueRow = {
   enabled: boolean;
 };
 
+export type EnvironmentVariable = {
+  id: string;
+  key: string;
+  value: string;
+  enabled: boolean;
+  isSecret: boolean;
+};
+
 export type FileRow = {
   id: string;
   name: string;
@@ -156,13 +164,13 @@ export type EnvironmentDetail = {
   id: string;
   name: string;
   isActive: boolean;
-  variables: KeyValueRow[];
+  variables: EnvironmentVariable[];
   updatedAt: string;
 };
 
 export type EnvironmentInput = {
   name: string;
-  variables: KeyValueRow[];
+  variables: EnvironmentVariable[];
 };
 
 export type ImportEnvironmentInput = {
@@ -195,6 +203,16 @@ export function createKeyValueRow(): KeyValueRow {
     key: "",
     value: "",
     enabled: true
+  };
+}
+
+export function createEnvironmentVariable(): EnvironmentVariable {
+  return {
+    id: createId(),
+    key: "",
+    value: "",
+    enabled: true,
+    isSecret: false
   };
 }
 

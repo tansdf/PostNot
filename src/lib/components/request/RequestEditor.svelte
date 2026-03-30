@@ -1,6 +1,15 @@
 <script lang="ts">
   import { pickMultipartFiles } from "$lib/api/commands";
-  import { createFileRow, createKeyValueRow, type AuthType, type BodyMode, type FileRow, type KeyValueRow, type RequestDraft } from "$lib/api/types";
+  import {
+    createFileRow,
+    createKeyValueRow,
+    type AuthType,
+    type BodyMode,
+    type EnvironmentVariable,
+    type FileRow,
+    type KeyValueRow,
+    type RequestDraft
+  } from "$lib/api/types";
   import VariableField from "$lib/components/request/VariableField.svelte";
 
   let jsonEditorShellElement: HTMLDivElement | null = $state(null);
@@ -39,7 +48,7 @@
     isSaving?: boolean;
     saveLabel?: string;
     saveDisabled?: boolean;
-    environmentVariables?: KeyValueRow[];
+    environmentVariables?: EnvironmentVariable[];
     onNewRequest?: () => Promise<void> | void;
     onOpenCurlImport?: () => Promise<void> | void;
     onSend?: () => Promise<void> | void;

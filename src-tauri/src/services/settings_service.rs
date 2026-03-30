@@ -10,8 +10,8 @@ const VALIDATE_TLS_KEY: &str = "validate_tls";
 const HISTORY_LIMIT_KEY: &str = "history_limit";
 const NOTIFICATION_TIMEOUT_MS_KEY: &str = "notification_timeout_ms";
 const DEFAULT_UI_SCALE: f64 = 1.0;
-const MIN_UI_SCALE: f64 = 0.8;
-const MAX_UI_SCALE: f64 = 1.2;
+const MIN_UI_SCALE: f64 = 0.6;
+const MAX_UI_SCALE: f64 = 1.5;
 const MIN_NOTIFICATION_TIMEOUT_MS: u64 = 1_000;
 const MAX_NOTIFICATION_TIMEOUT_MS: u64 = 60_000;
 
@@ -157,4 +157,18 @@ async fn upsert_setting(pool: &SqlitePool, key: &str, value_json: &str) -> AppRe
 
 fn now_iso() -> String {
     chrono::Utc::now().to_rfc3339()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_ui_scale;
+
+    #[test]
+    fn normalize_ui_scale_matches_settings_ui_range() {
+        assert_eq!(normalize_ui_scale(0.4), 0.6);
+        assert_eq!(normalize_ui_scale(0.6), 0.6);
+        assert_eq!(normalize_ui_scale(1.0), 1.0);
+        assert_eq!(normalize_ui_scale(1.5), 1.5);
+        assert_eq!(normalize_ui_scale(1.8), 1.5);
+    }
 }
