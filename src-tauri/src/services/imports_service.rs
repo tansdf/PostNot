@@ -8,7 +8,7 @@ use crate::{
         collections::CreateCollectionInput,
         environments::{EnvironmentInput, ImportEnvironmentInput, ImportEnvironmentResult},
         imports::{ImportRequestInput, ImportResult, ImportedRequestDraft},
-        requests::{KeyValueRow, RequestAuth, RequestBody, SendRequestPayload},
+        requests::{FileRow, KeyValueRow, RequestAuth, RequestBody, SendRequestPayload},
     },
     error::{AppError, AppResult},
     services::{collections_service, environments_service},
@@ -33,7 +33,9 @@ struct PostmanInfo {
 #[serde(untagged)]
 enum PostmanDescription {
     Text(String),
-    Detailed { content: Option<String> },
+    Detailed {
+        content: Option<String>,
+    },
     #[default]
     Empty,
 }
@@ -98,6 +100,10 @@ struct PostmanBody {
     raw: String,
     #[serde(default)]
     urlencoded: Vec<PostmanFormValue>,
+    #[serde(default)]
+    formdata: Vec<PostmanFormDataValue>,
+    #[serde(default)]
+    options: Option<PostmanBodyOptions>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -107,6 +113,39 @@ struct PostmanFormValue {
     #[serde(default)]
     value: String,
     disabled: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PostmanFormDataValue {
+    #[serde(default)]
+    key: String,
+    #[serde(default)]
+    value: String,
+    #[serde(default)]
+    src: PostmanFileSource,
+    #[serde(rename = "type", default)]
+    item_type: String,
+    disabled: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+#[serde(untagged)]
+enum PostmanFileSource {
+    Text(String),
+    List(Vec<String>),
+    #[default]
+    Empty,
+}
+
+#[derive(Debug, Deserialize)]
+struct PostmanBodyOptions {
+    raw: Option<PostmanRawBodyOptions>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PostmanRawBodyOptions {
+    #[serde(default)]
+    language: String,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -152,10 +191,15 @@ struct PostmanEnvironmentValue {
     disabled: Option<bool>,
 }
 
-pub async fn import_requests(pool: &SqlitePool, input: &ImportRequestInput) -> AppResult<ImportResult> {
+pub async fn import_requests(
+    pool: &SqlitePool,
+    input: &ImportRequestInput,
+) -> AppResult<ImportResult> {
     let source = input.source.trim();
     if source.is_empty() {
-        return Err(AppError::Message("Import source cannot be empty.".to_string()));
+        return Err(AppError::Message(
+            "Import source cannot be empty.".to_string(),
+        ));
     }
 
     match input.format.as_str() {
@@ -168,7 +212,9 @@ pub async fn import_requests(pool: &SqlitePool, input: &ImportRequestInput) -> A
 pub fn import_curl_to_draft(source: &str) -> AppResult<ImportedRequestDraft> {
     let source = source.trim();
     if source.is_empty() {
-        return Err(AppError::Message("Import source cannot be empty.".to_string()));
+        return Err(AppError::Message(
+            "Import source cannot be empty.".to_string(),
+        ));
     }
 
     Ok(ImportedRequestDraft {
@@ -182,11 +228,14 @@ pub async fn import_postman_environment(
 ) -> AppResult<ImportEnvironmentResult> {
     let source = input.source.trim();
     if source.is_empty() {
-        return Err(AppError::Message("Import source cannot be empty.".to_string()));
+        return Err(AppError::Message(
+            "Import source cannot be empty.".to_string(),
+        ));
     }
 
-    let environment: PostmanEnvironment = serde_json::from_str(source)
-        .map_err(|error| AppError::Message(format!("Invalid Postman environment JSON: {}", error)))?;
+    let environment: PostmanEnvironment = serde_json::from_str(source).map_err(|error| {
+        AppError::Message(format!("Invalid Postman environment JSON: {}", error))
+    })?;
 
     let name = if environment.name.trim().is_empty() {
         "Imported Postman environment".to_string()
@@ -225,8 +274,9 @@ pub async fn import_postman_environment(
 }
 
 async fn import_postman_collection(pool: &SqlitePool, source: &str) -> AppResult<ImportResult> {
-    let collection: PostmanCollection =
-        serde_json::from_str(source).map_err(|error| AppError::Message(format!("Invalid Postman collection JSON: {}", error)))?;
+    let collection: PostmanCollection = serde_json::from_str(source).map_err(|error| {
+        AppError::Message(format!("Invalid Postman collection JSON: {}", error))
+    })?;
 
     let collection_name = if collection.info.name.trim().is_empty() {
         "Imported Postman collection".to_string()
@@ -253,7 +303,9 @@ async fn import_postman_collection(pool: &SqlitePool, source: &str) -> AppResult
     collect_postman_requests(&collection.item, &mut Vec::new(), &mut requests)?;
 
     if requests.is_empty() {
-        return Err(AppError::Message("No requests were found in this Postman collection.".to_string()));
+        return Err(AppError::Message(
+            "No requests were found in this Postman collection.".to_string(),
+        ));
     }
 
     for request in &requests {
@@ -293,7 +345,11 @@ fn collect_postman_requests(
     Ok(())
 }
 
-fn map_postman_request(item: &PostmanItem, request: &PostmanRequest, path: &[String]) -> AppResult<SendRequestPayload> {
+fn map_postman_request(
+    item: &PostmanItem,
+    request: &PostmanRequest,
+    path: &[String],
+) -> AppResult<SendRequestPayload> {
     let mut query_params = Vec::new();
     let url = match &request.url {
         PostmanUrl::Text(value) => value.trim().to_string(),
@@ -307,7 +363,8 @@ fn map_postman_request(item: &PostmanItem, request: &PostmanRequest, path: &[Str
                 });
             }
 
-            value.raw.clone().unwrap_or_default().trim().to_string()
+            let raw_url = value.raw.clone().unwrap_or_default();
+            strip_query_from_postman_raw_url(&raw_url, !value.query.is_empty())
         }
         PostmanUrl::Empty => String::new(),
     };
@@ -331,8 +388,16 @@ fn map_postman_request(item: &PostmanItem, request: &PostmanRequest, path: &[Str
         name,
         method: normalize_method(&request.method),
         url,
-        query_params: if query_params.is_empty() { vec![empty_kv()] } else { query_params },
-        headers: if headers.is_empty() { vec![empty_kv()] } else { headers },
+        query_params: if query_params.is_empty() {
+            vec![empty_kv()]
+        } else {
+            query_params
+        },
+        headers: if headers.is_empty() {
+            vec![empty_kv()]
+        } else {
+            headers
+        },
         body,
         auth,
     })
@@ -345,7 +410,16 @@ fn map_postman_body(body: Option<&PostmanBody>) -> RequestBody {
 
     match body.body_mode.as_str() {
         "raw" => RequestBody {
-            mode: "raw".to_string(),
+            mode: match body
+                .options
+                .as_ref()
+                .and_then(|options| options.raw.as_ref())
+            {
+                Some(raw_options) if raw_options.language.eq_ignore_ascii_case("json") => {
+                    "json".to_string()
+                }
+                _ => "raw".to_string(),
+            },
             raw: body.raw.clone(),
             form: vec![empty_kv()],
             files: vec![],
@@ -368,6 +442,38 @@ fn map_postman_body(body: Option<&PostmanBody>) -> RequestBody {
             },
             files: vec![],
         },
+        "formdata" => {
+            let mut form = Vec::new();
+            let mut files = Vec::new();
+
+            for item in &body.formdata {
+                match item.item_type.as_str() {
+                    "file" => files.push(FileRow {
+                        id: Uuid::new_v4().to_string(),
+                        name: item.key.clone(),
+                        path: file_source_to_string(&item.src),
+                        enabled: !item.disabled.unwrap_or(false),
+                    }),
+                    _ => form.push(KeyValueRow {
+                        id: Uuid::new_v4().to_string(),
+                        key: item.key.clone(),
+                        value: item.value.clone(),
+                        enabled: !item.disabled.unwrap_or(false),
+                    }),
+                }
+            }
+
+            RequestBody {
+                mode: "multipart".to_string(),
+                raw: String::new(),
+                form: if form.is_empty() {
+                    vec![empty_kv()]
+                } else {
+                    form
+                },
+                files,
+            }
+        }
         _ => empty_body(),
     }
 }
@@ -411,6 +517,30 @@ fn auth_value(values: &[PostmanAuthValue], key: &str) -> String {
         .unwrap_or_default()
 }
 
+fn file_source_to_string(source: &PostmanFileSource) -> String {
+    match source {
+        PostmanFileSource::Text(value) => value.clone(),
+        PostmanFileSource::List(values) => values.first().cloned().unwrap_or_default(),
+        PostmanFileSource::Empty => String::new(),
+    }
+}
+
+fn strip_query_from_postman_raw_url(raw_url: &str, has_query_rows: bool) -> String {
+    let trimmed = raw_url.trim();
+    if !has_query_rows {
+        return trimmed.to_string();
+    }
+
+    let hash_index = trimmed.find('#').unwrap_or(trimmed.len());
+    let before_hash = &trimmed[..hash_index];
+    let hash = &trimmed[hash_index..];
+
+    match before_hash.find('?') {
+        Some(query_index) => format!("{}{}", &before_hash[..query_index], hash),
+        None => trimmed.to_string(),
+    }
+}
+
 async fn import_curl_request(
     pool: &SqlitePool,
     source: &str,
@@ -418,26 +548,27 @@ async fn import_curl_request(
 ) -> AppResult<ImportResult> {
     let request = parse_curl_command(source)?;
 
-    let (collection_id, collection_name, created_collection) = if let Some(collection_id) = target_collection_id {
-        let collection = collections_service::list_collections(pool)
-            .await?
-            .into_iter()
-            .find(|item| item.id == collection_id)
-            .ok_or_else(|| AppError::Message("Target collection not found.".to_string()))?;
+    let (collection_id, collection_name, created_collection) =
+        if let Some(collection_id) = target_collection_id {
+            let collection = collections_service::list_collections(pool)
+                .await?
+                .into_iter()
+                .find(|item| item.id == collection_id)
+                .ok_or_else(|| AppError::Message("Target collection not found.".to_string()))?;
 
-        (collection.id, collection.name, false)
-    } else {
-        let created = collections_service::create_collection(
-            pool,
-            &CreateCollectionInput {
-                name: "Imported cURL".to_string(),
-                description: "Requests imported from cURL.".to_string(),
-            },
-        )
-        .await?;
+            (collection.id, collection.name, false)
+        } else {
+            let created = collections_service::create_collection(
+                pool,
+                &CreateCollectionInput {
+                    name: "Imported cURL".to_string(),
+                    description: "Requests imported from cURL.".to_string(),
+                },
+            )
+            .await?;
 
-        (created.id, created.name, true)
-    };
+            (created.id, created.name, true)
+        };
 
     collections_service::save_request(pool, &collection_id, &request).await?;
 
@@ -450,9 +581,12 @@ async fn import_curl_request(
 }
 
 fn parse_curl_command(source: &str) -> AppResult<SendRequestPayload> {
-    let parts = shlex::split(source).ok_or_else(|| AppError::Message("Invalid cURL command.".to_string()))?;
+    let parts = shlex::split(source)
+        .ok_or_else(|| AppError::Message("Invalid cURL command.".to_string()))?;
     if parts.is_empty() || parts[0] != "curl" {
-        return Err(AppError::Message("Paste a complete cURL command starting with `curl`.".to_string()));
+        return Err(AppError::Message(
+            "Paste a complete cURL command starting with `curl`.".to_string(),
+        ));
     }
 
     let mut method = "GET".to_string();
@@ -489,7 +623,11 @@ fn parse_curl_command(source: &str) -> AppResult<SendRequestPayload> {
                 if let Some(value) = parts.get(i) {
                     body_raw = value.clone();
                     if body_mode == "none" {
-                        body_mode = if looks_like_json(value) { "json".to_string() } else { "raw".to_string() };
+                        body_mode = if looks_like_json(value) {
+                            "json".to_string()
+                        } else {
+                            "raw".to_string()
+                        };
                     }
                     if method == "GET" {
                         method = "POST".to_string();
@@ -499,7 +637,8 @@ fn parse_curl_command(source: &str) -> AppResult<SendRequestPayload> {
             "-u" | "--user" => {
                 i += 1;
                 if let Some(value) = parts.get(i) {
-                    let (username, password) = value.split_once(':').unwrap_or((value.as_str(), ""));
+                    let (username, password) =
+                        value.split_once(':').unwrap_or((value.as_str(), ""));
                     auth = RequestAuth {
                         auth_type: "basic".to_string(),
                         basic_username: username.to_string(),
@@ -518,7 +657,9 @@ fn parse_curl_command(source: &str) -> AppResult<SendRequestPayload> {
     }
 
     if url.is_empty() {
-        return Err(AppError::Message("Could not find a request URL in the cURL command.".to_string()));
+        return Err(AppError::Message(
+            "Could not find a request URL in the cURL command.".to_string(),
+        ));
     }
 
     let mut query_params = Vec::new();
@@ -537,8 +678,16 @@ fn parse_curl_command(source: &str) -> AppResult<SendRequestPayload> {
         name: format!("{} {}", method, url),
         method,
         url,
-        query_params: if query_params.is_empty() { vec![empty_kv()] } else { query_params },
-        headers: if headers.is_empty() { vec![empty_kv()] } else { headers },
+        query_params: if query_params.is_empty() {
+            vec![empty_kv()]
+        } else {
+            query_params
+        },
+        headers: if headers.is_empty() {
+            vec![empty_kv()]
+        } else {
+            headers
+        },
         body: RequestBody {
             mode: body_mode,
             raw: body_raw,
@@ -551,7 +700,8 @@ fn parse_curl_command(source: &str) -> AppResult<SendRequestPayload> {
 
 fn looks_like_json(value: &str) -> bool {
     let trimmed = value.trim();
-    (trimmed.starts_with('{') && trimmed.ends_with('}')) || (trimmed.starts_with('[') && trimmed.ends_with(']'))
+    (trimmed.starts_with('{') && trimmed.ends_with('}'))
+        || (trimmed.starts_with('[') && trimmed.ends_with(']'))
 }
 
 fn build_imported_request_name(path: &[String], item_name: &str) -> String {

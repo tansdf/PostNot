@@ -10,6 +10,7 @@ import {
   updateSavedRequest as updateSavedRequestCommand
 } from "$lib/api/commands";
 import type { CollectionSummary, CreateCollectionInput, RequestDraft, SavedRequestSummary } from "$lib/api/types";
+import { notifications } from "$lib/stores/notifications.svelte";
 
 class CollectionsStore {
   initialized = $state(false);
@@ -105,6 +106,7 @@ class CollectionsStore {
         description: ""
       });
       await this.loadCollections(collection.id);
+      notifications.success(collection.name, "Collection created");
       return collection;
     } catch (error) {
       this.errorText = error instanceof Error ? error.message : String(error);
@@ -118,6 +120,7 @@ class CollectionsStore {
     try {
       const collection = await updateCollectionCommand(collectionId, input);
       await this.loadCollections(collection.id);
+      notifications.success(collection.name, "Collection saved");
       return collection;
     } catch (error) {
       this.errorText = error instanceof Error ? error.message : String(error);
@@ -127,6 +130,7 @@ class CollectionsStore {
 
   async removeCollection(collectionId: string) {
     this.pendingDeleteCollectionId = collectionId;
+    const collectionName = this.collections.find((item) => item.id === collectionId)?.name ?? "Collection";
 
     try {
       await deleteCollection(collectionId);
@@ -135,6 +139,7 @@ class CollectionsStore {
 
       const preferredId = this.selectedCollectionId === collectionId ? "" : this.selectedCollectionId;
       await this.loadCollections(preferredId);
+      notifications.success(collectionName, "Collection deleted");
     } catch (error) {
       this.errorText = error instanceof Error ? error.message : String(error);
     } finally {
@@ -148,6 +153,7 @@ class CollectionsStore {
     try {
       const savedRequest = await saveRequestToCollection(collectionId, request);
       await Promise.all([this.loadCollections(collectionId), this.loadSavedRequests(collectionId)]);
+      notifications.success(savedRequest.name, "Request saved");
       return savedRequest;
     } catch (error) {
       this.errorText = error instanceof Error ? error.message : String(error);
@@ -163,6 +169,7 @@ class CollectionsStore {
     try {
       const savedRequest = await updateSavedRequestCommand(itemId, request);
       await Promise.all([this.loadCollections(collectionId), this.loadSavedRequests(collectionId)]);
+      notifications.success(savedRequest.name, "Request updated");
       return savedRequest;
     } catch (error) {
       this.errorText = error instanceof Error ? error.message : String(error);
@@ -174,10 +181,13 @@ class CollectionsStore {
 
   async removeSavedRequestItem(collectionId: string, itemId: string) {
     this.pendingDeleteSavedRequestId = itemId;
+    const savedRequestName =
+      (this.savedRequestsByCollection[collectionId] ?? []).find((item) => item.id === itemId)?.name || "Saved request";
 
     try {
       await deleteSavedRequest(itemId);
       await Promise.all([this.loadCollections(collectionId), this.loadSavedRequests(collectionId)]);
+      notifications.success(savedRequestName, "Saved request deleted");
     } catch (error) {
       this.errorText = error instanceof Error ? error.message : String(error);
     } finally {

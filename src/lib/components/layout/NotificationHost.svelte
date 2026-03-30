@@ -1,0 +1,38 @@
+<script lang="ts">
+  import { fly, fade } from "svelte/transition";
+  import { notifications } from "$lib/stores/notifications.svelte";
+</script>
+
+{#if notifications.items.length > 0}
+  <section class="notification-host" aria-live="polite" aria-relevant="additions removals">
+    {#each notifications.items as notification (notification.id)}
+      <article
+        class={`notification-card notification-${notification.tone}`}
+        role={notification.tone === "error" ? "alert" : "status"}
+        style={`--notification-duration: ${notification.durationMs}ms;`}
+        in:fly={{ y: 18, duration: 180 }}
+        out:fade={{ duration: 140 }}
+      >
+        <div class="notification-body">
+          {#if notification.title}
+            <strong>{notification.title}</strong>
+          {/if}
+          <p>{notification.message}</p>
+        </div>
+
+        <button
+          class="notification-close"
+          type="button"
+          aria-label="Dismiss notification"
+          onclick={() => notifications.dismiss(notification.id)}
+        >
+          x
+        </button>
+
+        <div class="notification-progress-track" aria-hidden="true">
+          <div class="notification-progress" onanimationend={() => notifications.dismiss(notification.id)}></div>
+        </div>
+      </article>
+    {/each}
+  </section>
+{/if}

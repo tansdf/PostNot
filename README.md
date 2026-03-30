@@ -43,8 +43,11 @@ Implemented now:
 - environments and variable resolution
 - Postman collection JSON import
 - Postman environment JSON import
+- Postman collection JSON export
+- Postman environment JSON export
 - cURL command import
 - multipart request composition with file uploads
+- app-level floating notifications for action feedback
 - settings page wired to SQLite
 - history panel wired to SQLite
 - history detail inspection
@@ -52,7 +55,6 @@ Implemented now:
 
 Not implemented yet:
 
-- Postman export
 - Tauri updater integration
 - scripts
 
@@ -82,8 +84,8 @@ Manual end-to-end verification in `tauri dev` has already been completed for the
 - Request cancellation is available while a request is in flight and canceled requests are not written to history.
 - Collections are browsed from the sidebar, edited on `/collections`, and the request editor can save new requests or update the currently loaded saved request.
 - Environments are managed on `/environments`, one environment can be active at a time, and `{{variable}}` placeholders are resolved during request execution.
-- `/environments` also supports paste-based and file-based import of Postman environment JSON with an option to activate the imported environment immediately.
-- `/collections` also supports paste-based import of Postman Collection v2.1 JSON and single cURL commands into PostNot collections.
+- `/environments` also supports paste-based and file-based import of Postman environment JSON, optional activation during import, and one-click export back to Postman environment JSON.
+- `/collections` also supports paste-based import of Postman Collection v2.1 JSON, one-click export back to Postman Collection v2.1 JSON, and single cURL commands into PostNot collections.
 
 ## Versioning Policy
 
@@ -95,8 +97,8 @@ Manual end-to-end verification in `tauri dev` has already been completed for the
 
 ## Recommended Next Steps
 
-1. Add Postman export.
-2. Add Tauri updater integration.
-3. Add collection folders and richer request organization.
-4. Continue tightening error handling and desktop UX polish.
-5. Plan the move of secrets out of SQLite and into OS-backed secure storage.
+1. Add Tauri updater integration.
+2. Add collection folders and richer request organization.
+3. Continue tightening error handling and desktop UX polish.
+4. Plan the move of secrets out of SQLite and into OS-backed secure storage.
+5. Evaluate multi-tab workflow and request-level productivity features.

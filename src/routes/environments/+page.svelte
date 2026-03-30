@@ -6,12 +6,14 @@
   import {
     createEnvironment,
     deleteEnvironment,
+    exportEnvironment,
     getEnvironment,
     importPostmanEnvironment,
     listEnvironments,
     setActiveEnvironment,
     updateEnvironment
   } from "$lib/api/commands";
+  import { notifications } from "$lib/stores/notifications.svelte";
   let environments: EnvironmentSummary[] = $state([]);
   let selectedEnvironmentId = $state("");
   let environmentDetail: EnvironmentDetail | null = $state(null);
@@ -20,12 +22,12 @@
   let isSaving = $state(false);
   let isCreating = $state(false);
   let isImporting = $state(false);
+  let isExporting = $state(false);
   let pendingDeleteId = $state("");
   let pendingActivateId = $state("");
   let errorText = $state("");
   let importSource = $state("");
   let importErrorText = $state("");
-  let importSuccessText = $state("");
   let importSetActive = $state(false);
   let isImportModalOpen = $state(false);
   let importFileInput: HTMLInputElement | null = $state(null);
@@ -112,7 +114,6 @@
   }
 
   async function handleCreateEnvironment() {
-    importSuccessText = "";
     isCreating = true;
 
     try {
@@ -123,6 +124,7 @@
         noScroll: true,
         keepFocus: true
       });
+      notifications.success(created.name, "Environment created");
     } catch (error) {
       errorText = error instanceof Error ? error.message : String(error);
     } finally {
@@ -143,6 +145,7 @@
         variables: environmentDetail.variables
       });
       await loadEnvironments(environmentDetail.id);
+      notifications.success(environmentDetail.name, "Environment saved");
     } catch (error) {
       errorText = error instanceof Error ? error.message : String(error);
     } finally {
@@ -156,11 +159,13 @@
     }
 
     pendingDeleteId = environmentId;
+    const environmentName = environments.find((environment) => environment.id === environmentId)?.name ?? "Environment";
 
     try {
       await deleteEnvironment(environmentId);
       environmentDetail = null;
       await loadEnvironments(selectedEnvironmentId === environmentId ? "" : selectedEnvironmentId);
+      notifications.success(environmentName, "Environment deleted");
     } catch (error) {
       errorText = error instanceof Error ? error.message : String(error);
     } finally {
@@ -169,12 +174,17 @@
   }
 
   async function handleActivate(environmentId: string | null) {
-    importSuccessText = "";
     pendingActivateId = environmentId ?? "__none__";
 
     try {
       await setActiveEnvironment(environmentId);
       await loadEnvironments(environmentId ?? selectedEnvironmentId);
+      if (environmentId) {
+        const environmentName = environments.find((environment) => environment.id === environmentId)?.name ?? "Environment";
+        notifications.success(environmentName, "Environment activated");
+      } else {
+        notifications.info("No environment is active now.", "Environment deactivated");
+      }
     } catch (error) {
       errorText = error instanceof Error ? error.message : String(error);
     } finally {
@@ -231,7 +241,6 @@
 
   async function handleImportEnvironment() {
     importErrorText = "";
-    importSuccessText = "";
 
     const source = importSource.trim();
     if (!source) {
@@ -247,9 +256,6 @@
         setActive: importSetActive
       });
 
-      importSuccessText = `${result.importedVariableCount} variable${
-        result.importedVariableCount === 1 ? "" : "s"
-      } imported into ${result.environmentName}.${result.activated ? " Environment is now active." : ""}`;
       importSource = "";
       await loadEnvironments(result.environmentId);
       await goto(`/environments?environmentId=${encodeURIComponent(result.environmentId)}`, {
@@ -257,10 +263,33 @@
         noScroll: true,
         keepFocus: true
       });
+      notifications.success(
+        `${result.importedVariableCount} variable${result.importedVariableCount === 1 ? "" : "s"} imported into ${result.environmentName}.${result.activated ? " Environment is now active." : ""}`,
+        "Environment imported"
+      );
     } catch (error) {
       importErrorText = error instanceof Error ? error.message : String(error);
     } finally {
       isImporting = false;
+    }
+  }
+
+  async function handleExportEnvironment() {
+    if (!environmentDetail) {
+      return;
+    }
+
+    isExporting = true;
+
+    try {
+      const result = await exportEnvironment(environmentDetail.id);
+      if (result) {
+        notifications.success(result.filePath, "Environment exported");
+      }
+    } catch (error) {
+      errorText = error instanceof Error ? error.message : String(error);
+    } finally {
+      isExporting = false;
     }
   }
 
@@ -285,6 +314,9 @@
       <div class="request-section-header">
         <div class="request-section-title">
           <h1>Environments</h1>
+          <button class="system-button" type="button" onclick={handleExportEnvironment} disabled={!environmentDetail || isExporting}>
+            {isExporting ? "Exporting..." : "Export"}
+          </button>
           <button class="system-button" type="button" onclick={openImportModal}>
             Import
           </button>
@@ -296,10 +328,6 @@
 
       {#if errorText}
         <div class="response-error">{errorText}</div>
-      {/if}
-
-      {#if importSuccessText}
-        <div class="collections-import-success">{importSuccessText}</div>
       {/if}
 
       {#if environments.length === 0 && !isLoading}

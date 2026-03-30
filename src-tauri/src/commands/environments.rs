@@ -3,10 +3,12 @@ use tauri::State;
 use crate::{
     app_state::AppState,
     domain::environments::{
-        EnvironmentDetail, EnvironmentInput, EnvironmentSummary, ImportEnvironmentInput, ImportEnvironmentResult,
+        EnvironmentDetail, EnvironmentInput, EnvironmentSummary, ImportEnvironmentInput,
+        ImportEnvironmentResult,
     },
+    domain::exports::ExportResult,
     error::AppResult,
-    services::{environments_service, imports_service},
+    services::{environments_service, exports_service, imports_service},
 };
 
 #[tauri::command]
@@ -20,7 +22,10 @@ pub async fn create_environment(state: State<'_, AppState>) -> AppResult<Environ
 }
 
 #[tauri::command]
-pub async fn get_environment(state: State<'_, AppState>, environment_id: String) -> AppResult<EnvironmentDetail> {
+pub async fn get_environment(
+    state: State<'_, AppState>,
+    environment_id: String,
+) -> AppResult<EnvironmentDetail> {
     environments_service::get_environment(state.db(), &environment_id).await
 }
 
@@ -34,7 +39,10 @@ pub async fn update_environment(
 }
 
 #[tauri::command]
-pub async fn delete_environment(state: State<'_, AppState>, environment_id: String) -> AppResult<()> {
+pub async fn delete_environment(
+    state: State<'_, AppState>,
+    environment_id: String,
+) -> AppResult<()> {
     environments_service::delete_environment(state.db(), &environment_id).await
 }
 
@@ -52,4 +60,12 @@ pub async fn import_postman_environment(
     input: ImportEnvironmentInput,
 ) -> AppResult<ImportEnvironmentResult> {
     imports_service::import_postman_environment(state.db(), &input).await
+}
+
+#[tauri::command]
+pub async fn export_environment(
+    state: State<'_, AppState>,
+    environment_id: String,
+) -> AppResult<Option<ExportResult>> {
+    exports_service::export_environment(state.db(), &environment_id).await
 }

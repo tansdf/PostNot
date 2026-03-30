@@ -3,14 +3,15 @@
   import { page } from "$app/state";
 
   import CollectionsPanel from "$lib/components/collections/CollectionsPanel.svelte";
-  import { importRequests } from "$lib/api/commands";
+  import { exportCollection, importRequests } from "$lib/api/commands";
+  import { notifications } from "$lib/stores/notifications.svelte";
   import { collections } from "$lib/stores/collections.svelte";
 
   let isSavingCollection = $state(false);
   let importSource = $state("");
   let isImporting = $state(false);
+  let isExporting = $state(false);
   let importErrorText = $state("");
-  let importSuccessText = $state("");
   let isImportModalOpen = $state(false);
   let importFileInput: HTMLInputElement | null = $state(null);
 
@@ -93,9 +94,29 @@
     await collections.loadCollections(collection.id);
   }
 
+  async function handleExportCollection() {
+    const collection = collections.selectedCollection;
+    if (!collection) {
+      return;
+    }
+
+    isExporting = true;
+
+    try {
+      collections.errorText = "";
+      const result = await exportCollection(collection.id);
+      if (result) {
+        notifications.success(result.filePath, "Collection exported");
+      }
+    } catch (error) {
+      collections.errorText = error instanceof Error ? error.message : String(error);
+    } finally {
+      isExporting = false;
+    }
+  }
+
   async function handleImportRequests() {
     importErrorText = "";
-    importSuccessText = "";
 
     const source = importSource.trim();
     if (!source) {
@@ -106,6 +127,7 @@
     isImporting = true;
 
     try {
+      collections.errorText = "";
       const result = await importRequests({
         format: "postman",
         source,
@@ -120,9 +142,10 @@
         keepFocus: true
       });
 
-      importSuccessText = `${result.importedRequestCount} request${
-        result.importedRequestCount === 1 ? "" : "s"
-      } imported into ${result.collectionName}.`;
+      notifications.success(
+        `${result.importedRequestCount} request${result.importedRequestCount === 1 ? "" : "s"} imported into ${result.collectionName}.`,
+        "Collection imported"
+      );
       importSource = "";
     } catch (error) {
       importErrorText = error instanceof Error ? error.message : String(error);
@@ -156,8 +179,9 @@
     pendingDeleteSavedRequestId={collections.pendingDeleteSavedRequestId}
     errorText={collections.errorText}
     {isImporting}
-    {importSuccessText}
+    {isExporting}
     onOpenImport={openImportModal}
+    onExportCollection={handleExportCollection}
     onSaveCollection={handleSaveCollection}
     onDeleteCollection={handleDeleteCollection}
     onOpenSavedRequest={handleOpenSavedRequest}

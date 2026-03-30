@@ -62,6 +62,7 @@ export type AppSettings = {
   followRedirects: boolean;
   validateTls: boolean;
   historyLimit: number;
+  notificationTimeoutMs: number;
 };
 
 export type HistoryEntrySummary = {
@@ -176,6 +177,10 @@ export type ImportEnvironmentResult = {
   activated: boolean;
 };
 
+export type ExportResult = {
+  filePath: string;
+};
+
 function createId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();
@@ -234,6 +239,7 @@ export function createDefaultSettings(): AppSettings {
     requestTimeoutMs: 30_000,
     followRedirects: true,
     validateTls: true,
-    historyLimit: 200
+    historyLimit: 200,
+    notificationTimeoutMs: 5_000
   };
 }

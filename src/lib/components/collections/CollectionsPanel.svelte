@@ -11,8 +11,9 @@
     pendingDeleteSavedRequestId = "",
     errorText = "",
     isImporting = false,
-    importSuccessText = "",
+    isExporting = false,
     onOpenImport = () => {},
+    onExportCollection = () => {},
     onSaveCollection = () => false,
     onDeleteCollection = () => {},
     onOpenSavedRequest = () => {},
@@ -27,8 +28,9 @@
     pendingDeleteSavedRequestId?: string;
     errorText?: string;
     isImporting?: boolean;
-    importSuccessText?: string;
+    isExporting?: boolean;
     onOpenImport?: () => Promise<void> | void;
+    onExportCollection?: () => Promise<void> | void;
     onSaveCollection?: (name: string, description: string) => Promise<boolean> | boolean;
     onDeleteCollection?: (collectionId: string) => Promise<void> | void;
     onOpenSavedRequest?: (itemId: string) => Promise<void> | void;
@@ -84,12 +86,15 @@
       <div class="request-section-title">
         <h1>Collection View</h1>
         <button class="system-button" type="button" onclick={onOpenImport}>Import</button>
+        <button class="system-button" type="button" onclick={onExportCollection} disabled={!collection || isExporting}>
+          {isExporting ? "Exporting..." : "Export"}
+        </button>
       </div>
 
-      {#if isImporting}
+      {#if isExporting}
+        <span class="history-meta">Exporting...</span>
+      {:else if isImporting}
         <span class="history-meta">Importing...</span>
-      {:else if importSuccessText}
-        <span class="history-meta">{importSuccessText}</span>
       {:else if isCollectionsLoading}
         <span class="history-meta">Loading...</span>
       {/if}

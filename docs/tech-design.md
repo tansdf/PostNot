@@ -62,8 +62,11 @@ This section reflects the code currently implemented in the repository.
 - Environments and variable resolution
 - Postman collection JSON import
 - Postman environment JSON import
+- Postman collection JSON export
+- Postman environment JSON export
 - cURL command import
 - Multipart request composition with native file selection
+- App-level floating notification system for action feedback
 - Settings page wired to backend persistence
 - History panel wired to backend persistence
 - History detail inspection from persisted snapshots
@@ -71,7 +74,6 @@ This section reflects the code currently implemented in the repository.
 
 ### Not Yet Implemented
 
-- Postman export
 - Tauri updater integration
 - Multi-tab workflow
 - Pre-request scripts
@@ -88,6 +90,7 @@ Responsibilities:
 
 - Render request editor, response viewer, settings page, and history panel
 - Manage page-level UI state
+- Render global floating notifications for cross-screen action feedback
 - Invoke typed Tauri commands for persistence and request execution
 - Provide a desktop-oriented workflow without browser networking
 
@@ -396,6 +399,7 @@ Commands currently exposed to the frontend:
 - `update_saved_request`
 - `get_saved_request`
 - `delete_saved_request`
+- `export_collection`
 - `list_environments`
 - `create_environment`
 - `get_environment`
@@ -403,6 +407,7 @@ Commands currently exposed to the frontend:
 - `delete_environment`
 - `set_active_environment`
 - `import_postman_environment`
+- `export_environment`
 - `import_requests`
 - `import_curl_request_to_draft`
 
@@ -425,6 +430,7 @@ Commands currently exposed to the frontend:
 - `update_saved_request`: updates an existing saved request in place
 - `get_saved_request`: loads one saved request back into the editor
 - `delete_saved_request`: removes one saved request from a collection
+- `export_collection`: exports one collection to Postman Collection v2.1 JSON through a native save dialog
 - `list_environments`: returns saved environments with active-state and variable counts
 - `create_environment`: creates a blank environment draft
 - `get_environment`: returns one environment and its variables
@@ -432,6 +438,7 @@ Commands currently exposed to the frontend:
 - `delete_environment`: removes one environment
 - `set_active_environment`: marks one environment active or clears the active environment
 - `import_postman_environment`: imports a Postman environment JSON file or payload into a new PostNot environment
+- `export_environment`: exports one environment to Postman environment JSON through a native save dialog
 - `import_requests`: imports requests from Postman collection JSON or cURL into PostNot collections
 - `import_curl_request_to_draft`: parses a cURL command into an editable request draft without saving it yet
 
@@ -466,6 +473,7 @@ Current UI sections:
 
 - sidebar collection browser with saved request stack
 - dedicated collection editor view
+- collection import/export actions
 - saved request list for the selected collection
 - open-in-requests and delete actions for saved requests
 
@@ -477,6 +485,7 @@ Current UI sections:
 - active/inactive environment controls
 - environment variable editor
 - Postman environment import
+- Postman environment export
 - variable usage hint for `{{name}}` syntax
 
 ## 11. Security and Persistence Notes
@@ -511,6 +520,8 @@ Ship a usable desktop app that can compose and execute HTTP requests locally, pe
 - environments and variable resolution
 - Postman collection JSON import
 - Postman environment JSON import
+- Postman collection JSON export
+- Postman environment JSON export
 - cURL command import
 - multipart request composition with local file uploads
 - response viewer

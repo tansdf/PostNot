@@ -3,11 +3,14 @@ use tauri::State;
 use crate::{
     app_state::AppState,
     domain::{
-        collections::{CollectionSummary, CreateCollectionInput, SavedRequestDetail, SavedRequestSummary},
+        collections::{
+            CollectionSummary, CreateCollectionInput, SavedRequestDetail, SavedRequestSummary,
+        },
+        exports::ExportResult,
         requests::SendRequestPayload,
     },
     error::AppResult,
-    services::collections_service,
+    services::{collections_service, exports_service},
 };
 
 #[tauri::command]
@@ -74,4 +77,12 @@ pub async fn get_saved_request(
 #[tauri::command]
 pub async fn delete_saved_request(state: State<'_, AppState>, item_id: String) -> AppResult<()> {
     collections_service::delete_saved_request(state.db(), &item_id).await
+}
+
+#[tauri::command]
+pub async fn export_collection(
+    state: State<'_, AppState>,
+    collection_id: String,
+) -> AppResult<Option<ExportResult>> {
+    exports_service::export_collection(state.db(), &collection_id).await
 }

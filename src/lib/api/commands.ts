@@ -7,6 +7,7 @@ import {
   type AppSettings,
   type EnvironmentDetail,
   type EnvironmentInput,
+  type ExportResult,
   type ImportEnvironmentInput,
   type ImportEnvironmentResult,
   type EnvironmentSummary,
@@ -371,6 +372,16 @@ export async function deleteSavedRequest(itemId: string): Promise<void> {
   await invoke("delete_saved_request", { itemId });
 }
 
+export async function exportCollection(collectionId: string): Promise<ExportResult | null> {
+  if (!hasTauriRuntime()) {
+    return {
+      filePath: `/tmp/${collectionId}.postman_collection.json`
+    };
+  }
+
+  return invoke<ExportResult | null>("export_collection", { collectionId });
+}
+
 export async function importRequests(input: ImportRequestInput): Promise<ImportResult> {
   if (!hasTauriRuntime()) {
     return {
@@ -502,4 +513,14 @@ export async function importPostmanEnvironment(input: ImportEnvironmentInput): P
   }
 
   return invoke<ImportEnvironmentResult>("import_postman_environment", { input });
+}
+
+export async function exportEnvironment(environmentId: string): Promise<ExportResult | null> {
+  if (!hasTauriRuntime()) {
+    return {
+      filePath: `/tmp/${environmentId}.postman_environment.json`
+    };
+  }
+
+  return invoke<ExportResult | null>("export_environment", { environmentId });
 }

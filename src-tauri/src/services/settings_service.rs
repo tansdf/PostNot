@@ -1,9 +1,6 @@
 use sqlx::{Row, SqlitePool};
 
-use crate::{
-    domain::settings::AppSettings,
-    error::AppResult,
-};
+use crate::{domain::settings::AppSettings, error::AppResult};
 
 const THEME_KEY: &str = "theme";
 const UI_SCALE_KEY: &str = "ui_scale";
@@ -11,9 +8,12 @@ const REQUEST_TIMEOUT_MS_KEY: &str = "request_timeout_ms";
 const FOLLOW_REDIRECTS_KEY: &str = "follow_redirects";
 const VALIDATE_TLS_KEY: &str = "validate_tls";
 const HISTORY_LIMIT_KEY: &str = "history_limit";
+const NOTIFICATION_TIMEOUT_MS_KEY: &str = "notification_timeout_ms";
 const DEFAULT_UI_SCALE: f64 = 1.0;
 const MIN_UI_SCALE: f64 = 0.8;
 const MAX_UI_SCALE: f64 = 1.2;
+const MIN_NOTIFICATION_TIMEOUT_MS: u64 = 1_000;
+const MAX_NOTIFICATION_TIMEOUT_MS: u64 = 60_000;
 
 pub fn default_settings() -> AppSettings {
     AppSettings {
@@ -23,6 +23,7 @@ pub fn default_settings() -> AppSettings {
         follow_redirects: true,
         validate_tls: true,
         history_limit: 200,
+        notification_timeout_ms: 5_000,
     }
 }
 
@@ -51,11 +52,19 @@ pub async fn get_settings(pool: &SqlitePool) -> AppResult<AppSettings> {
 
         match key.as_str() {
             THEME_KEY => settings.theme = serde_json::from_str(&value_json)?,
-            UI_SCALE_KEY => settings.ui_scale = normalize_ui_scale(serde_json::from_str(&value_json)?),
-            REQUEST_TIMEOUT_MS_KEY => settings.request_timeout_ms = serde_json::from_str(&value_json)?,
+            UI_SCALE_KEY => {
+                settings.ui_scale = normalize_ui_scale(serde_json::from_str(&value_json)?)
+            }
+            REQUEST_TIMEOUT_MS_KEY => {
+                settings.request_timeout_ms = serde_json::from_str(&value_json)?
+            }
             FOLLOW_REDIRECTS_KEY => settings.follow_redirects = serde_json::from_str(&value_json)?,
             VALIDATE_TLS_KEY => settings.validate_tls = serde_json::from_str(&value_json)?,
             HISTORY_LIMIT_KEY => settings.history_limit = serde_json::from_str(&value_json)?,
+            NOTIFICATION_TIMEOUT_MS_KEY => {
+                settings.notification_timeout_ms =
+                    normalize_notification_timeout_ms(serde_json::from_str(&value_json)?)
+            }
             _ => {}
         }
     }
@@ -89,19 +98,35 @@ fn serialize_settings(settings: &AppSettings) -> AppResult<Vec<(&'static str, St
             FOLLOW_REDIRECTS_KEY,
             serde_json::to_string(&settings.follow_redirects)?,
         ),
-        (VALIDATE_TLS_KEY, serde_json::to_string(&settings.validate_tls)?),
-        (HISTORY_LIMIT_KEY, serde_json::to_string(&settings.history_limit)?),
+        (
+            VALIDATE_TLS_KEY,
+            serde_json::to_string(&settings.validate_tls)?,
+        ),
+        (
+            HISTORY_LIMIT_KEY,
+            serde_json::to_string(&settings.history_limit)?,
+        ),
+        (
+            NOTIFICATION_TIMEOUT_MS_KEY,
+            serde_json::to_string(&settings.notification_timeout_ms)?,
+        ),
     ])
 }
 
 fn normalize_settings(settings: &AppSettings) -> AppSettings {
     let mut normalized = settings.clone();
     normalized.ui_scale = normalize_ui_scale(normalized.ui_scale);
+    normalized.notification_timeout_ms =
+        normalize_notification_timeout_ms(normalized.notification_timeout_ms);
     normalized
 }
 
 fn normalize_ui_scale(value: f64) -> f64 {
     value.clamp(MIN_UI_SCALE, MAX_UI_SCALE)
+}
+
+fn normalize_notification_timeout_ms(value: u64) -> u64 {
+    value.clamp(MIN_NOTIFICATION_TIMEOUT_MS, MAX_NOTIFICATION_TIMEOUT_MS)
 }
 
 async fn insert_default(pool: &SqlitePool, key: &str, value_json: &str) -> AppResult<()> {

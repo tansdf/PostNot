@@ -4,7 +4,9 @@ use uuid::Uuid;
 
 use crate::{
     domain::{
-        collections::{CollectionSummary, CreateCollectionInput, SavedRequestDetail, SavedRequestSummary},
+        collections::{
+            CollectionSummary, CreateCollectionInput, SavedRequestDetail, SavedRequestSummary,
+        },
         requests::SendRequestPayload,
     },
     error::{AppError, AppResult},
@@ -33,10 +35,15 @@ pub async fn list_collections(pool: &SqlitePool) -> AppResult<Vec<CollectionSumm
     Ok(rows.into_iter().map(map_collection_summary).collect())
 }
 
-pub async fn create_collection(pool: &SqlitePool, input: &CreateCollectionInput) -> AppResult<CollectionSummary> {
+pub async fn create_collection(
+    pool: &SqlitePool,
+    input: &CreateCollectionInput,
+) -> AppResult<CollectionSummary> {
     let name = input.name.trim();
     if name.is_empty() {
-        return Err(AppError::Message("Collection name is required.".to_string()));
+        return Err(AppError::Message(
+            "Collection name is required.".to_string(),
+        ));
     }
 
     let id = Uuid::new_v4().to_string();
@@ -63,7 +70,9 @@ pub async fn update_collection(
 ) -> AppResult<CollectionSummary> {
     let name = input.name.trim();
     if name.is_empty() {
-        return Err(AppError::Message("Collection name is required.".to_string()));
+        return Err(AppError::Message(
+            "Collection name is required.".to_string(),
+        ));
     }
 
     let result = sqlx::query(
@@ -92,7 +101,10 @@ pub async fn delete_collection(pool: &SqlitePool, collection_id: &str) -> AppRes
     Ok(())
 }
 
-pub async fn list_saved_requests(pool: &SqlitePool, collection_id: &str) -> AppResult<Vec<SavedRequestSummary>> {
+pub async fn list_saved_requests(
+    pool: &SqlitePool,
+    collection_id: &str,
+) -> AppResult<Vec<SavedRequestSummary>> {
     let rows = sqlx::query(
         r#"
         SELECT id, collection_id, name, method, url, updated_at
@@ -108,11 +120,35 @@ pub async fn list_saved_requests(pool: &SqlitePool, collection_id: &str) -> AppR
     Ok(rows.into_iter().map(map_saved_request_summary).collect())
 }
 
-pub async fn save_request(pool: &SqlitePool, collection_id: &str, request: &SendRequestPayload) -> AppResult<SavedRequestSummary> {
-    let collection_name: Option<String> = sqlx::query_scalar("SELECT name FROM collections WHERE id = ?1")
-        .bind(collection_id)
-        .fetch_optional(pool)
-        .await?;
+pub async fn list_saved_request_details(
+    pool: &SqlitePool,
+    collection_id: &str,
+) -> AppResult<Vec<SavedRequestDetail>> {
+    let rows = sqlx::query(
+        r#"
+        SELECT id, collection_id, name, method, url, query_params_json, headers_json, body_json, auth_json, updated_at
+        FROM collection_items
+        WHERE collection_id = ?1 AND kind = 'request' AND parent_id IS NULL
+        ORDER BY sort_order ASC, updated_at DESC
+        "#,
+    )
+    .bind(collection_id)
+    .fetch_all(pool)
+    .await?;
+
+    rows.into_iter().map(map_saved_request_detail).collect()
+}
+
+pub async fn save_request(
+    pool: &SqlitePool,
+    collection_id: &str,
+    request: &SendRequestPayload,
+) -> AppResult<SavedRequestSummary> {
+    let collection_name: Option<String> =
+        sqlx::query_scalar("SELECT name FROM collections WHERE id = ?1")
+            .bind(collection_id)
+            .fetch_optional(pool)
+            .await?;
 
     if collection_name.is_none() {
         return Err(AppError::Message("Collection not found.".to_string()));
@@ -236,10 +272,11 @@ pub async fn get_saved_request(pool: &SqlitePool, item_id: &str) -> AppResult<Sa
 }
 
 pub async fn delete_saved_request(pool: &SqlitePool, item_id: &str) -> AppResult<()> {
-    let collection_id: Option<String> = sqlx::query_scalar("SELECT collection_id FROM collection_items WHERE id = ?1")
-        .bind(item_id)
-        .fetch_optional(pool)
-        .await?;
+    let collection_id: Option<String> =
+        sqlx::query_scalar("SELECT collection_id FROM collection_items WHERE id = ?1")
+            .bind(item_id)
+            .fetch_optional(pool)
+            .await?;
 
     sqlx::query("DELETE FROM collection_items WHERE id = ?1")
         .bind(item_id)
@@ -253,7 +290,10 @@ pub async fn delete_saved_request(pool: &SqlitePool, item_id: &str) -> AppResult
     Ok(())
 }
 
-async fn get_collection(pool: &SqlitePool, collection_id: &str) -> AppResult<CollectionSummary> {
+pub async fn get_collection(
+    pool: &SqlitePool,
+    collection_id: &str,
+) -> AppResult<CollectionSummary> {
     let row = sqlx::query(
         r#"
         SELECT
@@ -278,7 +318,10 @@ async fn get_collection(pool: &SqlitePool, collection_id: &str) -> AppResult<Col
     Ok(map_collection_summary(row))
 }
 
-async fn get_saved_request_summary(pool: &SqlitePool, item_id: &str) -> AppResult<SavedRequestSummary> {
+async fn get_saved_request_summary(
+    pool: &SqlitePool,
+    item_id: &str,
+) -> AppResult<SavedRequestSummary> {
     let row = sqlx::query(
         "SELECT id, collection_id, name, method, url, updated_at FROM collection_items WHERE id = ?1 AND kind = 'request'",
     )
@@ -319,6 +362,24 @@ fn map_saved_request_summary(row: sqlx::sqlite::SqliteRow) -> SavedRequestSummar
         url: row.get("url"),
         updated_at: row.get("updated_at"),
     }
+}
+
+fn map_saved_request_detail(row: sqlx::sqlite::SqliteRow) -> AppResult<SavedRequestDetail> {
+    Ok(SavedRequestDetail {
+        id: row.get("id"),
+        collection_id: row.get("collection_id"),
+        name: row.get("name"),
+        updated_at: row.get("updated_at"),
+        request: SendRequestPayload {
+            name: row.get("name"),
+            method: row.get("method"),
+            url: row.get("url"),
+            query_params: serde_json::from_str(&row.get::<String, _>("query_params_json"))?,
+            headers: serde_json::from_str(&row.get::<String, _>("headers_json"))?,
+            body: serde_json::from_str(&row.get::<String, _>("body_json"))?,
+            auth: serde_json::from_str(&row.get::<String, _>("auth_json"))?,
+        },
+    })
 }
 
 fn saved_request_name(request: &SendRequestPayload) -> String {

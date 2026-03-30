@@ -1,9 +1,7 @@
 use tauri::State;
 
 use crate::{
-    app_state::AppState,
-    domain::settings::AppSettings,
-    error::AppResult,
+    app_state::AppState, domain::settings::AppSettings, error::AppResult,
     services::settings_service,
 };
 

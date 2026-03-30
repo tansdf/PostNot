@@ -1,9 +1,4 @@
-use std::{
-    env,
-    fs,
-    path::PathBuf,
-    sync::Once,
-};
+use std::{env, fs, path::PathBuf, sync::Once};
 
 #[cfg(target_os = "windows")]
 use std::process::Command;
@@ -28,6 +23,9 @@ pub fn run() -> Result<(), String> {
             let database = tauri::async_runtime::block_on(db::init(app.handle()))?;
             tauri::async_runtime::block_on(services::settings_service::ensure_defaults(&database))?;
             app.manage(app_state::AppState::new(database));
+            if let Some(window) = app.get_webview_window("main") {
+                services::window_state_service::restore_and_track_main_window(&window);
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -48,6 +46,7 @@ pub fn run() -> Result<(), String> {
             commands::collections::update_saved_request,
             commands::collections::get_saved_request,
             commands::collections::delete_saved_request,
+            commands::collections::export_collection,
             commands::environments::list_environments,
             commands::environments::create_environment,
             commands::environments::get_environment,
@@ -55,6 +54,7 @@ pub fn run() -> Result<(), String> {
             commands::environments::delete_environment,
             commands::environments::set_active_environment,
             commands::environments::import_postman_environment,
+            commands::environments::export_environment,
             commands::imports::import_requests,
             commands::imports::import_curl_request_to_draft,
         ])
@@ -91,7 +91,14 @@ fn install_panic_hook() {
 
             let location = panic_info
                 .location()
-                .map(|location| format!("{}:{}:{}", location.file(), location.line(), location.column()))
+                .map(|location| {
+                    format!(
+                        "{}:{}:{}",
+                        location.file(),
+                        location.line(),
+                        location.column()
+                    )
+                })
                 .unwrap_or_else(|| "unknown location".to_string());
 
             report_startup_failure(&format!("panic at {}: {}", location, message));

@@ -6,7 +6,10 @@ use sqlx::{
 };
 use tauri::AppHandle;
 
-use crate::{error::{AppError, AppResult}, storage::paths};
+use crate::{
+    error::{AppError, AppResult},
+    storage::paths,
+};
 
 pub const DATABASE_FILE_NAME: &str = "postnot.sqlite";
 static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");

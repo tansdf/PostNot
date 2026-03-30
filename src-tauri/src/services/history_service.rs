@@ -49,7 +49,11 @@ pub async fn record_success(
     prune(pool).await
 }
 
-pub async fn record_failure(pool: &SqlitePool, request: &SendRequestPayload, error_text: &str) -> AppResult<()> {
+pub async fn record_failure(
+    pool: &SqlitePool,
+    request: &SendRequestPayload,
+    error_text: &str,
+) -> AppResult<()> {
     let request_snapshot_json = serde_json::to_string(request)?;
 
     sqlx::query(
@@ -68,7 +72,10 @@ pub async fn record_failure(pool: &SqlitePool, request: &SendRequestPayload, err
     prune(pool).await
 }
 
-pub async fn list_history(pool: &SqlitePool, limit: Option<u32>) -> AppResult<Vec<HistoryEntrySummary>> {
+pub async fn list_history(
+    pool: &SqlitePool,
+    limit: Option<u32>,
+) -> AppResult<Vec<HistoryEntrySummary>> {
     let row_limit = i64::from(limit.unwrap_or(50));
     let rows = sqlx::query(
         "SELECT id, request_name, method, url, status_code, duration_ms, response_body_preview, error_text, executed_at FROM history_entries ORDER BY executed_at DESC LIMIT ?1",
@@ -102,11 +109,15 @@ pub async fn get_history_entry(pool: &SqlitePool, id: &str) -> AppResult<History
     .await?
     .ok_or_else(|| AppError::Message("History entry not found.".to_string()))?;
 
-    let request_snapshot: SendRequestPayload = serde_json::from_str(&row.get::<String, _>("request_snapshot_json"))?;
-    let response_headers: Vec<KeyValueRow> = serde_json::from_str(&row.get::<String, _>("response_headers_json"))?;
+    let request_snapshot: SendRequestPayload =
+        serde_json::from_str(&row.get::<String, _>("request_snapshot_json"))?;
+    let response_headers: Vec<KeyValueRow> =
+        serde_json::from_str(&row.get::<String, _>("response_headers_json"))?;
     let response_body_path: Option<String> = row.get("response_body_path");
     let response_body_text = match response_body_path {
-        Some(path) => read_response_body(Path::new(&path)).await.unwrap_or_else(|_| row.get("response_body_preview")),
+        Some(path) => read_response_body(Path::new(&path))
+            .await
+            .unwrap_or_else(|_| row.get("response_body_preview")),
         None => row.get("response_body_preview"),
     };
 
@@ -130,7 +141,9 @@ pub async fn clear_history(pool: &SqlitePool) -> AppResult<()> {
         delete_response_body_file(&path).await?;
     }
 
-    sqlx::query("DELETE FROM history_entries").execute(pool).await?;
+    sqlx::query("DELETE FROM history_entries")
+        .execute(pool)
+        .await?;
     Ok(())
 }
 
@@ -167,7 +180,11 @@ fn preview(body: &str) -> String {
     body.chars().take(PREVIEW_LIMIT).collect()
 }
 
-async fn write_response_body(app: &AppHandle, history_id: &str, body_text: &str) -> AppResult<Option<String>> {
+async fn write_response_body(
+    app: &AppHandle,
+    history_id: &str,
+    body_text: &str,
+) -> AppResult<Option<String>> {
     if body_text.is_empty() {
         return Ok(None);
     }
@@ -194,9 +211,11 @@ async fn delete_response_body_file(path: &Path) -> AppResult<()> {
 }
 
 async fn stored_response_body_paths(pool: &SqlitePool) -> AppResult<Vec<PathBuf>> {
-    let rows = sqlx::query("SELECT response_body_path FROM history_entries WHERE response_body_path IS NOT NULL")
-        .fetch_all(pool)
-        .await?;
+    let rows = sqlx::query(
+        "SELECT response_body_path FROM history_entries WHERE response_body_path IS NOT NULL",
+    )
+    .fetch_all(pool)
+    .await?;
 
     Ok(rows
         .into_iter()

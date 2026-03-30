@@ -3,6 +3,7 @@
 
   import { getSettings, updateSettings } from "$lib/api/commands";
   import { createDefaultSettings, type AppSettings } from "$lib/api/types";
+  import { notifications } from "$lib/stores/notifications.svelte";
   import { applyTheme, applyUiScale } from "$lib/theme";
 
   const uiScaleOptions = [
@@ -29,7 +30,6 @@
   let isLoading = $state(true);
   let isSaving = $state(false);
   let errorText = $state("");
-  let saveMessage = $state("");
 
   onMount(loadSettings);
 
@@ -40,6 +40,7 @@
       settings = await getSettings();
       applyTheme(settings.theme);
       applyUiScale(settings.uiScale);
+      notifications.setDefaultDuration(settings.notificationTimeoutMs);
       errorText = "";
     } catch (error) {
       errorText = error instanceof Error ? error.message : String(error);
@@ -50,14 +51,14 @@
 
   async function handleSubmit() {
     isSaving = true;
-    saveMessage = "";
 
     try {
       settings = await updateSettings(settings);
       applyTheme(settings.theme);
       applyUiScale(settings.uiScale);
+      notifications.setDefaultDuration(settings.notificationTimeoutMs);
       errorText = "";
-      saveMessage = "Settings saved.";
+      notifications.success("Your preferences were saved.", "Settings saved");
     } catch (error) {
       errorText = error instanceof Error ? error.message : String(error);
     } finally {
@@ -71,7 +72,7 @@
 </svelte:head>
 
 <section class="settings-page panel">
-    <div class="editor-header">
+    <div class="request-section-header">
       <h1>Settings</h1>
       {#if isLoading}
         <span class="history-meta">Loading...</span>
@@ -79,51 +80,112 @@
     </div>
 
     <form class="settings-form" onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
-      <label>
-        <span class="field-label">Theme</span>
-        <select class="text-input" bind:value={settings.theme}>
-          <option value="system">System</option>
-          <option value="light">Light</option>
-          <option value="dark">Dark</option>
-        </select>
-      </label>
+      <div class="settings-layout">
+        <section class="settings-section-card">
+          <div class="settings-section-heading">
+            <div>
+              <h2>General</h2>
+              <p class="settings-section-lede">Desktop look and feel across the entire shell.</p>
+            </div>
+          </div>
 
-      <label>
-        <span class="field-label">Interface zoom</span>
-        <select class="text-input" bind:value={settings.uiScale}>
-          {#each uiScaleOptions as option (option.value)}
-            <option value={option.value}>{option.label}</option>
-          {/each}
-        </select>
-      </label>
+          <div class="settings-field-grid">
+            <label>
+              <span class="field-label">Theme</span>
+              <select class="text-input" bind:value={settings.theme}>
+                <option value="system">System</option>
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+              </select>
+            </label>
 
-      <label>
-        <span class="field-label">Request timeout (ms)</span>
-        <input class="text-input" type="number" min="1000" step="1000" bind:value={settings.requestTimeoutMs} />
-      </label>
+            <label>
+              <span class="field-label">Interface zoom</span>
+              <select class="text-input" bind:value={settings.uiScale}>
+                {#each uiScaleOptions as option (option.value)}
+                  <option value={option.value}>{option.label}</option>
+                {/each}
+              </select>
+            </label>
+          </div>
+        </section>
 
-      <label>
-        <span class="field-label">History limit</span>
-        <input class="text-input" type="number" min="1" step="1" bind:value={settings.historyLimit} />
-      </label>
+        <section class="settings-section-card">
+          <div class="settings-section-heading">
+            <div>
+              <h2>Requests</h2>
+              <p class="settings-section-lede">Default execution behavior for outgoing HTTP requests.</p>
+            </div>
+          </div>
 
-      <label class="settings-toggle">
-        <input class="row-toggle settings-checkbox" type="checkbox" bind:checked={settings.followRedirects} />
-        <span>Follow redirects automatically</span>
-      </label>
+          <div class="settings-field-grid">
+            <label>
+              <span class="field-label">Request timeout (ms)</span>
+              <input class="text-input" type="number" min="1000" step="1000" bind:value={settings.requestTimeoutMs} />
+            </label>
+          </div>
 
-      <label class="settings-toggle">
-        <input class="row-toggle settings-checkbox" type="checkbox" bind:checked={settings.validateTls} />
-        <span>Validate TLS certificates</span>
-      </label>
+          <label class="settings-toggle">
+            <input class="row-toggle settings-checkbox" type="checkbox" bind:checked={settings.followRedirects} />
+            <span>Follow redirects automatically</span>
+          </label>
+
+          <label class="settings-toggle">
+            <input class="row-toggle settings-checkbox" type="checkbox" bind:checked={settings.validateTls} />
+            <span>Validate TLS certificates</span>
+          </label>
+        </section>
+
+        <section class="settings-section-card">
+          <div class="settings-section-heading">
+            <div>
+              <h2>History</h2>
+              <p class="settings-section-lede">How much recent request activity PostNot keeps on disk.</p>
+            </div>
+          </div>
+
+          <div class="settings-field-grid">
+            <label>
+              <span class="field-label">History limit</span>
+              <input class="text-input" type="number" min="1" step="1" bind:value={settings.historyLimit} />
+            </label>
+          </div>
+        </section>
+
+        <section class="settings-section-card">
+          <div class="settings-section-heading">
+            <div>
+              <h2>Notifications</h2>
+              <p class="settings-section-lede">Floating notification behavior for action feedback across the app.</p>
+            </div>
+          </div>
+
+          <div class="settings-field-grid">
+            <label>
+              <span class="field-label">Notification timeout (seconds)</span>
+              <input
+                class="text-input"
+                type="number"
+                min="1"
+                step="1"
+                value={Math.round(settings.notificationTimeoutMs / 1000)}
+                oninput={(event) => {
+                  const seconds = Number(event.currentTarget.value);
+                  settings = {
+                    ...settings,
+                    notificationTimeoutMs: Number.isFinite(seconds) ? Math.max(1, seconds) * 1000 : 5000
+                  };
+                }}
+              />
+            </label>
+          </div>
+        </section>
+      </div>
 
       <div class="settings-actions">
         <button class="send-button" type="submit" disabled={isSaving || isLoading}>
           {isSaving ? "Saving..." : "Save settings"}
         </button>
-        {#if saveMessage}
-          <span class="history-meta">{saveMessage}</span>
-        {/if}
       </div>
     </form>
 

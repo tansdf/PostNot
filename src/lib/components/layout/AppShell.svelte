@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import { page } from "$app/state";
+  import NotificationHost from "$lib/components/layout/NotificationHost.svelte";
   import SidebarCollections from "$lib/components/layout/SidebarCollections.svelte";
 
   let {
@@ -33,5 +34,7 @@
     <main class="workspace">
       {@render children?.()}
     </main>
+
+    <NotificationHost />
   </div>
 </div>

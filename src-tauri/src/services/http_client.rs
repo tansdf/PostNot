@@ -33,7 +33,11 @@ pub async fn send_request(
         .build()?;
     let mut url = Url::parse(&payload.url)?;
 
-    for query in payload.query_params.iter().filter(|item| item.enabled && !item.key.trim().is_empty()) {
+    for query in payload
+        .query_params
+        .iter()
+        .filter(|item| item.enabled && !item.key.trim().is_empty())
+    {
         url.query_pairs_mut().append_pair(&query.key, &query.value);
     }
 
@@ -49,7 +53,11 @@ pub async fn send_request(
         .map_err(|error| AppError::Message(error.to_string()))?;
     let mut request = client.request(method, url);
 
-    for header in payload.headers.iter().filter(|item| item.enabled && !item.key.trim().is_empty()) {
+    for header in payload
+        .headers
+        .iter()
+        .filter(|item| item.enabled && !item.key.trim().is_empty())
+    {
         let name = HeaderName::from_bytes(header.key.as_bytes())?;
         let value = HeaderValue::from_str(&header.value)?;
         request = request.header(name, value);
@@ -57,12 +65,18 @@ pub async fn send_request(
 
     match payload.auth.auth_type.as_str() {
         "basic" => {
-            request = request.basic_auth(&payload.auth.basic_username, Some(&payload.auth.basic_password));
+            request = request.basic_auth(
+                &payload.auth.basic_username,
+                Some(&payload.auth.basic_password),
+            );
         }
         "bearer" => {
             request = request.bearer_auth(&payload.auth.bearer_token);
         }
-        "api-key" if payload.auth.api_key_in == "header" && !payload.auth.api_key_name.trim().is_empty() => {
+        "api-key"
+            if payload.auth.api_key_in == "header"
+                && !payload.auth.api_key_name.trim().is_empty() =>
+        {
             request = request.header(&payload.auth.api_key_name, &payload.auth.api_key_value);
         }
         _ => {}
@@ -89,7 +103,12 @@ pub async fn send_request(
         "multipart" => {
             let mut form = multipart::Form::new();
 
-            for item in payload.body.form.iter().filter(|entry| entry.enabled && !entry.key.trim().is_empty()) {
+            for item in payload
+                .body
+                .form
+                .iter()
+                .filter(|entry| entry.enabled && !entry.key.trim().is_empty())
+            {
                 form = form.text(item.key.clone(), item.value.clone());
             }
 

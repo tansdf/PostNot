@@ -29,6 +29,7 @@
   import RequestEditor from "$lib/components/request/RequestEditor.svelte";
   import ResponseViewer from "$lib/components/response/ResponseViewer.svelte";
   import { collections } from "$lib/stores/collections.svelte";
+  import { notifications } from "$lib/stores/notifications.svelte";
 
   let request = $state(createRequestDraft());
   let response: ResponsePayload | null = $state(null);
@@ -162,6 +163,12 @@
     try {
       await setActiveEnvironment(environmentId || null);
       await loadEnvironments(environmentId);
+      if (environmentId) {
+        const environmentName = environments.find((environment) => environment.id === environmentId)?.name ?? "Environment";
+        notifications.info(environmentName, "Active environment changed");
+      } else {
+        notifications.info("Requests will now run without an active environment.", "Environment cleared");
+      }
     } catch (error) {
       environmentsErrorText = error instanceof Error ? error.message : String(error);
     } finally {
@@ -181,6 +188,7 @@
       closeHistoryDetail();
       await loadHistory();
       historyErrorText = "";
+      notifications.success("Stored request history was cleared.", "History cleared");
     } catch (error) {
       historyErrorText = error instanceof Error ? error.message : String(error);
     } finally {
@@ -370,6 +378,7 @@
         noScroll: true,
         keepFocus: true
       });
+      notifications.success("The imported cURL command is now loaded into the request editor.", "cURL imported");
     } catch (error) {
       curlImportErrorText = error instanceof Error ? error.message : String(error);
     } finally {

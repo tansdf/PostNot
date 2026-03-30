@@ -25,7 +25,8 @@ pub async fn list_environments(pool: &SqlitePool) -> AppResult<Vec<EnvironmentSu
 
     rows.into_iter()
         .map(|row| {
-            let variables: Vec<KeyValueRow> = serde_json::from_str(&row.get::<String, _>("variables_json"))?;
+            let variables: Vec<KeyValueRow> =
+                serde_json::from_str(&row.get::<String, _>("variables_json"))?;
 
             Ok(EnvironmentSummary {
                 id: row.get("id"),
@@ -59,7 +60,10 @@ pub async fn create_environment(pool: &SqlitePool) -> AppResult<EnvironmentDetai
     get_environment(pool, &id).await
 }
 
-pub async fn get_environment(pool: &SqlitePool, environment_id: &str) -> AppResult<EnvironmentDetail> {
+pub async fn get_environment(
+    pool: &SqlitePool,
+    environment_id: &str,
+) -> AppResult<EnvironmentDetail> {
     let row = sqlx::query(
         "SELECT id, name, is_active, variables_json, updated_at FROM environments WHERE id = ?1",
     )
@@ -84,7 +88,9 @@ pub async fn update_environment(
 ) -> AppResult<EnvironmentDetail> {
     let name = input.name.trim();
     if name.is_empty() {
-        return Err(AppError::Message("Environment name is required.".to_string()));
+        return Err(AppError::Message(
+            "Environment name is required.".to_string(),
+        ));
     }
 
     let result = sqlx::query(
@@ -128,15 +134,17 @@ pub async fn delete_environment(pool: &SqlitePool, environment_id: &str) -> AppR
     Ok(())
 }
 
-pub async fn set_active_environment(pool: &SqlitePool, environment_id: Option<&str>) -> AppResult<()> {
+pub async fn set_active_environment(
+    pool: &SqlitePool,
+    environment_id: Option<&str>,
+) -> AppResult<()> {
     sqlx::query("UPDATE environments SET is_active = 0")
         .execute(pool)
         .await?;
 
     if let Some(environment_id) = environment_id {
-        let result = sqlx::query("UPDATE environments SET is_active = 1, updated_at = ?2 WHERE id = ?1")
+        let result = sqlx::query("UPDATE environments SET is_active = 1 WHERE id = ?1")
             .bind(environment_id)
-            .bind(now_iso())
             .execute(pool)
             .await?;
 

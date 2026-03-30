@@ -35,7 +35,9 @@ impl AppState {
             .map_err(|_| AppError::Message("Failed to access request state.".to_string()))?;
 
         if in_flight_request.is_some() {
-            return Err(AppError::Message("Another request is already in flight.".to_string()));
+            return Err(AppError::Message(
+                "Another request is already in flight.".to_string(),
+            ));
         }
 
         let request_id = Uuid::new_v4().to_string();

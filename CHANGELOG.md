@@ -9,6 +9,15 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 ### Added
 
 - Paste-based and file-based import for Postman environment JSON on the dedicated `/environments` page, including an option to make the imported environment active immediately.
+- One-click export for collections to Postman Collection v2.1 JSON and for environments to Postman environment JSON through native save dialogs.
+- Global floating notifications with timed dismissal, hover pause/resume, progress indicators, manual close, and max-visible queueing for action feedback across the app.
+
+### Changed
+
+- Postman collection import now preserves exported query parameters more predictably when both `raw` URLs and structured query arrays are present.
+- Postman collection import now recognizes JSON raw-body language metadata and multipart `formdata`, improving round-tripping for exported requests.
+- Collections, environments, settings, request save/import flows, and history clearing now report completion through the shared notification system instead of page-local success text.
+- The desktop window now restores its last size and position on launch, and reopens maximized if that was its last state when closed.
 
 ## [0.7.0] - 2026-03-27
 
