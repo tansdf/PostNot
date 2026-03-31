@@ -6,6 +6,8 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-03-31
+
 ### Added
 
 - Paste-based and file-based import for Postman environment JSON on the dedicated `/environments` page, including an option to make the imported environment active immediately.
@@ -21,6 +23,11 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 - The desktop window now restores its last size and position on launch, and reopens maximized if that was its last state when closed.
 - Requests that use secret environment variables still execute with resolved values, but stored history snapshots now keep the original unresolved `{{variable}}` text instead of persisting the secret.
 - Postman environment import/export now understands secret variables and exports them as named placeholders with blank values instead of plaintext.
+
+### Fixed
+
+- Saving settings now preserves the full `60-150%` interface zoom range instead of clamping back to the older `80-120%` limits.
+- Refined secret-variable controls in the environments editor with better row alignment, clearer key/visibility icon states, and smoother inline action hierarchy.
 
 ## [0.7.0] - 2026-03-27
 
