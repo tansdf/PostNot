@@ -6,13 +6,19 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-04-04
+
 ### Added
 
 - In-app updater integration on the Settings page, including signed GitHub Release checks and native install handoff when a newer desktop build is available.
+- Apache 2.0 licensing across the repository, package metadata, and desktop crate metadata.
+- A dedicated [AGENTS.md](AGENTS.md) guide for coding agents and contributor tooling, separating implementation context from the public README.
 
 ### Changed
 
 - Release builds are now configured to produce signed updater artifacts so GitHub Releases can feed the desktop updater.
+- The Settings updater area now keeps persistent updater-specific error feedback inside the Updates card instead of duplicating it as a page-level error block.
+- The public-facing README was rewritten for human readers and open-source discovery, while operational workspace details moved into `AGENTS.md`.
 
 ## [0.8.0] - 2026-03-31
 
