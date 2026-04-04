@@ -530,6 +530,7 @@ Ship a usable desktop app that can compose and execute HTTP requests locally, pe
 - history panel
 - history detail inspection
 - clear history action
+- signed updater checks and install flow from Settings
 
 ### Milestone 1 Remaining
 
@@ -541,11 +542,11 @@ Manual end-to-end verification via `tauri dev` has already been completed for th
 
 Recommended implementation order from the current state:
 
-1. Add Postman environment import and export
-2. Add Tauri updater integration
-3. Add collection folders and richer request organization
-4. Continue tightening error handling and desktop UX polish
-5. Improve import/export compatibility and remaining desktop polish
+1. Add collection folders and richer request organization
+2. Continue tightening error handling and desktop UX polish
+3. Improve import/export compatibility and remaining desktop polish
+4. Decide whether updater discovery should stay on GitHub's stable-only `/latest` endpoint or move to a custom prerelease-aware manifest
+5. Evaluate multi-tab workflow and request-level productivity features
 
 ## 14. Open Decisions
 
@@ -560,4 +561,4 @@ These are still unresolved:
 
 Treat the repository as being in an active Milestone 1 state, not full MVP completion.
 
-The design is now grounded in what the code actually does: persisted settings influence request execution, history is stored in SQLite with secret-derived environment values redacted, secret environment values live in the OS credential store, environments resolve variables at send time, collections are part of the working UI, import can pull requests in from Postman collections and cURL, and multipart requests can now attach local files. The next work should stay focused on updater work, request organization, multi-tab decisions, and remaining UX polish.
+The design is now grounded in what the code actually does: persisted settings influence request execution, history is stored in SQLite with secret-derived environment values redacted, secret environment values live in the OS credential store, environments resolve variables at send time, collections are part of the working UI, import can pull requests in from Postman collections and cURL, multipart requests can now attach local files, and the desktop shell can check GitHub Releases for signed updater builds from Settings. The next work should stay focused on request organization, updater channel decisions, multi-tab decisions, and remaining UX polish.

@@ -19,6 +19,7 @@ pub fn run() -> Result<(), String> {
     install_panic_hook();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let database = tauri::async_runtime::block_on(db::init(app.handle()))?;
             tauri::async_runtime::block_on(services::settings_service::ensure_defaults(&database))?;
@@ -35,6 +36,8 @@ pub fn run() -> Result<(), String> {
             commands::requests::pick_multipart_files,
             commands::settings::get_settings,
             commands::settings::update_settings,
+            commands::updates::check_for_updates,
+            commands::updates::install_update,
             commands::history::list_history,
             commands::history::get_history_entry,
             commands::history::clear_history,

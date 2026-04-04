@@ -6,4 +6,5 @@ pub mod http_client;
 pub mod imports_service;
 pub mod secret_store_service;
 pub mod settings_service;
+pub mod updates_service;
 pub mod window_state_service;

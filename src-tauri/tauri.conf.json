@@ -25,8 +25,17 @@
       "csp": null
     }
   },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/tansdf/PostNot/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlFM0FDRjNBNTMzRkJERjkKUldUNXZUOVRPczg2bmlUNzdBdlFvS1Z0RHBzc1JyMXgxUDNCclRuVmsvZGVZUCttcEVaTzNySmgK"
+    }
+  },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

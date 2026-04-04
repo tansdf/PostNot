@@ -73,6 +73,18 @@ export type AppSettings = {
   notificationTimeoutMs: number;
 };
 
+export type AvailableUpdate = {
+  currentVersion: string;
+  version: string;
+  date: string | null;
+  body: string | null;
+};
+
+export type UpdateCheckResult = {
+  configured: boolean;
+  update: AvailableUpdate | null;
+};
+
 export type HistoryEntrySummary = {
   id: string;
   requestName: string;

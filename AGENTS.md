@@ -1,0 +1,117 @@
+# PostNot Agent Guide
+
+Operational context for coding agents and contributor tooling. This file is the agent-facing companion to the public [README.md](README.md).
+
+## Repository Role
+
+PostNot is a local-first desktop API client built with:
+
+- Rust
+- Tauri 2
+- SvelteKit
+- TypeScript
+- SQLite
+
+The app already supports request execution, history, collections, environments, secret environment storage, import/export flows, notifications, settings, and signed in-app update checks from Settings.
+
+## Canonical Working Directory
+
+Use this repo path as the project root:
+
+`/home/tansdf/gitreps/PostNot`
+
+Windows-side equivalent:
+
+`\\wsl.localhost\Ubuntu\home\tansdf\gitreps\PostNot`
+
+Do not use malformed WindowsApps-style paths if they appear in broken thread context.
+
+## Start Here
+
+When onboarding into a fresh task, read these first:
+
+- [docs/tech-design.md](docs/tech-design.md): current architecture and implementation state
+- [src/routes/+page.svelte](src/routes/+page.svelte): main request runner UI
+- [src/routes/settings/+page.svelte](src/routes/settings/+page.svelte): persisted settings UI and updater surface
+- [src-tauri/src/lib.rs](src-tauri/src/lib.rs): Tauri startup and command registration
+- [src-tauri/src/services/http_client.rs](src-tauri/src/services/http_client.rs): native request execution
+- [src-tauri/src/services/settings_service.rs](src-tauri/src/services/settings_service.rs): persisted settings
+- [src-tauri/src/services/history_service.rs](src-tauri/src/services/history_service.rs): request history
+- [src-tauri/src/services/environments_service.rs](src-tauri/src/services/environments_service.rs): environments, secret redaction, variable resolution
+
+## Current Product State
+
+Implemented now:
+
+- Tauri desktop shell
+- native HTTP execution in Rust
+- persisted settings
+- persisted history with detail inspection
+- request cancellation
+- collections and saved requests
+- environments with variable resolution
+- OS-backed secret storage for secret environment variables
+- Postman collection import/export
+- Postman environment import/export
+- cURL import
+- multipart request composition with local file uploads
+- floating notifications
+- signed in-app update checks from Settings
+- window size and position restore
+
+Still intentionally open:
+
+- collection folders and richer request organization
+- multi-tab workflow decisions
+- additional UX polish and error handling
+- updater channel decision for prereleases vs stable-only discovery
+
+## Validation
+
+Frontend:
+
+```bash
+npm run check
+```
+
+Rust:
+
+```bash
+source "$HOME/.cargo/env"
+cargo check --manifest-path src-tauri/Cargo.toml
+```
+
+Run the desktop app locally with:
+
+```bash
+npm run tauri dev
+```
+
+## Runtime Notes
+
+- SQLite data lives under the Tauri app data directory.
+- Secret environment values are stored in the OS credential store, not SQLite.
+- History persists requests that use secret environment variables, but stores unresolved `{{variable}}` text instead of resolved secret values.
+- Collections are managed on `/collections`.
+- Environments are managed on `/environments`.
+- Settings are managed on `/settings`.
+- The updater is wired to GitHub Releases at `https://github.com/tansdf/PostNot/releases/latest/download/latest.json`.
+- Because that endpoint follows GitHub's stable `latest` release, prereleases are not discovered by the in-app updater.
+
+## Release Notes For Agents
+
+- Keep versions in sync across:
+  - [package.json](package.json)
+  - [package-lock.json](package-lock.json)
+  - [src-tauri/Cargo.toml](src-tauri/Cargo.toml)
+  - [src-tauri/tauri.conf.json](src-tauri/tauri.conf.json)
+  - [vite.config.ts](vite.config.ts) for `__APP_VERSION__`
+- [CHANGELOG.md](CHANGELOG.md) is the source of truth for release history.
+- The release workflow is in [.github/workflows/release.yml](.github/workflows/release.yml).
+- Signed updater artifacts require the `TAURI_SIGNING_PRIVATE_KEY` GitHub secret, plus `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` if the key is password protected.
+
+## Repo Hygiene
+
+- Use [README.md](README.md) for customer-facing messaging.
+- Keep [AGENTS.md](AGENTS.md) focused on implementation, release, and workspace context.
+- Keep [docs/tech-design.md](docs/tech-design.md) aligned with actual code behavior, not aspirational architecture.

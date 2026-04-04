@@ -6,6 +6,14 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+### Added
+
+- In-app updater integration on the Settings page, including signed GitHub Release checks and native install handoff when a newer desktop build is available.
+
+### Changed
+
+- Release builds are now configured to produce signed updater artifacts so GitHub Releases can feed the desktop updater.
+
 ## [0.8.0] - 2026-03-31
 
 ### Added

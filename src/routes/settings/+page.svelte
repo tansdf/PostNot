@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
 
-  import { getSettings, updateSettings } from "$lib/api/commands";
-  import { createDefaultSettings, type AppSettings } from "$lib/api/types";
+  import { checkForUpdates, getSettings, installUpdate, updateSettings } from "$lib/api/commands";
+  import { createDefaultSettings, type AppSettings, type UpdateCheckResult } from "$lib/api/types";
   import { notifications } from "$lib/stores/notifications.svelte";
   import { applyTheme, applyUiScale } from "$lib/theme";
 
@@ -30,6 +30,50 @@
   let isLoading = $state(true);
   let isSaving = $state(false);
   let errorText = $state("");
+  let updateResult = $state<UpdateCheckResult | null>(null);
+  let updateCheckedAt = $state<string | null>(null);
+  let updateErrorText = $state("");
+  let isCheckingUpdates = $state(false);
+  let isInstallingUpdate = $state(false);
+
+  const currentVersion = __APP_VERSION__;
+  const updatesStatusText = $derived.by(() => {
+    if (isCheckingUpdates) {
+      return "Checking GitHub Releases for a newer signed build...";
+    }
+
+    if (isInstallingUpdate) {
+      return "Downloading and applying the available update...";
+    }
+
+    if (updateErrorText) {
+      return updateErrorText;
+    }
+
+    if (!updateResult) {
+      return "Check manually whenever you want to look for a newer desktop build.";
+    }
+
+    if (!updateResult.configured) {
+      return "Updater support is not configured for this build yet.";
+    }
+
+    if (updateResult.update) {
+      return `Version ${updateResult.update.version} is available and ready to install.`;
+    }
+
+    return `You're already on the latest signed release (${currentVersion}).`;
+  });
+  const checkedAtLabel = $derived.by(() => {
+    if (!updateCheckedAt) {
+      return "";
+    }
+
+    return new Intl.DateTimeFormat(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short"
+    }).format(new Date(updateCheckedAt));
+  });
 
   onMount(loadSettings);
 
@@ -63,6 +107,48 @@
       errorText = error instanceof Error ? error.message : String(error);
     } finally {
       isSaving = false;
+    }
+  }
+
+  async function handleCheckForUpdates() {
+    isCheckingUpdates = true;
+    updateErrorText = "";
+
+    try {
+      updateResult = await checkForUpdates();
+      updateCheckedAt = new Date().toISOString();
+
+      if (updateResult.update) {
+        notifications.success(`Version ${updateResult.update.version} is available.`, "Update found");
+      } else {
+        notifications.info(`No newer signed release is available than v${currentVersion}.`, "No update found");
+      }
+    } catch (error) {
+      updateErrorText = error instanceof Error ? error.message : String(error);
+      notifications.error(updateErrorText, "Update check failed");
+    } finally {
+      isCheckingUpdates = false;
+    }
+  }
+
+  async function handleInstallUpdate() {
+    if (!updateResult?.update) {
+      return;
+    }
+
+    isInstallingUpdate = true;
+    updateErrorText = "";
+
+    try {
+      notifications.info(
+        `Installing v${updateResult.update.version}. PostNot will restart if the platform keeps the app open after install.`,
+        "Applying update"
+      );
+      await installUpdate();
+    } catch (error) {
+      updateErrorText = error instanceof Error ? error.message : String(error);
+      notifications.error(updateErrorText, "Update install failed");
+      isInstallingUpdate = false;
     }
   }
 </script>
@@ -107,6 +193,71 @@
                 {/each}
               </select>
             </label>
+          </div>
+        </section>
+
+        <section class="settings-section-card">
+          <div class="settings-section-heading">
+            <div>
+              <h2>Updates</h2>
+              <p class="settings-section-lede">Check for newer signed PostNot builds published to the latest stable GitHub Release.</p>
+            </div>
+
+            <button
+              class="system-button"
+              type="button"
+              disabled={isLoading || isCheckingUpdates || isInstallingUpdate}
+              onclick={handleCheckForUpdates}
+            >
+              {isCheckingUpdates ? "Checking..." : "Check now"}
+            </button>
+          </div>
+
+          <div class="settings-field-grid">
+            <div class="settings-status-item">
+              <span class="field-label">Current version</span>
+              <strong>v{currentVersion}</strong>
+            </div>
+
+            <div class="settings-status-item">
+              <span class="field-label">Last checked</span>
+              <strong>{checkedAtLabel || "Not checked yet"}</strong>
+            </div>
+          </div>
+
+          <div class="settings-updates-summary">
+            {#if updateErrorText}
+              <div class="settings-update-feedback settings-update-feedback-error">
+                <strong>Update check failed</strong>
+                <p>{updateErrorText}</p>
+              </div>
+            {:else}
+              <p>{updatesStatusText}</p>
+            {/if}
+
+            {#if updateResult?.update}
+              <div class="settings-update-meta">
+                <strong>Available: v{updateResult.update.version}</strong>
+                {#if updateResult.update.date}
+                  <span>Published {new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(updateResult.update.date))}</span>
+                {/if}
+              </div>
+
+              {#if updateResult.update.body}
+                <pre class="history-preview settings-update-notes">{updateResult.update.body}</pre>
+              {/if}
+            {/if}
+          </div>
+
+          <div class="settings-inline-actions">
+            <button
+              class="send-button"
+              type="button"
+              disabled={!updateResult?.update || isCheckingUpdates || isInstallingUpdate}
+              onclick={handleInstallUpdate}
+            >
+              {isInstallingUpdate ? "Installing..." : "Install update"}
+            </button>
           </div>
         </section>
 

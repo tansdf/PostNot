@@ -5,6 +5,7 @@ import {
   type CurlImportInput,
   createDefaultSettings,
   type AppSettings,
+  type UpdateCheckResult,
   type EnvironmentDetail,
   type EnvironmentInput,
   type EnvironmentVariable,
@@ -253,6 +254,25 @@ export async function updateSettings(settings: AppSettings): Promise<AppSettings
   }
 
   return invoke<AppSettings>("update_settings", { settings });
+}
+
+export async function checkForUpdates(): Promise<UpdateCheckResult> {
+  if (!hasTauriRuntime()) {
+    return {
+      configured: false,
+      update: null
+    };
+  }
+
+  return invoke<UpdateCheckResult>("check_for_updates");
+}
+
+export async function installUpdate(): Promise<void> {
+  if (!hasTauriRuntime()) {
+    return;
+  }
+
+  return invoke<void>("install_update");
 }
 
 export async function listHistory(limit = 25): Promise<HistoryEntrySummary[]> {

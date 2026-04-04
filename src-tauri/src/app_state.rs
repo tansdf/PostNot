@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use sqlx::SqlitePool;
+use tauri_plugin_updater::Update;
 use tokio::sync::watch;
 use uuid::Uuid;
 
@@ -18,6 +19,7 @@ pub struct AppState {
     db: SqlitePool,
     secret_store: Arc<dyn SecretStore>,
     in_flight_request: Mutex<Option<InFlightRequest>>,
+    pending_update: Mutex<Option<Update>>,
 }
 
 impl AppState {
@@ -26,6 +28,7 @@ impl AppState {
             db,
             secret_store,
             in_flight_request: Mutex::new(None),
+            pending_update: Mutex::new(None),
         }
     }
 
@@ -84,5 +87,34 @@ impl AppState {
         }
 
         Ok(false)
+    }
+
+    pub fn set_pending_update(&self, update: Update) -> AppResult<()> {
+        let mut pending_update = self
+            .pending_update
+            .lock()
+            .map_err(|_| AppError::Message("Failed to access updater state.".to_string()))?;
+
+        *pending_update = Some(update);
+        Ok(())
+    }
+
+    pub fn take_pending_update(&self) -> AppResult<Option<Update>> {
+        let mut pending_update = self
+            .pending_update
+            .lock()
+            .map_err(|_| AppError::Message("Failed to access updater state.".to_string()))?;
+
+        Ok(pending_update.take())
+    }
+
+    pub fn clear_pending_update(&self) -> AppResult<()> {
+        let mut pending_update = self
+            .pending_update
+            .lock()
+            .map_err(|_| AppError::Message("Failed to access updater state.".to_string()))?;
+
+        *pending_update = None;
+        Ok(())
     }
 }
