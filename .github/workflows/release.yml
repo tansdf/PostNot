@@ -95,6 +95,11 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
       - name: Build combined updater manifest
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -105,7 +110,7 @@ jobs:
 
           mkdir -p .release-sigs
           gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}" > release.json
-          gh release download "${GITHUB_REF_NAME}" --pattern "*.sig" --dir .release-sigs
+          gh release download "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --pattern "*.sig" --dir .release-sigs
 
           node <<'EOF'
           const fs = require("fs");
@@ -181,5 +186,7 @@ jobs:
       - name: Upload combined updater manifest
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
         run: |
-          gh release upload "${GITHUB_REF_NAME}" latest.json --clobber
+          gh release upload "${GITHUB_REF_NAME}" latest.json --repo "${GITHUB_REPOSITORY}" --clobber
