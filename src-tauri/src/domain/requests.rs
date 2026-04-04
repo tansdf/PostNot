@@ -66,6 +66,13 @@ pub struct ResponsePayload {
     pub executed_at: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SendRequestResult {
+    pub response: ResponsePayload,
+    pub history_persistence_error: Option<String>,
+}
+
 fn default_true() -> bool {
     true
 }

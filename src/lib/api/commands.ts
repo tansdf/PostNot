@@ -20,11 +20,12 @@ import {
   type ImportedRequestDraft,
   type RequestDraft,
   type ResponsePayload,
+  type SendRequestResult,
   type SavedRequestDetail,
   type SavedRequestSummary
 } from "$lib/api/types";
 
-function hasTauriRuntime() {
+export function hasTauriRuntime() {
   return typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
 }
 
@@ -216,12 +217,15 @@ function createMockSavedRequestDetail(id: string): SavedRequestDetail {
   };
 }
 
-export async function sendRequest(payload: RequestDraft): Promise<ResponsePayload> {
+export async function sendRequest(payload: RequestDraft): Promise<SendRequestResult> {
   if (!hasTauriRuntime()) {
-    return createMockResponse(payload);
+    return {
+      response: createMockResponse(payload),
+      historyPersistenceError: null
+    };
   }
 
-  return invoke<ResponsePayload>("send_request", { payload });
+  return invoke<SendRequestResult>("send_request", { payload });
 }
 
 export async function cancelActiveRequest(): Promise<boolean> {

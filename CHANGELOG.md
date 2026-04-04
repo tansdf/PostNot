@@ -6,6 +6,17 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-04-05
+
+### Changed
+
+- Successful HTTP responses are always returned to the UI even when saving the run to history fails; a warning notification explains that history was not updated, including the underlying error text.
+- When a request fails and logging that failure to history also fails, the UI still shows the original request error while a warning notification reports the history write problem (via a Tauri event from the shell).
+
+### Fixed
+
+- Release automation now publishes one combined `latest.json` updater manifest after all platform builds finish, preventing matrix jobs from overwriting each other with single-platform updater metadata.
+
 ## [0.9.1] - 2026-04-04
 
 ### Changed

@@ -202,7 +202,14 @@
     isCancelingRequest = false;
 
     try {
-      response = await sendRequest(request);
+      const sendResult = await sendRequest(request);
+      response = sendResult.response;
+      if (sendResult.historyPersistenceError) {
+        notifications.warning(
+          `The response is shown, but this run was not saved to history: ${sendResult.historyPersistenceError}`,
+          "History not saved"
+        );
+      }
     } catch (error) {
       const errorText = error instanceof Error ? error.message : String(error);
 

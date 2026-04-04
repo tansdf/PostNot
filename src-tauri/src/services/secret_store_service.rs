@@ -1,10 +1,7 @@
 use std::sync::Arc;
 
 #[cfg(test)]
-use std::{
-    collections::HashMap,
-    sync::Mutex,
-};
+use std::{collections::HashMap, sync::Mutex};
 
 use keyring::{Entry, Error as KeyringError};
 

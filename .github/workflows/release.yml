@@ -86,4 +86,100 @@ jobs:
           releaseBody: "See CHANGELOG.md for details and the assets below for platform builds."
           releaseDraft: true
           prerelease: true
+          retryAttempts: 2
+          uploadUpdaterJson: false
           args: ${{ matrix.args }}
+
+  publish-updater-json:
+    needs: build-and-release
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Build combined updater manifest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p .release-sigs
+          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}" > release.json
+          gh release download "${GITHUB_REF_NAME}" --pattern "*.sig" --dir .release-sigs
+
+          node <<'EOF'
+          const fs = require("fs");
+          const path = require("path");
+
+          const release = JSON.parse(fs.readFileSync("release.json", "utf8"));
+          const tag = process.env.GITHUB_REF_NAME;
+          const repo = process.env.GITHUB_REPOSITORY;
+          const assetBaseUrl = `https://github.com/${repo}/releases/download/${tag}`;
+
+          const assets = release.assets ?? [];
+          const sigDir = ".release-sigs";
+          const sigByName = new Map();
+
+          for (const fileName of fs.readdirSync(sigDir)) {
+            sigByName.set(fileName, fs.readFileSync(path.join(sigDir, fileName), "utf8").trim());
+          }
+
+          const platforms = {};
+
+          function addPlatform(key, assetName, signatureName) {
+            const asset = assets.find((entry) => entry.name === assetName);
+            const signature = sigByName.get(signatureName);
+
+            if (!asset || !signature) {
+              return;
+            }
+
+            platforms[key] = {
+              signature,
+              url: `${assetBaseUrl}/${asset.name}`
+            };
+          }
+
+          const nsisAsset = assets.find((entry) => entry.name.endsWith("-setup.exe"));
+          const msiAsset = assets.find((entry) => entry.name.endsWith(".msi"));
+          const appImageAsset = assets.find((entry) => entry.name.endsWith(".AppImage"));
+          const macIntelAsset = assets.find((entry) => entry.name.endsWith("_x64.app.tar.gz"));
+          const macArmAsset = assets.find((entry) => entry.name.endsWith("_aarch64.app.tar.gz"));
+
+          if (nsisAsset) {
+            addPlatform("windows-x86_64-nsis", nsisAsset.name, `${nsisAsset.name}.sig`);
+          }
+
+          if (msiAsset) {
+            addPlatform("windows-x86_64", msiAsset.name, `${msiAsset.name}.sig`);
+          } else if (nsisAsset) {
+            addPlatform("windows-x86_64", nsisAsset.name, `${nsisAsset.name}.sig`);
+          }
+
+          if (appImageAsset) {
+            addPlatform("linux-x86_64", appImageAsset.name, `${appImageAsset.name}.sig`);
+          }
+
+          if (macIntelAsset) {
+            addPlatform("darwin-x86_64", macIntelAsset.name, `${macIntelAsset.name}.sig`);
+          }
+
+          if (macArmAsset) {
+            addPlatform("darwin-aarch64", macArmAsset.name, `${macArmAsset.name}.sig`);
+          }
+
+          const latest = {
+            version: release.tag_name,
+            notes: release.body ?? "",
+            pub_date: release.published_at ?? release.created_at ?? new Date().toISOString(),
+            platforms
+          };
+
+          fs.writeFileSync("latest.json", `${JSON.stringify(latest, null, 2)}\n`);
+          EOF
+
+      - name: Upload combined updater manifest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${GITHUB_REF_NAME}" latest.json --clobber

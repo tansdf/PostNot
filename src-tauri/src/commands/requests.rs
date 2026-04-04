@@ -1,18 +1,34 @@
-use tauri::{AppHandle, State};
+use serde::Serialize;
+use tauri::{AppHandle, Emitter, State};
 
 use crate::{
     app_state::AppState,
-    domain::requests::{ResponsePayload, SendRequestPayload},
+    domain::requests::{SendRequestPayload, SendRequestResult},
     error::AppResult,
     services::{environments_service, history_service, http_client, settings_service},
 };
+
+const HISTORY_PERSISTENCE_EVENT: &str = "history-persistence-error";
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HistoryPersistenceEvent {
+    message: String,
+}
+
+fn emit_history_persistence_error(app: &AppHandle, message: String) {
+    let _ = app.emit(
+        HISTORY_PERSISTENCE_EVENT,
+        HistoryPersistenceEvent { message },
+    );
+}
 
 #[tauri::command]
 pub async fn send_request(
     app: AppHandle,
     state: State<'_, AppState>,
     payload: SendRequestPayload,
-) -> AppResult<ResponsePayload> {
+) -> AppResult<SendRequestResult> {
     let (request_id, cancel_rx) = state.start_request()?;
     let settings = settings_service::get_settings(state.db()).await?;
     let active_environment =
@@ -30,27 +46,35 @@ pub async fn send_request(
 
     let result = match request_result {
         Ok(response) => {
-            match history_service::record_success(state.db(), &history_payload, &response, &app)
-                .await
+            let history_persistence_error = match history_service::record_success(
+                state.db(),
+                &history_payload,
+                &response,
+                &app,
+            )
+            .await
             {
-                Ok(()) => Ok(response),
-                Err(error) => Err(error),
-            }
+                Ok(()) => None,
+                Err(error) => Some(error.to_string()),
+            };
+            Ok(SendRequestResult {
+                response,
+                history_persistence_error,
+            })
         }
         Err(error) => match error.is_cancelled() {
             true => Err(error),
             false => {
-                let history_result = history_service::record_failure(
+                if let Err(history_error) = history_service::record_failure(
                     state.db(),
                     &history_payload,
                     &error.to_string(),
                 )
-                .await;
-
-                match history_result {
-                    Ok(()) => Err(error),
-                    Err(history_error) => Err(history_error),
+                .await
+                {
+                    emit_history_persistence_error(&app, history_error.to_string());
                 }
+                Err(error)
             }
         },
     };

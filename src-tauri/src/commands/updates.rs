@@ -1,6 +1,9 @@
 use tauri::{AppHandle, State};
 
-use crate::{app_state::AppState, domain::updates::UpdateCheckResult, error::AppResult, services::updates_service};
+use crate::{
+    app_state::AppState, domain::updates::UpdateCheckResult, error::AppResult,
+    services::updates_service,
+};
 
 #[tauri::command]
 pub async fn check_for_updates(

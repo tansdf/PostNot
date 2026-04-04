@@ -49,7 +49,7 @@ pub async fn check_for_updates(app: &AppHandle, state: &AppState) -> AppResult<U
     })
 }
 
-pub async fn install_update(app: &AppHandle, state: &AppState) -> AppResult<()> {
+pub async fn install_update(_app: &AppHandle, state: &AppState) -> AppResult<()> {
     let Some(update) = state.take_pending_update()? else {
         return Err(AppError::Message(
             "Check for updates first so PostNot knows what to install.".to_string(),
@@ -62,7 +62,7 @@ pub async fn install_update(app: &AppHandle, state: &AppState) -> AppResult<()> 
         .map_err(map_updater_error)?;
 
     #[cfg(not(target_os = "windows"))]
-    app.restart();
+    _app.restart();
 
     #[cfg(target_os = "windows")]
     Ok(())

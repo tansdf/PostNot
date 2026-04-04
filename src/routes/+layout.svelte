@@ -1,7 +1,8 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import { onMount } from "svelte";
-  import { getSettings } from "$lib/api/commands";
+  import { listen } from "@tauri-apps/api/event";
+  import { getSettings, hasTauriRuntime } from "$lib/api/commands";
   import "$lib/styles/app.css";
   import { applyTheme, applyUiScale, watchSystemTheme } from "$lib/theme";
   import AppShell from "$lib/components/layout/AppShell.svelte";
@@ -10,6 +11,22 @@
   let { children }: { children?: Snippet } = $props();
 
   onMount(() => {
+    let unlistenHistoryPersistence: (() => void) | undefined;
+
+    if (hasTauriRuntime()) {
+      void listen<{ message: string }>("history-persistence-error", (event) => {
+        const text = event.payload.message?.trim();
+        if (text) {
+          notifications.warning(
+            `The request failed, and the failure could not be written to history: ${text}`,
+            "History not saved"
+          );
+        }
+      }).then((unlisten) => {
+        unlistenHistoryPersistence = unlisten;
+      });
+    }
+
     let themePreference = "system";
     const stopWatching = watchSystemTheme(() => {
       if (themePreference === "system") {
@@ -35,6 +52,7 @@
     void loadTheme();
 
     return () => {
+      unlistenHistoryPersistence?.();
       stopWatching();
     };
   });

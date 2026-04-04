@@ -63,6 +63,11 @@ export type ResponsePayload = {
   executedAt: string;
 };
 
+export type SendRequestResult = {
+  response: ResponsePayload;
+  historyPersistenceError: string | null;
+};
+
 export type AppSettings = {
   theme: string;
   uiScale: number;
