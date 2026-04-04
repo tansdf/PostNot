@@ -42,18 +42,16 @@
   let draftDescription = $state("");
 
   $effect(() => {
-    if (collection && collection.id !== editableCollectionId) {
-      editableCollectionId = collection.id;
-      draftName = collection.name;
-      draftDescription = collection.description;
-    }
-  });
-
-  $effect(() => {
-    if (!collection) {
-      editableCollectionId = "";
-      draftName = "";
-      draftDescription = "";
+    const nextId = collection?.id ?? "";
+    if (nextId !== editableCollectionId) {
+      editableCollectionId = nextId;
+      if (collection) {
+        draftName = collection.name;
+        draftDescription = collection.description;
+      } else {
+        draftName = "";
+        draftDescription = "";
+      }
     }
   });
 

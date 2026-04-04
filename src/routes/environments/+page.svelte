@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
+  import { resolve } from "$app/paths";
   import { page } from "$app/state";
   import { onMount } from "svelte";
   import { createEnvironmentVariable, type EnvironmentDetail, type EnvironmentSummary } from "$lib/api/types";
@@ -57,7 +58,7 @@
     }
 
     if (!environmentId && environments.length > 0 && !selectedEnvironmentId) {
-      await goto(`/environments?environmentId=${encodeURIComponent(environments[0].id)}`, {
+      await goto(resolve(`/environments?environmentId=${encodeURIComponent(environments[0].id)}`), {
         replaceState: true,
         noScroll: true,
         keepFocus: true
@@ -80,11 +81,12 @@
       selectedEnvironmentId = nextEnvironmentId;
 
       if (requestedEnvironmentId !== nextEnvironmentId) {
-        await goto(nextEnvironmentId ? `/environments?environmentId=${encodeURIComponent(nextEnvironmentId)}` : "/environments", {
-          replaceState: true,
-          noScroll: true,
-          keepFocus: true
-        });
+        const navOpts = { replaceState: true, noScroll: true, keepFocus: true } as const;
+        if (nextEnvironmentId) {
+          await goto(resolve(`/environments?environmentId=${encodeURIComponent(nextEnvironmentId)}`), navOpts);
+        } else {
+          await goto(resolve("/environments"), navOpts);
+        }
       }
 
       if (nextEnvironmentId) {
@@ -123,7 +125,7 @@
     try {
       const created = await createEnvironment();
       await loadEnvironments(created.id);
-      await goto(`/environments?environmentId=${encodeURIComponent(created.id)}`, {
+      await goto(resolve(`/environments?environmentId=${encodeURIComponent(created.id)}`), {
         replaceState: true,
         noScroll: true,
         keepFocus: true
@@ -283,7 +285,7 @@
 
       importSource = "";
       await loadEnvironments(result.environmentId);
-      await goto(`/environments?environmentId=${encodeURIComponent(result.environmentId)}`, {
+      await goto(resolve(`/environments?environmentId=${encodeURIComponent(result.environmentId)}`), {
         replaceState: true,
         noScroll: true,
         keepFocus: true

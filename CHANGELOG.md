@@ -6,6 +6,15 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-04-04
+
+### Changed
+
+- Internal navigation and sidebar links now use SvelteKit `resolve()` so URLs stay correct when the app is served under a subpath.
+- Request body mode changes clear JSON and multipart field errors directly instead of using separate reactive effects.
+- The environment variable field autocomplete uses declarative mirror text for caret measurement and tighter suggestion-index handling, improving alignment with Svelte 5 runes practice.
+- Collection detail draft fields sync from the selected collection with a single consolidated effect.
+
 ## [0.9.0] - 2026-04-04
 
 ### Added

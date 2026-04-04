@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
+  import { resolve } from "$app/paths";
   import { page } from "$app/state";
   import NotificationHost from "$lib/components/layout/NotificationHost.svelte";
   import SidebarCollections from "$lib/components/layout/SidebarCollections.svelte";
@@ -22,10 +23,25 @@
       </div>
 
       <nav class="sidebar-nav" aria-label="Primary">
-        <a class={["sidebar-link", page.url.pathname === "/" && "sidebar-link-active"]} href="/">Requests</a>
-        <a class={["sidebar-link", page.url.pathname.startsWith("/collections") && "sidebar-link-active"]} href="/collections">Collections</a>
-        <a class={["sidebar-link", page.url.pathname.startsWith("/environments") && "sidebar-link-active"]} href="/environments">Environments</a>
-        <a class={["sidebar-link", page.url.pathname.startsWith("/settings") && "sidebar-link-active"]} href="/settings">Settings</a>
+        <a class={["sidebar-link", page.url.pathname === "/" && "sidebar-link-active"]} href={resolve("/")}>Requests</a>
+        <a
+          class={["sidebar-link", page.url.pathname.startsWith("/collections") && "sidebar-link-active"]}
+          href={resolve("/collections")}
+        >
+          Collections
+        </a>
+        <a
+          class={["sidebar-link", page.url.pathname.startsWith("/environments") && "sidebar-link-active"]}
+          href={resolve("/environments")}
+        >
+          Environments
+        </a>
+        <a
+          class={["sidebar-link", page.url.pathname.startsWith("/settings") && "sidebar-link-active"]}
+          href={resolve("/settings")}
+        >
+          Settings
+        </a>
       </nav>
 
       <SidebarCollections />

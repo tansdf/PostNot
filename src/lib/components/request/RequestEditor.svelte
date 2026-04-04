@@ -13,6 +13,7 @@
   import VariableField from "$lib/components/request/VariableField.svelte";
 
   let jsonEditorShellElement: HTMLDivElement | null = $state(null);
+  let jsonOverlayElement: HTMLPreElement | null = $state(null);
 
   $effect(() => {
     if (request.body.mode !== "json" || !jsonEditorShellElement || !jsonOverlayElement) return;
@@ -57,6 +58,9 @@
   } = $props();
 
   let activePanel: "query" | "headers" | "body" | "auth" = $state("query");
+  let jsonValidationError = $state("");
+  let multipartErrorText = $state("");
+  let isPickingMultipartFiles = $state(false);
 
   const panels = [
     { id: "query", label: "Query" },
@@ -163,6 +167,12 @@
   }
 
   function updateBodyMode(mode: BodyMode) {
+    if (mode !== "json") {
+      jsonValidationError = "";
+    }
+    if (mode !== "multipart") {
+      multipartErrorText = "";
+    }
     request = {
       ...request,
       body: {
@@ -181,10 +191,6 @@
       }
     };
   }
-
-  let jsonValidationError = $state("");
-  let multipartErrorText = $state("");
-  let isPickingMultipartFiles = $state(false);
 
   function formatJsonBody() {
     try {
@@ -209,20 +215,6 @@
       jsonValidationError = error instanceof SyntaxError ? error.message : "Invalid JSON";
     }
   }
-
-  $effect(() => {
-    if (request.body.mode !== "json") {
-      jsonValidationError = "";
-    }
-  });
-
-  $effect(() => {
-    if (request.body.mode !== "multipart") {
-      multipartErrorText = "";
-    }
-  });
-
-  let jsonOverlayElement: HTMLPreElement | null = $state(null);
 
   type JsonToken = { type: string; value: string };
 

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
+  import { resolve } from "$app/paths";
   import { page } from "$app/state";
 
   import CollectionsPanel from "$lib/components/collections/CollectionsPanel.svelte";
@@ -32,7 +33,7 @@
     if (!collectionId) {
       const fallbackCollectionId = collections.selectedCollectionId;
       if (fallbackCollectionId) {
-        await goto(`/collections?collectionId=${encodeURIComponent(fallbackCollectionId)}`, {
+        await goto(resolve(`/collections?collectionId=${encodeURIComponent(fallbackCollectionId)}`), {
           replaceState: true,
           noScroll: true,
           keepFocus: true
@@ -69,15 +70,16 @@
     await collections.removeCollection(collectionId);
 
     const nextCollectionId = collections.selectedCollectionId;
-    await goto(nextCollectionId ? `/collections?collectionId=${encodeURIComponent(nextCollectionId)}` : "/collections", {
-      replaceState: true,
-      noScroll: true,
-      keepFocus: true
-    });
+    const navOpts = { replaceState: true, noScroll: true, keepFocus: true } as const;
+    if (nextCollectionId) {
+      await goto(resolve(`/collections?collectionId=${encodeURIComponent(nextCollectionId)}`), navOpts);
+    } else {
+      await goto(resolve("/collections"), navOpts);
+    }
   }
 
   async function handleOpenSavedRequest(itemId: string) {
-    await goto(`/?savedRequestId=${encodeURIComponent(itemId)}`);
+    await goto(resolve(`/?savedRequestId=${encodeURIComponent(itemId)}`));
   }
 
   async function handleDeleteSavedRequest(itemId: string) {
@@ -136,7 +138,7 @@
 
       await collections.loadCollections(result.collectionId);
 
-      await goto(`/collections?collectionId=${encodeURIComponent(result.collectionId)}`, {
+      await goto(resolve(`/collections?collectionId=${encodeURIComponent(result.collectionId)}`), {
         replaceState: true,
         noScroll: true,
         keepFocus: true

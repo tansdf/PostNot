@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
+  import { resolve } from "$app/paths";
   import { page } from "$app/state";
   import { onMount } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
@@ -29,12 +30,12 @@
       return;
     }
 
-    await goto(`/collections?collectionId=${encodeURIComponent(collection.id)}`);
+    await goto(resolve(`/collections?collectionId=${encodeURIComponent(collection.id)}`));
   }
 
   async function openCollection(collectionId: string) {
     await collections.selectCollection(collectionId);
-    await goto(`/collections?collectionId=${encodeURIComponent(collectionId)}`);
+    await goto(resolve(`/collections?collectionId=${encodeURIComponent(collectionId)}`));
   }
 
   async function toggleCollection(collectionId: string) {
@@ -52,7 +53,7 @@
 
   async function openSavedRequest(collectionId: string, itemId: string) {
     await collections.selectCollection(collectionId);
-    await goto(`/?savedRequestId=${encodeURIComponent(itemId)}`);
+    await goto(resolve(`/?savedRequestId=${encodeURIComponent(itemId)}`));
   }
 </script>
 

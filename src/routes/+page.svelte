@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
+  import { resolve } from "$app/paths";
   import { page } from "$app/state";
   import { onMount, tick } from "svelte";
 
@@ -278,7 +279,7 @@
         return;
       }
 
-      await goto(`/?savedRequestId=${encodeURIComponent(savedRequest.id)}`, {
+      await goto(resolve(`/?savedRequestId=${encodeURIComponent(savedRequest.id)}`), {
         replaceState: true,
         noScroll: true,
         keepFocus: true
@@ -316,7 +317,7 @@
     requestSaveErrorText = "";
     isSaveDialogOpen = false;
     await collections.selectCollection(savedRequest.collectionId);
-    await goto(`/?savedRequestId=${encodeURIComponent(savedRequest.id)}`, {
+    await goto(resolve(`/?savedRequestId=${encodeURIComponent(savedRequest.id)}`), {
       replaceState: true,
       noScroll: true,
       keepFocus: true
@@ -335,7 +336,7 @@
     activeSavedRequestId = "";
     activeSavedRequestCollectionId = "";
     lastLoadedSavedRequestId = "";
-    await goto("/", {
+    await goto(resolve("/"), {
       replaceState: true,
       noScroll: true,
       keepFocus: true
@@ -373,7 +374,7 @@
       activeSavedRequestCollectionId = "";
       lastLoadedSavedRequestId = "";
       closeCurlImportDialog();
-      await goto("/", {
+      await goto(resolve("/"), {
         replaceState: true,
         noScroll: true,
         keepFocus: true

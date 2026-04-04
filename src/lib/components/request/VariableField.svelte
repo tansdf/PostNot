@@ -56,6 +56,7 @@
   let suggestionPlacement: "above" | "below" = $state("above");
   let hasMeasuredSuggestionPosition = $state(false);
   let blurTimeout: ReturnType<typeof setTimeout> | null = $state(null);
+  let mirrorBeforeText = $state(" ");
 
   const variablePattern = /{{\s*([A-Za-z0-9_.-]+)\s*}}/g;
 
@@ -63,22 +64,16 @@
   let filteredVariables = $derived(getFilteredVariables(availableVariables, currentQuery));
   let usedVariables = $derived(getUsedVariables(value, availableVariables));
 
-  $effect(() => {
+  function clampSuggestionIndex() {
     if (!filteredVariables.length) {
       activeSuggestionIndex = 0;
     } else if (activeSuggestionIndex >= filteredVariables.length) {
       activeSuggestionIndex = 0;
     }
-  });
-
-  $effect(() => {
-    if (isSuggestionsOpen) {
-      void tick().then(() => updateSuggestionAnchor());
-    }
-  });
+  }
 
   function getAvailableVariables(rows: EnvironmentVariable[]): VariableOption[] {
-    const seen = new Set<string>();
+    const seen: Record<string, true> = {};
 
     return rows
       .filter((row) => row.enabled && row.key.trim())
@@ -90,11 +85,11 @@
       .filter((row) => {
         const lookupKey = row.key.toLowerCase();
 
-        if (seen.has(lookupKey)) {
+        if (seen[lookupKey]) {
           return false;
         }
 
-        seen.add(lookupKey);
+        seen[lookupKey] = true;
         return true;
       });
   }
@@ -110,17 +105,17 @@
 
   function getUsedVariables(fieldValue: string, rows: VariableOption[]): UsedVariable[] {
     const variableLookup = new Map(rows.map((row) => [row.key, row]));
-    const seen = new Set<string>();
+    const seen: Record<string, true> = {};
     const result: UsedVariable[] = [];
 
     for (const match of fieldValue.matchAll(variablePattern)) {
       const key = match[1]?.trim();
 
-      if (!key || seen.has(key)) {
+      if (!key || seen[key]) {
         continue;
       }
 
-      seen.add(key);
+      seen[key] = true;
 
       if (variableLookup.has(key)) {
         const resolvedVariable = variableLookup.get(key);
@@ -204,6 +199,7 @@
     replacementEnd = tokenContext.end;
     currentQuery = tokenContext.query;
     hasMeasuredSuggestionPosition = false;
+    clampSuggestionIndex();
     updateSuggestionAnchor();
     isSuggestionsOpen = true;
     void tick().then(() => updateSuggestionAnchor());
@@ -258,8 +254,7 @@
     const selectionStart = fieldElement.selectionStart ?? value.length;
     const beforeCursor = value.slice(0, selectionStart) || " ";
 
-    mirrorTextElement.textContent = beforeCursor;
-    mirrorCaretElement.textContent = "\u200b";
+    mirrorBeforeText = beforeCursor;
 
     const caretLeft = mirrorCaretElement.offsetLeft - fieldElement.scrollLeft;
     const caretTop = mirrorCaretElement.offsetTop - fieldElement.scrollTop;
@@ -323,6 +318,7 @@
 
   function handleKeydown(event: KeyboardEvent) {
     if (isSuggestionsOpen && filteredVariables.length) {
+      clampSuggestionIndex();
       if (event.key === "ArrowDown") {
         event.preventDefault();
         activeSuggestionIndex = (activeSuggestionIndex + 1) % filteredVariables.length;
@@ -428,7 +424,7 @@
     {/if}
 
     <div aria-hidden="true" class={["variable-input-mirror", multiline && "variable-input-mirror-multiline"]} bind:this={mirrorElement}>
-      <span bind:this={mirrorTextElement}></span><span bind:this={mirrorCaretElement} class="variable-input-caret-marker"></span>
+      <span bind:this={mirrorTextElement}>{mirrorBeforeText}</span><span bind:this={mirrorCaretElement} class="variable-input-caret-marker">&#8203;</span>
     </div>
   </div>
 
