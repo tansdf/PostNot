@@ -33,16 +33,17 @@
   let updateResult = $state<UpdateCheckResult | null>(null);
   let updateCheckedAt = $state<string | null>(null);
   let updateErrorText = $state("");
-  let isCheckingUpdates = $state(false);
-  let isInstallingUpdate = $state(false);
+  let updatePhase = $state<"idle" | "checking" | "installing">("idle");
 
   const currentVersion = __APP_VERSION__;
+  const isCheckingUpdates = $derived(updatePhase === "checking");
+  const isInstallingUpdate = $derived(updatePhase === "installing");
   const updatesStatusText = $derived.by(() => {
-    if (isCheckingUpdates) {
+    if (updatePhase === "checking") {
       return "Checking GitHub Releases for a newer signed build...";
     }
 
-    if (isInstallingUpdate) {
+    if (updatePhase === "installing") {
       return "Downloading and applying the available update...";
     }
 
@@ -76,6 +77,25 @@
   });
 
   onMount(loadSettings);
+
+  function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string) {
+    return new Promise<T>((resolve, reject) => {
+      const timeoutId = window.setTimeout(() => {
+        reject(new Error(message));
+      }, timeoutMs);
+
+      promise.then(
+        (value) => {
+          window.clearTimeout(timeoutId);
+          resolve(value);
+        },
+        (error) => {
+          window.clearTimeout(timeoutId);
+          reject(error);
+        }
+      );
+    });
+  }
 
   async function loadSettings() {
     isLoading = true;
@@ -111,23 +131,30 @@
   }
 
   async function handleCheckForUpdates() {
-    isCheckingUpdates = true;
+    updatePhase = "checking";
     updateErrorText = "";
+    updateResult = null;
 
     try {
-      updateResult = await checkForUpdates();
-      updateCheckedAt = new Date().toISOString();
+      const result = await withTimeout(
+        checkForUpdates(),
+        30_000,
+        "Update check timed out. Please try again."
+      );
 
-      if (updateResult.update) {
-        notifications.success(`Version ${updateResult.update.version} is available.`, "Update found");
+      updateResult = result;
+      updateCheckedAt = new Date().toISOString();
+      updatePhase = "idle";
+
+      if (result.update) {
+        notifications.success(`Version ${result.update.version} is available.`, "Update found");
       } else {
         notifications.info(`No newer signed release is available than v${currentVersion}.`, "No update found");
       }
     } catch (error) {
       updateErrorText = error instanceof Error ? error.message : String(error);
+      updatePhase = "idle";
       notifications.error(updateErrorText, "Update check failed");
-    } finally {
-      isCheckingUpdates = false;
     }
   }
 
@@ -136,19 +163,28 @@
       return;
     }
 
-    isInstallingUpdate = true;
+    const targetVersion = updateResult.update.version;
+    updatePhase = "installing";
     updateErrorText = "";
 
     try {
       notifications.info(
-        `Installing v${updateResult.update.version}. PostNot will restart if the platform keeps the app open after install.`,
+        `Installing v${targetVersion}. PostNot should close when the installer takes over.`,
         "Applying update"
       );
       await installUpdate();
+
+      updateResult = null;
+      updateCheckedAt = new Date().toISOString();
+      notifications.success(
+        `The update installer for v${targetVersion} has been handed off. If PostNot is still open, you can close it and let the installer finish.`,
+        "Installer started"
+      );
     } catch (error) {
       updateErrorText = error instanceof Error ? error.message : String(error);
       notifications.error(updateErrorText, "Update install failed");
-      isInstallingUpdate = false;
+    } finally {
+      updatePhase = "idle";
     }
   }
 </script>
@@ -249,16 +285,18 @@
             {/if}
           </div>
 
-          <div class="settings-inline-actions">
-            <button
-              class="send-button"
-              type="button"
-              disabled={!updateResult?.update || isCheckingUpdates || isInstallingUpdate}
-              onclick={handleInstallUpdate}
-            >
-              {isInstallingUpdate ? "Installing..." : "Install update"}
-            </button>
-          </div>
+          {#if updateResult?.update}
+            <div class="settings-inline-actions">
+              <button
+                class="send-button"
+                type="button"
+                disabled={isCheckingUpdates || isInstallingUpdate}
+                onclick={handleInstallUpdate}
+              >
+                {isInstallingUpdate ? "Installing..." : "Install update"}
+              </button>
+            </div>
+          {/if}
         </section>
 
         <section class="settings-section-card">

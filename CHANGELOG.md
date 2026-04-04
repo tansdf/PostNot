@@ -6,6 +6,13 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-04-05
+
+### Fixed
+
+- The Settings updater card now uses one explicit UI phase for idle, checking, and installing states, preventing `Checking...` from getting stuck while update availability text is already shown.
+- The `Install update` action is now rendered only when a newer version has actually been found, instead of appearing in a permanently disabled state before any check completes.
+
 ## [0.9.2] - 2026-04-05
 
 ### Changed
