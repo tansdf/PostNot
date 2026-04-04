@@ -80,6 +80,10 @@ cargo check --manifest-path src-tauri/Cargo.toml
 - Signed release artifacts are published through GitHub Releases.
 - The in-app updater currently checks the latest stable GitHub Release.
 
+## License
+
+PostNot is licensed under the [Apache License 2.0](LICENSE).
+
 ## For Contributors And Agents
 
 - Implementation and workspace guidance now lives in [AGENTS.md](AGENTS.md).
