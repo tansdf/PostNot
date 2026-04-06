@@ -22,6 +22,12 @@
     value: string;
   };
 
+  type FieldHistoryEntry = {
+    value: string;
+    selectionStart: number;
+    selectionEnd: number;
+  };
+
   let {
     value = "",
     variables = [],
@@ -68,6 +74,9 @@
   let hasMeasuredSuggestionPosition = $state(false);
   let blurTimeout: ReturnType<typeof setTimeout> | null = $state(null);
   let mirrorBeforeText = $state(" ");
+  let historyEntries = $state<FieldHistoryEntry[]>([]);
+  let historyIndex = $state(-1);
+  let isApplyingHistory = $state(false);
 
   const variablePattern = /{{\s*(\$[A-Za-z0-9_.-]+(?:\[\d+\])?|[A-Za-z0-9_.-]+)\s*}}/g;
   const dynamicVariableOptions: VariableOption[] = [
@@ -99,6 +108,31 @@
     getUsedVariables(value, availableVariables, dynamicVariableOptions)
   );
   let hasHighlightOverlay = $derived(highlightTokens.length > 0);
+
+  $effect(() => {
+    if (isApplyingHistory) {
+      isApplyingHistory = false;
+      return;
+    }
+
+    if (historyIndex === -1) {
+      resetHistory(value);
+      return;
+    }
+
+    if (historyEntries[historyIndex]?.value === value) {
+      return;
+    }
+
+    const isFocused =
+      typeof document !== "undefined" && fieldElement !== null && document.activeElement === fieldElement;
+
+    if (isFocused) {
+      pushHistoryEntry(value);
+    } else {
+      resetHistory(value);
+    }
+  });
 
   $effect(() => {
     if (!hasHighlightOverlay || !fieldElement || !highlightOverlayElement) {
@@ -245,6 +279,71 @@
   function updateValue(nextValue: string) {
     value = nextValue;
     onValueInput(nextValue);
+    pushHistoryEntry(nextValue);
+  }
+
+  function createHistoryEntry(nextValue: string): FieldHistoryEntry {
+    const selectionStart = fieldElement?.selectionStart ?? nextValue.length;
+    const selectionEnd = fieldElement?.selectionEnd ?? selectionStart;
+
+    return {
+      value: nextValue,
+      selectionStart,
+      selectionEnd
+    };
+  }
+
+  function resetHistory(nextValue: string) {
+    historyEntries = [createHistoryEntry(nextValue)];
+    historyIndex = 0;
+  }
+
+  function pushHistoryEntry(nextValue: string) {
+    const nextEntry = createHistoryEntry(nextValue);
+    const currentEntry = historyEntries[historyIndex];
+
+    if (
+      currentEntry &&
+      currentEntry.value === nextEntry.value &&
+      currentEntry.selectionStart === nextEntry.selectionStart &&
+      currentEntry.selectionEnd === nextEntry.selectionEnd
+    ) {
+      return;
+    }
+
+    const nextEntries = [...historyEntries.slice(0, historyIndex + 1), nextEntry].slice(-200);
+    historyEntries = nextEntries;
+    historyIndex = nextEntries.length - 1;
+  }
+
+  function applyHistoryEntry(nextIndex: number) {
+    const nextEntry = historyEntries[nextIndex];
+    if (!nextEntry) {
+      return;
+    }
+
+    historyIndex = nextIndex;
+    isApplyingHistory = true;
+    value = nextEntry.value;
+    onValueInput(nextEntry.value);
+
+    requestAnimationFrame(() => {
+      fieldElement?.focus();
+      fieldElement?.setSelectionRange(nextEntry.selectionStart, nextEntry.selectionEnd);
+      updateAutocompleteState();
+    });
+  }
+
+  function isUndoShortcut(event: KeyboardEvent) {
+    return (event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "z";
+  }
+
+  function isRedoShortcut(event: KeyboardEvent) {
+    const key = event.key.toLowerCase();
+    return (
+      ((event.ctrlKey || event.metaKey) && key === "y") ||
+      ((event.ctrlKey || event.metaKey) && event.shiftKey && key === "z")
+    );
   }
 
   function getTokenContext(fieldValue: string, cursor: number) {
@@ -397,7 +496,7 @@
 
   function handleInput(event: Event) {
     const target = event.currentTarget as HTMLInputElement | HTMLTextAreaElement;
-    onValueInput(target.value);
+    updateValue(target.value);
     updateAutocompleteState();
   }
 
@@ -418,6 +517,22 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
+    if (isUndoShortcut(event)) {
+      if (historyIndex > 0) {
+        event.preventDefault();
+        applyHistoryEntry(historyIndex - 1);
+      }
+      return;
+    }
+
+    if (isRedoShortcut(event)) {
+      if (historyIndex < historyEntries.length - 1) {
+        event.preventDefault();
+        applyHistoryEntry(historyIndex + 1);
+      }
+      return;
+    }
+
     if (isSuggestionsOpen && filteredVariables.length) {
       clampSuggestionIndex();
       if (event.key === "ArrowDown") {
