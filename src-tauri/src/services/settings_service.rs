@@ -9,6 +9,7 @@ const FOLLOW_REDIRECTS_KEY: &str = "follow_redirects";
 const VALIDATE_TLS_KEY: &str = "validate_tls";
 const HISTORY_LIMIT_KEY: &str = "history_limit";
 const NOTIFICATION_TIMEOUT_MS_KEY: &str = "notification_timeout_ms";
+const LAST_UPDATE_CHECKED_AT_KEY: &str = "last_update_checked_at";
 const DEFAULT_UI_SCALE: f64 = 1.0;
 const MIN_UI_SCALE: f64 = 0.6;
 const MAX_UI_SCALE: f64 = 1.5;
@@ -24,6 +25,7 @@ pub fn default_settings() -> AppSettings {
         validate_tls: true,
         history_limit: 200,
         notification_timeout_ms: 5_000,
+        last_update_checked_at: None,
     }
 }
 
@@ -65,6 +67,9 @@ pub async fn get_settings(pool: &SqlitePool) -> AppResult<AppSettings> {
                 settings.notification_timeout_ms =
                     normalize_notification_timeout_ms(serde_json::from_str(&value_json)?)
             }
+            LAST_UPDATE_CHECKED_AT_KEY => {
+                settings.last_update_checked_at = serde_json::from_str(&value_json)?
+            }
             _ => {}
         }
     }
@@ -73,13 +78,23 @@ pub async fn get_settings(pool: &SqlitePool) -> AppResult<AppSettings> {
 }
 
 pub async fn save_settings(pool: &SqlitePool, settings: &AppSettings) -> AppResult<()> {
-    let settings = normalize_settings(settings);
+    let mut settings = normalize_settings(settings);
+    settings.last_update_checked_at = get_settings(pool).await?.last_update_checked_at;
 
     for (key, value_json) in serialize_settings(&settings)? {
         upsert_setting(pool, key, &value_json).await?;
     }
 
     Ok(())
+}
+
+pub async fn save_last_update_checked_at(pool: &SqlitePool, checked_at: &str) -> AppResult<()> {
+    upsert_setting(
+        pool,
+        LAST_UPDATE_CHECKED_AT_KEY,
+        &serde_json::to_string(&Some(checked_at.to_string()))?,
+    )
+    .await
 }
 
 pub async fn history_limit(pool: &SqlitePool) -> AppResult<u32> {
@@ -109,6 +124,10 @@ fn serialize_settings(settings: &AppSettings) -> AppResult<Vec<(&'static str, St
         (
             NOTIFICATION_TIMEOUT_MS_KEY,
             serde_json::to_string(&settings.notification_timeout_ms)?,
+        ),
+        (
+            LAST_UPDATE_CHECKED_AT_KEY,
+            serde_json::to_string(&settings.last_update_checked_at)?,
         ),
     ])
 }

@@ -10,4 +10,5 @@ pub struct AppSettings {
     pub validate_tls: bool,
     pub history_limit: u32,
     pub notification_timeout_ms: u64,
+    pub last_update_checked_at: Option<String>,
 }

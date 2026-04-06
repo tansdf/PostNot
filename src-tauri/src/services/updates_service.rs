@@ -6,6 +6,7 @@ use crate::{
     app_state::AppState,
     domain::updates::{AvailableUpdate, UpdateCheckResult},
     error::{AppError, AppResult},
+    services::settings_service,
 };
 
 const DEFAULT_UPDATE_ENDPOINT: &str =
@@ -26,6 +27,9 @@ pub async fn check_for_updates(app: &AppHandle, state: &AppState) -> AppResult<U
         .check()
         .await
         .map_err(map_updater_error)?;
+
+    settings_service::save_last_update_checked_at(state.db(), &chrono::Utc::now().to_rfc3339())
+        .await?;
 
     if let Some(update) = update {
         let metadata = AvailableUpdate {

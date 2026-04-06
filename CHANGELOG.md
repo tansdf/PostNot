@@ -6,6 +6,20 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-04-07
+
+### Added
+
+- PostNot now performs a silent update check when the app opens, and the sidebar version pill shows a small upward indicator when a newer signed release is ready to install.
+
+### Changed
+
+- The Settings updates card now uses the shared updater state, so if a startup check already found a release it opens directly in the ready-to-install state instead of waiting for another manual check.
+
+### Fixed
+
+- The updater's `Last checked` timestamp is now persisted in app settings after successful checks instead of resetting every time the app restarts.
+
 ## [0.10.1] - 2026-04-06
 
 ### Fixed

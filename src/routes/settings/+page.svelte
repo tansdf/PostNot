@@ -1,9 +1,10 @@
 <script lang="ts">
   import { onMount } from "svelte";
 
-  import { checkForUpdates, getSettings, installUpdate, updateSettings } from "$lib/api/commands";
-  import { createDefaultSettings, type AppSettings, type AvailableUpdate } from "$lib/api/types";
+  import { getSettings, updateSettings } from "$lib/api/commands";
+  import { createDefaultSettings, type AppSettings } from "$lib/api/types";
   import { notifications } from "$lib/stores/notifications.svelte";
+  import { updater } from "$lib/stores/updater.svelte";
   import { applyTheme, applyUiScale } from "$lib/theme";
 
   const uiScaleOptions = [
@@ -30,79 +31,54 @@
   let isLoading = $state(true);
   let isSaving = $state(false);
   let errorText = $state("");
-  let availableUpdate = $state<AvailableUpdate | null>(null);
-  let isUpdaterConfigured = $state<boolean | null>(null);
-  let updateCheckedAt = $state<string | null>(null);
-  let updateErrorText = $state("");
-  let updatePhase = $state<"idle" | "checking" | "installing">("idle");
 
   const currentVersion = __APP_VERSION__;
-  const isCheckingUpdates = $derived(updatePhase === "checking");
-  const isInstallingUpdate = $derived(updatePhase === "installing");
   const updatesStatusText = $derived.by(() => {
-    if (updatePhase === "checking") {
+    if (updater.phase === "checking") {
       return "Checking GitHub Releases for a newer signed build...";
     }
 
-    if (updatePhase === "installing") {
+    if (updater.phase === "installing") {
       return "Downloading and applying the available update...";
     }
 
-    if (updateErrorText) {
-      return updateErrorText;
+    if (updater.errorText) {
+      return updater.errorText;
     }
 
-    if (isUpdaterConfigured === null) {
+    if (updater.configured === null) {
       return "Check manually whenever you want to look for a newer desktop build.";
     }
 
-    if (!isUpdaterConfigured) {
+    if (!updater.configured) {
       return "Updater support is not configured for this build yet.";
     }
 
-    if (availableUpdate) {
-      return `Version ${availableUpdate.version} is available and ready to install.`;
+    if (updater.availableUpdate) {
+      return `Version ${updater.availableUpdate.version} is available and ready to install.`;
     }
 
     return `You're already on the latest signed release (${currentVersion}).`;
   });
   const checkedAtLabel = $derived.by(() => {
-    if (!updateCheckedAt) {
+    if (!updater.lastCheckedAt) {
       return "";
     }
 
     return new Intl.DateTimeFormat(undefined, {
       dateStyle: "medium",
       timeStyle: "short"
-    }).format(new Date(updateCheckedAt));
+    }).format(new Date(updater.lastCheckedAt));
   });
 
   onMount(loadSettings);
-
-  function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string) {
-    return new Promise<T>((resolve, reject) => {
-      const timeoutId = window.setTimeout(() => {
-        reject(new Error(message));
-      }, timeoutMs);
-
-      promise.then(
-        (value) => {
-          window.clearTimeout(timeoutId);
-          resolve(value);
-        },
-        (error) => {
-          window.clearTimeout(timeoutId);
-          reject(error);
-        }
-      );
-    });
-  }
 
   async function loadSettings() {
     isLoading = true;
 
     try {
       settings = await getSettings();
+      await updater.initialize();
       applyTheme(settings.theme);
       applyUiScale(settings.uiScale);
       notifications.setDefaultDuration(settings.notificationTimeoutMs);
@@ -128,64 +104,6 @@
       errorText = error instanceof Error ? error.message : String(error);
     } finally {
       isSaving = false;
-    }
-  }
-
-  async function handleCheckForUpdates() {
-    updatePhase = "checking";
-    updateErrorText = "";
-
-    try {
-      const result = await withTimeout(
-        checkForUpdates(),
-        30_000,
-        "Update check timed out. Please try again."
-      );
-
-      isUpdaterConfigured = result.configured;
-      availableUpdate = result.update;
-      updateCheckedAt = new Date().toISOString();
-      updatePhase = "idle";
-
-      if (result.update) {
-        notifications.success(`Version ${result.update.version} is available.`, "Update found");
-      } else {
-        notifications.info(`No newer signed release is available than v${currentVersion}.`, "No update found");
-      }
-    } catch (error) {
-      updateErrorText = error instanceof Error ? error.message : String(error);
-      updatePhase = "idle";
-      notifications.error(updateErrorText, "Update check failed");
-    }
-  }
-
-  async function handleInstallUpdate() {
-    if (!availableUpdate) {
-      return;
-    }
-
-    const targetVersion = availableUpdate.version;
-    updatePhase = "installing";
-    updateErrorText = "";
-
-    try {
-      notifications.info(
-        `Installing v${targetVersion}. PostNot should close when the installer takes over.`,
-        "Applying update"
-      );
-      await installUpdate();
-
-      availableUpdate = null;
-      updateCheckedAt = new Date().toISOString();
-      notifications.success(
-        `The update installer for v${targetVersion} has been handed off. If PostNot is still open, you can close it and let the installer finish.`,
-        "Installer started"
-      );
-    } catch (error) {
-      updateErrorText = error instanceof Error ? error.message : String(error);
-      notifications.error(updateErrorText, "Update install failed");
-    } finally {
-      updatePhase = "idle";
     }
   }
 </script>
@@ -243,10 +161,10 @@
             <button
               class="system-button"
               type="button"
-              disabled={isLoading || isCheckingUpdates || isInstallingUpdate}
-              onclick={handleCheckForUpdates}
+              disabled={isLoading || updater.isChecking || updater.isInstalling}
+              onclick={() => updater.checkManually()}
             >
-              {isCheckingUpdates ? "Checking..." : "Check now"}
+              {updater.isChecking ? "Checking..." : "Check now"}
             </button>
           </div>
 
@@ -263,38 +181,38 @@
           </div>
 
           <div class="settings-updates-summary">
-            {#if updateErrorText}
+            {#if updater.errorText}
               <div class="settings-update-feedback settings-update-feedback-error">
                 <strong>Update check failed</strong>
-                <p>{updateErrorText}</p>
+                <p>{updater.errorText}</p>
               </div>
             {:else}
               <p>{updatesStatusText}</p>
             {/if}
 
-            {#if availableUpdate}
+            {#if updater.availableUpdate}
               <div class="settings-update-meta">
-                <strong>Available: v{availableUpdate.version}</strong>
-                {#if availableUpdate.date}
-                  <span>Published {new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(availableUpdate.date))}</span>
+                <strong>Available: v{updater.availableUpdate.version}</strong>
+                {#if updater.availableUpdate.date}
+                  <span>Published {new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(updater.availableUpdate.date))}</span>
                 {/if}
               </div>
 
-              {#if availableUpdate.body}
-                <pre class="history-preview settings-update-notes">{availableUpdate.body}</pre>
+              {#if updater.availableUpdate.body}
+                <pre class="history-preview settings-update-notes">{updater.availableUpdate.body}</pre>
               {/if}
             {/if}
           </div>
 
-          {#if availableUpdate}
+          {#if updater.availableUpdate}
             <div class="settings-inline-actions">
               <button
                 class="send-button"
                 type="button"
-                disabled={isCheckingUpdates || isInstallingUpdate}
-                onclick={handleInstallUpdate}
+                disabled={updater.isChecking || updater.isInstalling}
+                onclick={() => updater.installAvailableUpdate()}
               >
-                {isInstallingUpdate ? "Installing..." : "Install update"}
+                {updater.isInstalling ? "Installing..." : "Install update"}
               </button>
             </div>
           {/if}

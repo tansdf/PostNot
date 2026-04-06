@@ -7,6 +7,7 @@
   import { applyTheme, applyUiScale, watchSystemTheme } from "$lib/theme";
   import AppShell from "$lib/components/layout/AppShell.svelte";
   import { notifications } from "$lib/stores/notifications.svelte";
+  import { updater } from "$lib/stores/updater.svelte";
 
   let { children }: { children?: Snippet } = $props();
 
@@ -40,6 +41,7 @@
         themePreference = settings.theme;
         applyUiScale(settings.uiScale);
         notifications.setDefaultDuration(settings.notificationTimeoutMs);
+        await updater.initialize();
       } catch {
         themePreference = "system";
         applyUiScale(1);
@@ -50,6 +52,7 @@
     };
 
     void loadTheme();
+    void updater.ensureSilentCheck();
 
     return () => {
       unlistenHistoryPersistence?.();

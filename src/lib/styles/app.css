@@ -164,6 +164,23 @@ button:disabled {
   color: rgba(248, 243, 231, 0.6);
   vertical-align: top;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.version-pill-update-ready {
+  background: color-mix(in srgb, var(--bg-accent) 24%, rgba(248, 243, 231, 0.12));
+  color: color-mix(in srgb, white 80%, var(--bg-accent));
+}
+
+.version-pill-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.74rem;
+  line-height: 1;
+  color: var(--bg-accent);
 }
 
 .brand-block p {

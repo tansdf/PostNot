@@ -76,6 +76,7 @@ export type AppSettings = {
   validateTls: boolean;
   historyLimit: number;
   notificationTimeoutMs: number;
+  lastUpdateCheckedAt: string | null;
 };
 
 export type AvailableUpdate = {
@@ -275,6 +276,7 @@ export function createDefaultSettings(): AppSettings {
     followRedirects: true,
     validateTls: true,
     historyLimit: 200,
-    notificationTimeoutMs: 5_000
+    notificationTimeoutMs: 5_000,
+    lastUpdateCheckedAt: null
   };
 }
