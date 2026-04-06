@@ -7,6 +7,7 @@
     key: string;
     value: string;
     isSecret: boolean;
+    isDynamic?: boolean;
   };
 
   type UsedVariable = {
@@ -14,6 +15,11 @@
     value: string | null;
     isResolved: boolean;
     tooltip: string;
+  };
+
+  type HighlightToken = {
+    type: string;
+    value: string;
   };
 
   let {
@@ -27,7 +33,9 @@
     spellcheck = true,
     multiline = false,
     disabled = false,
-    onExtraKeydown = undefined
+    onExtraKeydown = undefined,
+    highlightTokens = [],
+    highlightOverlayClassName = ""
   }: {
     value?: string;
     variables?: EnvironmentVariable[];
@@ -40,9 +48,12 @@
     multiline?: boolean;
     disabled?: boolean;
     onExtraKeydown?: ((event: KeyboardEvent) => void) | undefined;
+    highlightTokens?: HighlightToken[];
+    highlightOverlayClassName?: string;
   } = $props();
 
   let fieldElement: HTMLInputElement | HTMLTextAreaElement | null = $state(null);
+  let highlightOverlayElement: HTMLPreElement | null = $state(null);
   let mirrorElement: HTMLDivElement | null = $state(null);
   let mirrorTextElement: HTMLSpanElement | null = $state(null);
   let mirrorCaretElement: HTMLSpanElement | null = $state(null);
@@ -58,11 +69,58 @@
   let blurTimeout: ReturnType<typeof setTimeout> | null = $state(null);
   let mirrorBeforeText = $state(" ");
 
-  const variablePattern = /{{\s*([A-Za-z0-9_.-]+)\s*}}/g;
+  const variablePattern = /{{\s*(\$[A-Za-z0-9_.-]+(?:\[\d+\])?|[A-Za-z0-9_.-]+)\s*}}/g;
+  const dynamicVariableOptions: VariableOption[] = [
+    { key: "$guid", value: "dynamic UUID v4", isSecret: false, isDynamic: true },
+    { key: "$randomUUID", value: "dynamic UUID v4", isSecret: false, isDynamic: true },
+    { key: "$timestamp", value: "current Unix timestamp", isSecret: false, isDynamic: true },
+    { key: "$isoTimestamp", value: "current ISO 8601 timestamp", isSecret: false, isDynamic: true },
+    { key: "$randomAlphaNumeric", value: "random alphanumeric value", isSecret: false, isDynamic: true },
+    { key: "$randomBoolean", value: "random boolean", isSecret: false, isDynamic: true },
+    { key: "$randomInt", value: "random integer", isSecret: false, isDynamic: true },
+    { key: "$randomColor", value: "random color name", isSecret: false, isDynamic: true },
+    { key: "$randomHexColor", value: "random hex color", isSecret: false, isDynamic: true },
+    { key: "$randomAbbreviation", value: "random uppercase abbreviation", isSecret: false, isDynamic: true },
+    { key: "$randomIP", value: "random IPv4 address", isSecret: false, isDynamic: true },
+    { key: "$randomIPV6", value: "random IPv6 address", isSecret: false, isDynamic: true },
+    { key: "$randomMACAddress", value: "random MAC address", isSecret: false, isDynamic: true },
+    { key: "$randomPassword", value: "random password", isSecret: false, isDynamic: true },
+    { key: "$randomLocale", value: "random locale", isSecret: false, isDynamic: true },
+    { key: "$randomUserAgent", value: "random user agent", isSecret: false, isDynamic: true },
+    { key: "$randomProtocol", value: "random protocol", isSecret: false, isDynamic: true },
+    { key: "$randomSemver", value: "random semantic version", isSecret: false, isDynamic: true }
+  ];
 
   let availableVariables = $derived(getAvailableVariables(variables));
-  let filteredVariables = $derived(getFilteredVariables(availableVariables, currentQuery));
-  let usedVariables = $derived(getUsedVariables(value, availableVariables));
+  let filteredVariables = $derived(
+    getFilteredVariables(availableVariables, dynamicVariableOptions, currentQuery)
+  );
+  let usedVariables = $derived(
+    getUsedVariables(value, availableVariables, dynamicVariableOptions)
+  );
+  let hasHighlightOverlay = $derived(highlightTokens.length > 0);
+
+  $effect(() => {
+    if (!hasHighlightOverlay || !fieldElement || !highlightOverlayElement) {
+      return;
+    }
+
+    const activeFieldElement = fieldElement;
+
+    const syncScroll = () => {
+      if (!highlightOverlayElement) {
+        return;
+      }
+
+      highlightOverlayElement.scrollTop = activeFieldElement.scrollTop;
+      highlightOverlayElement.scrollLeft = activeFieldElement.scrollLeft;
+    };
+
+    syncScroll();
+    activeFieldElement.addEventListener("scroll", syncScroll);
+
+    return () => activeFieldElement.removeEventListener("scroll", syncScroll);
+  });
 
   function clampSuggestionIndex() {
     if (!filteredVariables.length) {
@@ -94,16 +152,30 @@
       });
   }
 
-  function getFilteredVariables(rows: VariableOption[], query: string) {
-    if (!query.trim()) {
+  function getFilteredVariables(
+    rows: VariableOption[],
+    dynamicRows: VariableOption[],
+    query: string
+  ) {
+    const normalizedQuery = query.trim().toLowerCase();
+
+    if (!normalizedQuery) {
       return rows;
     }
 
-    const normalizedQuery = query.trim().toLowerCase();
+    if (normalizedQuery.startsWith("$")) {
+      const dynamicQuery = normalizedQuery.replace(/\[\d*$/, "");
+      return dynamicRows.filter((row) => row.key.toLowerCase().includes(dynamicQuery));
+    }
+
     return rows.filter((row) => row.key.toLowerCase().includes(normalizedQuery));
   }
 
-  function getUsedVariables(fieldValue: string, rows: VariableOption[]): UsedVariable[] {
+  function getUsedVariables(
+    fieldValue: string,
+    rows: VariableOption[],
+    dynamicRows: VariableOption[]
+  ): UsedVariable[] {
     const variableLookup = new Map(rows.map((row) => [row.key, row]));
     const seen: Record<string, true> = {};
     const result: UsedVariable[] = [];
@@ -129,6 +201,18 @@
             : `${key}: ${resolvedValue || "(empty value)"}`
         });
       } else {
+        const dynamicTooltip = describeDynamicVariable(key, dynamicRows);
+
+        if (dynamicTooltip) {
+          result.push({
+            key,
+            value: null,
+            isResolved: true,
+            tooltip: `${key}: ${dynamicTooltip}`
+          });
+          continue;
+        }
+
         result.push({
           key,
           value: null,
@@ -139,6 +223,23 @@
     }
 
     return result;
+  }
+
+  function describeDynamicVariable(key: string, rows: VariableOption[]) {
+    const normalizedKey = key.trim();
+
+    const builtInMatch = rows.find((row) => row.key === normalizedKey);
+    if (builtInMatch) {
+      return builtInMatch.value;
+    }
+
+    const randomAlphaNumericMatch = normalizedKey.match(/^\$randomAlphaNumeric\[(\d+)\]$/);
+    if (randomAlphaNumericMatch) {
+      const length = Number(randomAlphaNumericMatch[1]);
+      return `random alphanumeric value (${length} ${length === 1 ? "character" : "characters"})`;
+    }
+
+    return null;
   }
 
   function updateValue(nextValue: string) {
@@ -182,7 +283,7 @@
   }
 
   function updateAutocompleteState() {
-    if (!fieldElement || !availableVariables.length) {
+    if (!fieldElement) {
       closeSuggestions();
       return;
     }
@@ -296,7 +397,7 @@
 
   function handleInput(event: Event) {
     const target = event.currentTarget as HTMLInputElement | HTMLTextAreaElement;
-    updateValue(target.value);
+    onValueInput(target.value);
     updateAutocompleteState();
   }
 
@@ -353,16 +454,61 @@
   }
 
   function getFieldClasses() {
-    return [className, usedVariables.length ? "variable-aware-active" : ""].filter(Boolean).join(" ");
+    return [
+      className,
+      usedVariables.length ? "variable-aware-active" : "",
+      hasHighlightOverlay && "variable-input-highlighted"
+    ].filter(Boolean).join(" ");
   }
 
   function getSuggestionStyle() {
     return `left: ${suggestionLeft}px; top: ${suggestionTop}px;`;
   }
+
+  function getHighlightOverlayClasses() {
+    return [
+      "variable-highlight-overlay",
+      multiline ? "variable-highlight-overlay-multiline" : "variable-highlight-overlay-singleline",
+      highlightOverlayClassName
+    ].filter(Boolean).join(" ");
+  }
+
+  function getHighlightTokenClass(type: string) {
+    switch (type) {
+      case "key":
+        return "jt-key";
+      case "string":
+        return "jt-string";
+      case "number":
+        return "jt-number";
+      case "bool":
+        return "jt-bool";
+      case "null":
+        return "jt-null";
+      case "bracket":
+        return "jt-bracket";
+      case "colon":
+        return "jt-colon";
+      case "comma":
+        return "jt-comma";
+      case "variable":
+        return "jt-variable";
+      default:
+        return "";
+    }
+  }
 </script>
 
 <div class="variable-field">
   <div class="variable-input-shell">
+    {#if hasHighlightOverlay}
+      <pre
+        class={getHighlightOverlayClasses()}
+        aria-hidden="true"
+        bind:this={highlightOverlayElement}
+      >{#each highlightTokens as token, index (index)}{#if getHighlightTokenClass(token.type)}<span class={getHighlightTokenClass(token.type)}>{token.value}</span>{:else}{token.value}{/if}{/each}</pre>
+    {/if}
+
     {#if multiline}
       <textarea
         bind:this={fieldElement}
@@ -371,7 +517,7 @@
         {placeholder}
         {spellcheck}
         {disabled}
-        value={value}
+        bind:value={value}
         onblur={handleBlur}
         onclick={handleCursorMovement}
         onfocus={handleFocus}
@@ -388,7 +534,7 @@
         {spellcheck}
         {disabled}
         {type}
-        value={value}
+        bind:value={value}
         onblur={handleBlur}
         onclick={handleCursorMovement}
         onfocus={handleFocus}

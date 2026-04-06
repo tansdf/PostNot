@@ -12,23 +12,6 @@
   } from "$lib/api/types";
   import VariableField from "$lib/components/request/VariableField.svelte";
 
-  let jsonEditorShellElement: HTMLDivElement | null = $state(null);
-  let jsonOverlayElement: HTMLPreElement | null = $state(null);
-
-  $effect(() => {
-    if (request.body.mode !== "json" || !jsonEditorShellElement || !jsonOverlayElement) return;
-    const textarea = jsonEditorShellElement.querySelector<HTMLTextAreaElement>("textarea");
-    if (!textarea) return;
-    const handler = () => {
-      if (jsonOverlayElement) {
-        jsonOverlayElement.scrollTop = textarea.scrollTop;
-        jsonOverlayElement.scrollLeft = textarea.scrollLeft;
-      }
-    };
-    textarea.addEventListener("scroll", handler);
-    return () => textarea.removeEventListener("scroll", handler);
-  });
-
   let {
     request = $bindable(),
     isSending = false,
@@ -216,12 +199,51 @@
     }
   }
 
-  type JsonToken = { type: string; value: string };
+  type HighlightToken = { type: string; value: string };
 
-  function tokenizeJson(json: string): JsonToken[] {
-    const tokens: JsonToken[] = [];
+  const variableTokenPattern = /{{\s*(?:\$[A-Za-z0-9_.-]+(?:\[\d+\])?|[A-Za-z0-9_.-]+)\s*}}/g;
+
+  function matchVariableToken(source: string, start: number) {
+    return source.slice(start).match(/^{{\s*(?:\$[A-Za-z0-9_.-]+(?:\[\d+\])?|[A-Za-z0-9_.-]+)\s*}}/)?.[0] ?? null;
+  }
+
+  function pushVariableAwareText(tokens: HighlightToken[], value: string, baseType: HighlightToken["type"]) {
+    if (!value) {
+      return;
+    }
+
+    let lastIndex = 0;
+
+    for (const match of value.matchAll(variableTokenPattern)) {
+      const index = match.index ?? 0;
+
+      if (index > lastIndex) {
+        tokens.push({ type: baseType, value: value.slice(lastIndex, index) });
+      }
+
+      tokens.push({ type: "variable", value: match[0] });
+      lastIndex = index + match[0].length;
+    }
+
+    if (lastIndex < value.length) {
+      tokens.push({ type: baseType, value: value.slice(lastIndex) });
+    } else if (lastIndex === 0) {
+      tokens.push({ type: baseType, value });
+    }
+  }
+
+  function tokenizeJson(json: string): HighlightToken[] {
+    const tokens: HighlightToken[] = [];
     let i = 0;
     while (i < json.length) {
+      const variableToken = matchVariableToken(json, i);
+
+      if (variableToken) {
+        tokens.push({ type: "variable", value: variableToken });
+        i += variableToken.length;
+        continue;
+      }
+
       const ch = json[i];
       if (ch === '"') {
         const start = i;
@@ -231,7 +253,7 @@
         const raw = json.slice(start, i);
         let j = i;
         while (j < json.length && (json[j] === ' ' || json[j] === '\t')) j++;
-        tokens.push({ type: json[j] === ':' ? "key" : "string", value: raw });
+        pushVariableAwareText(tokens, raw, json[j] === ':' ? "key" : "string");
         continue;
       }
       if (ch === '-' || (ch >= '0' && ch <= '9')) {
@@ -240,8 +262,8 @@
         tokens.push({ type: "number", value: json.slice(start, i) });
         continue;
       }
-      if (json.startsWith("true", i)) { tokens.push({ type: "boolean", value: "true" }); i += 4; continue; }
-      if (json.startsWith("false", i)) { tokens.push({ type: "boolean", value: "false" }); i += 5; continue; }
+      if (json.startsWith("true", i)) { tokens.push({ type: "bool", value: "true" }); i += 4; continue; }
+      if (json.startsWith("false", i)) { tokens.push({ type: "bool", value: "false" }); i += 5; continue; }
       if (json.startsWith("null", i)) { tokens.push({ type: "null", value: "null" }); i += 4; continue; }
       if ('{}[]'.includes(ch)) { tokens.push({ type: "bracket", value: ch }); i++; continue; }
       if (ch === ':') { tokens.push({ type: "colon", value: ": " }); i++; if (json[i] === ' ') i++; continue; }
@@ -262,6 +284,13 @@
   let jsonTokens = $derived(
     request.body.mode === "json" ? tokenizeJson(request.body.raw) : []
   );
+  let urlTokens = $derived(pushUrlTokens(displayUrl));
+
+  function pushUrlTokens(url: string) {
+    const tokens: HighlightToken[] = [];
+    pushVariableAwareText(tokens, url, "text");
+    return tokens;
+  }
 
   function handleJsonKeydown(event: KeyboardEvent) {
     if (request.body.mode !== "json") return;
@@ -477,6 +506,7 @@
         className="text-input url-input"
         value={displayUrl}
         variables={environmentVariables}
+        highlightTokens={urlTokens}
         placeholder="https://api.example.com/resource"
         spellcheck={false}
         onValueInput={syncUrlInput}
@@ -599,18 +629,14 @@
       {/if}
 
       {#if request.body.mode === "json"}
-        <div class="json-editor-shell" bind:this={jsonEditorShellElement} onfocusout={validateJsonOnBlur} onfocusin={() => { jsonValidationError = ""; }}>
-          <pre
-            class="json-editor-overlay"
-            aria-hidden="true"
-            bind:this={jsonOverlayElement}
-          >{#each jsonTokens as token, i (i)}{#if token.type === "key"}<span class="jt-key">{token.value}</span>{:else if token.type === "string"}<span class="jt-string">{token.value}</span>{:else if token.type === "number"}<span class="jt-number">{token.value}</span>{:else if token.type === "boolean"}<span class="jt-bool">{token.value}</span>{:else if token.type === "null"}<span class="jt-null">{token.value}</span>{:else if token.type === "bracket"}<span class="jt-bracket">{token.value}</span>{:else if token.type === "colon"}<span class="jt-colon">{token.value}</span>{:else if token.type === "comma"}<span class="jt-comma">{token.value}</span>{:else}{token.value}{/if}{/each}
-</pre>
+        <div class="json-editor-shell" onfocusout={validateJsonOnBlur} onfocusin={() => { jsonValidationError = ""; }}>
           <VariableField
             className="body-textarea json-editor-textarea"
             multiline={true}
             value={request.body.raw}
             variables={environmentVariables}
+            highlightTokens={jsonTokens}
+            highlightOverlayClassName="json-editor-overlay"
             placeholder={'{"hello":"world"}'}
             onValueInput={(nextValue) => updateBodyField("raw", nextValue)}
             onExtraKeydown={handleJsonKeydown}

@@ -3,7 +3,7 @@ use std::{
     sync::Arc,
 };
 
-use chrono::Utc;
+use chrono::{SecondsFormat, Utc};
 use sqlx::{Row, SqlitePool};
 use uuid::Uuid;
 
@@ -31,6 +31,12 @@ struct EnvironmentRecord {
 struct VariableValue {
     value: String,
     is_secret: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct DynamicVariableCall<'a> {
+    name: &'a str,
+    argument: Option<usize>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -783,6 +789,189 @@ fn build_variable_map(
         .unwrap_or_default()
 }
 
+fn parse_dynamic_variable(key: &str) -> Option<DynamicVariableCall<'_>> {
+    let trimmed = key.trim();
+
+    if !trimmed.starts_with('$') {
+        return None;
+    }
+
+    let Some(bracket_start) = trimmed.find('[') else {
+        return Some(DynamicVariableCall {
+            name: trimmed,
+            argument: None,
+        });
+    };
+
+    if !trimmed.ends_with(']') {
+        return None;
+    }
+
+    let name = &trimmed[..bracket_start];
+    let argument = trimmed[bracket_start + 1..trimmed.len() - 1]
+        .parse::<usize>()
+        .ok()?;
+
+    Some(DynamicVariableCall {
+        name,
+        argument: Some(argument),
+    })
+}
+
+fn random_u32() -> u32 {
+    let bytes = Uuid::new_v4().into_bytes();
+    u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]])
+}
+
+fn random_u16() -> u16 {
+    let bytes = Uuid::new_v4().into_bytes();
+    u16::from_le_bytes([bytes[0], bytes[1]])
+}
+
+fn random_byte() -> u8 {
+    Uuid::new_v4().into_bytes()[0]
+}
+
+fn random_choice<'a>(items: &'a [&'a str]) -> &'a str {
+    let index = (random_u32() as usize) % items.len();
+    items[index]
+}
+
+fn random_alphanumeric(length: usize) -> String {
+    const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+
+    let mut output = String::with_capacity(length);
+
+    while output.len() < length {
+        for byte in Uuid::new_v4().into_bytes() {
+            if output.len() == length {
+                break;
+            }
+
+            output.push(CHARSET[(byte as usize) % CHARSET.len()] as char);
+        }
+    }
+
+    output
+}
+
+fn random_hex_color() -> String {
+    format!("#{:06x}", random_u32() % 0x0100_0000)
+}
+
+fn random_abbreviation() -> String {
+    let length = 3 + (random_byte() as usize % 3);
+    let mut output = String::with_capacity(length);
+
+    while output.len() < length {
+        for byte in Uuid::new_v4().into_bytes() {
+            if output.len() == length {
+                break;
+            }
+
+            output.push((b'A' + (byte % 26)) as char);
+        }
+    }
+
+    output
+}
+
+fn random_ipv4() -> String {
+    let bytes = Uuid::new_v4().into_bytes();
+    format!("{}.{}.{}.{}", bytes[0], bytes[1], bytes[2], bytes[3])
+}
+
+fn random_ipv6() -> String {
+    let bytes = Uuid::new_v4().into_bytes();
+    bytes
+        .chunks_exact(2)
+        .map(|chunk| format!("{:02x}{:02x}", chunk[0], chunk[1]))
+        .collect::<Vec<_>>()
+        .join(":")
+}
+
+fn random_mac_address() -> String {
+    let bytes = Uuid::new_v4().into_bytes();
+    bytes[..6]
+        .iter()
+        .map(|byte| format!("{:02x}", byte))
+        .collect::<Vec<_>>()
+        .join(":")
+}
+
+fn random_password() -> String {
+    const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
+
+    let mut output = String::with_capacity(15);
+
+    while output.len() < 15 {
+        for byte in Uuid::new_v4().into_bytes() {
+            if output.len() == 15 {
+                break;
+            }
+
+            output.push(CHARSET[(byte as usize) % CHARSET.len()] as char);
+        }
+    }
+
+    output
+}
+
+fn resolve_dynamic_variable(key: &str) -> Option<String> {
+    const COLORS: &[&str] = &[
+        "red", "orange", "amber", "yellow", "lime", "green", "emerald", "teal", "cyan", "blue",
+        "indigo", "violet", "pink",
+    ];
+    const LOCALES: &[&str] = &[
+        "en", "en_US", "en_GB", "de", "es", "fr", "it", "ja", "ko", "nl", "pl", "pt_BR",
+        "ru", "sv", "tr", "zh_CN",
+    ];
+    const USER_AGENTS: &[&str] = &[
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0",
+    ];
+    const PROTOCOLS: &[&str] = &["http", "https"];
+
+    let parsed = parse_dynamic_variable(key)?;
+
+    match parsed.name {
+        "$guid" | "$randomUUID" if parsed.argument.is_none() => {
+            Some(Uuid::new_v4().to_string())
+        }
+        "$timestamp" if parsed.argument.is_none() => Some(Utc::now().timestamp().to_string()),
+        "$isoTimestamp" if parsed.argument.is_none() => Some(
+            Utc::now()
+                .to_rfc3339_opts(SecondsFormat::Millis, true),
+        ),
+        "$randomAlphaNumeric" => Some(random_alphanumeric(parsed.argument.unwrap_or(1))),
+        "$randomBoolean" if parsed.argument.is_none() => Some((random_byte() % 2 == 0).to_string()),
+        "$randomInt" if parsed.argument.is_none() => Some((random_u32() % 1001).to_string()),
+        "$randomColor" if parsed.argument.is_none() => Some(random_choice(COLORS).to_string()),
+        "$randomHexColor" if parsed.argument.is_none() => Some(random_hex_color()),
+        "$randomAbbreviation" if parsed.argument.is_none() => Some(random_abbreviation()),
+        "$randomIP" if parsed.argument.is_none() => Some(random_ipv4()),
+        "$randomIPV6" if parsed.argument.is_none() => Some(random_ipv6()),
+        "$randomMACAddress" if parsed.argument.is_none() => Some(random_mac_address()),
+        "$randomPassword" if parsed.argument.is_none() => Some(random_password()),
+        "$randomLocale" if parsed.argument.is_none() => Some(random_choice(LOCALES).to_string()),
+        "$randomUserAgent" if parsed.argument.is_none() => {
+            Some(random_choice(USER_AGENTS).to_string())
+        }
+        "$randomProtocol" if parsed.argument.is_none() => {
+            Some(random_choice(PROTOCOLS).to_string())
+        }
+        "$randomSemver" if parsed.argument.is_none() => Some(format!(
+            "{}.{}.{}",
+            random_u16() % 10,
+            random_u16() % 10,
+            random_u16() % 10
+        )),
+        _ => None,
+    }
+}
+
 fn resolve_string(input: &str, variables: &HashMap<String, VariableValue>) -> (String, bool) {
     let mut resolved = String::with_capacity(input.len());
     let mut rest = input;
@@ -804,16 +993,15 @@ fn resolve_string(input: &str, variables: &HashMap<String, VariableValue>) -> (S
 
         let key = after_start[..end].trim();
 
-        match variables.get(key) {
-            Some(value) => {
-                resolved.push_str(&value.value);
-                used_secret |= value.is_secret;
-            }
-            None => {
-                resolved.push_str("{{");
-                resolved.push_str(&after_start[..end]);
-                resolved.push_str("}}");
-            }
+        if let Some(value) = resolve_dynamic_variable(key) {
+            resolved.push_str(&value);
+        } else if let Some(value) = variables.get(key) {
+            resolved.push_str(&value.value);
+            used_secret |= value.is_secret;
+        } else {
+            resolved.push_str("{{");
+            resolved.push_str(&after_start[..end]);
+            resolved.push_str("}}");
         }
 
         rest = &after_start[end + 2..];
@@ -828,9 +1016,10 @@ fn now_iso() -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use std::{collections::HashMap, sync::Arc};
 
     use sqlx::SqlitePool;
+    use uuid::Uuid;
 
     use crate::{
         domain::{
@@ -961,6 +1150,84 @@ mod tests {
     }
 
     #[test]
+    fn resolve_string_supports_dynamic_variables() {
+        let variables = HashMap::new();
+
+        let (single_char, used_secret) =
+            environments_service::resolve_string("{{$randomAlphaNumeric}}", &variables);
+        assert!(!used_secret);
+        assert_eq!(single_char.len(), 1);
+        assert!(single_char.chars().all(|ch| ch.is_ascii_alphanumeric()));
+
+        let (four_chars, _) =
+            environments_service::resolve_string("{{$randomAlphaNumeric[4]}}", &variables);
+        assert_eq!(four_chars.len(), 4);
+        assert!(four_chars.chars().all(|ch| ch.is_ascii_alphanumeric()));
+
+        let (guid, _) = environments_service::resolve_string("{{$guid}}", &variables);
+        assert!(Uuid::parse_str(&guid).is_ok());
+
+        let (random_uuid, _) =
+            environments_service::resolve_string("{{$randomUUID}}", &variables);
+        assert!(Uuid::parse_str(&random_uuid).is_ok());
+
+        let (timestamp, _) = environments_service::resolve_string("{{$timestamp}}", &variables);
+        assert!(timestamp.parse::<i64>().is_ok());
+
+        let (iso_timestamp, _) =
+            environments_service::resolve_string("{{$isoTimestamp}}", &variables);
+        assert!(chrono::DateTime::parse_from_rfc3339(&iso_timestamp).is_ok());
+
+        let (random_boolean, _) =
+            environments_service::resolve_string("{{$randomBoolean}}", &variables);
+        assert!(matches!(random_boolean.as_str(), "true" | "false"));
+
+        let (random_int, _) = environments_service::resolve_string("{{$randomInt}}", &variables);
+        let parsed_random_int = random_int.parse::<u16>().expect("random integer");
+        assert!(parsed_random_int <= 1000);
+
+        let (random_hex_color, _) =
+            environments_service::resolve_string("{{$randomHexColor}}", &variables);
+        assert_eq!(random_hex_color.len(), 7);
+        assert!(random_hex_color.starts_with('#'));
+        assert!(random_hex_color[1..].chars().all(|ch| ch.is_ascii_hexdigit()));
+
+        let (random_ip, _) = environments_service::resolve_string("{{$randomIP}}", &variables);
+        let ipv4_parts: Vec<&str> = random_ip.split('.').collect();
+        assert_eq!(ipv4_parts.len(), 4);
+        assert!(ipv4_parts
+            .iter()
+            .all(|part| part.parse::<u8>().is_ok()));
+
+        let (random_ipv6, _) = environments_service::resolve_string("{{$randomIPV6}}", &variables);
+        let ipv6_parts: Vec<&str> = random_ipv6.split(':').collect();
+        assert_eq!(ipv6_parts.len(), 8);
+        assert!(ipv6_parts
+            .iter()
+            .all(|part| part.len() == 4 && part.chars().all(|ch| ch.is_ascii_hexdigit())));
+
+        let (random_mac, _) =
+            environments_service::resolve_string("{{$randomMACAddress}}", &variables);
+        let mac_parts: Vec<&str> = random_mac.split(':').collect();
+        assert_eq!(mac_parts.len(), 6);
+        assert!(mac_parts
+            .iter()
+            .all(|part| part.len() == 2 && part.chars().all(|ch| ch.is_ascii_hexdigit())));
+
+        let (random_protocol, _) =
+            environments_service::resolve_string("{{$randomProtocol}}", &variables);
+        assert!(matches!(random_protocol.as_str(), "http" | "https"));
+
+        let (random_semver, _) =
+            environments_service::resolve_string("{{$randomSemver}}", &variables);
+        let semver_parts: Vec<&str> = random_semver.split('.').collect();
+        assert_eq!(semver_parts.len(), 3);
+        assert!(semver_parts
+            .iter()
+            .all(|part| part.parse::<u16>().is_ok()));
+    }
+
+    #[test]
     fn resolve_request_tracks_secret_usage_and_redacts_history_snapshot() {
         let payload = SendRequestPayload {
             name: "Call {{token}}".to_string(),
@@ -1058,5 +1325,69 @@ mod tests {
             history_snapshot.auth.bearer_token,
             payload.auth.bearer_token
         );
+    }
+
+    #[test]
+    fn resolve_request_keeps_dynamic_variables_non_secret_in_history_snapshot() {
+        let payload = SendRequestPayload {
+            name: "Dynamic request".to_string(),
+            method: "GET".to_string(),
+            url: "https://api.example.com/items/{{$randomAlphaNumeric[4]}}".to_string(),
+            query_params: vec![KeyValueRow {
+                id: "query-1".to_string(),
+                key: "nonce".to_string(),
+                value: "{{$randomInt}}".to_string(),
+                enabled: true,
+            }],
+            headers: vec![KeyValueRow {
+                id: "header-1".to_string(),
+                key: "X-Request-Id".to_string(),
+                value: "{{$guid}}".to_string(),
+                enabled: true,
+            }],
+            body: RequestBody {
+                mode: "json".to_string(),
+                raw: r#"{"nonce":"{{$randomAlphaNumeric[8]}}"}"#.to_string(),
+                form: vec![],
+                files: vec![],
+            },
+            auth: RequestAuth {
+                auth_type: "none".to_string(),
+                basic_username: String::new(),
+                basic_password: String::new(),
+                bearer_token: String::new(),
+                api_key_name: String::new(),
+                api_key_value: String::new(),
+                api_key_in: "header".to_string(),
+            },
+        };
+
+        let resolved = environments_service::resolve_request(&payload, None);
+
+        assert!(!resolved.secret_usage.url);
+        assert!(!resolved.secret_usage.query_param_ids.contains("query-1"));
+        assert!(!resolved.secret_usage.header_ids.contains("header-1"));
+        assert!(!resolved.secret_usage.body_raw);
+        assert_ne!(resolved.payload.url, payload.url);
+        assert_ne!(resolved.payload.query_params[0].value, payload.query_params[0].value);
+        assert_ne!(resolved.payload.headers[0].value, payload.headers[0].value);
+        assert_ne!(resolved.payload.body.raw, payload.body.raw);
+
+        let history_snapshot = environments_service::redact_secret_history_payload(
+            &payload,
+            &resolved.payload,
+            &resolved.secret_usage,
+        );
+
+        assert_eq!(history_snapshot.url, resolved.payload.url);
+        assert_eq!(
+            history_snapshot.query_params[0].value,
+            resolved.payload.query_params[0].value
+        );
+        assert_eq!(
+            history_snapshot.headers[0].value,
+            resolved.payload.headers[0].value
+        );
+        assert_eq!(history_snapshot.body.raw, resolved.payload.body.raw);
     }
 }

@@ -6,6 +6,12 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+### Added
+
+- Variable-aware token highlighting in the request URL input, matching the overlay-based editor behavior used for the JSON body editor.
+- Dedicated variable token coloring in the JSON body editor so `{{variable}}` placeholders are highlighted separately from normal JSON strings.
+- Postman-style built-in dynamic variables at request runtime, including `$guid`, `$randomUUID`, `$timestamp`, `$isoTimestamp`, `$randomBoolean`, `$randomInt`, common random network/text helpers, and an extended `$randomAlphaNumeric[length]` form for explicit output length.
+
 ## [0.9.3] - 2026-04-05
 
 ### Fixed

@@ -746,6 +746,9 @@ select option {
   box-shadow: 0 14px 28px rgba(0, 0, 0, 0.22);
   width: min(20rem, calc(100vw - 4rem));
   min-width: 14rem;
+  max-height: min(20rem, calc(100vh - 2rem));
+  overflow-y: auto;
+  overscroll-behavior: contain;
   transform: translateY(-100%);
 }
 
@@ -2252,6 +2255,7 @@ select option {
 .jt-number { color: #d08770; }
 .jt-bool { color: #81a1c1; }
 .jt-null { color: #bf616a; font-style: italic; }
+.jt-variable { color: #d7ba7d; font-weight: 600; }
 .jt-bracket { color: var(--text-muted); }
 .jt-colon { color: var(--text-muted); }
 .jt-comma { color: var(--text-muted); }
@@ -2261,25 +2265,13 @@ select option {
 :root[data-theme="light"] .jt-number { color: #b35d2d; }
 :root[data-theme="light"] .jt-bool { color: #3b6ea5; }
 :root[data-theme="light"] .jt-null { color: #a83232; }
+:root[data-theme="light"] .jt-variable { color: #8a5a00; }
 
 .json-editor-shell {
   position: relative;
 }
 
-.json-editor-shell .json-editor-overlay {
-  border: none !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-}
-
-.json-editor-shell textarea.json-editor-textarea {
-  color: transparent !important;
-  caret-color: var(--text-primary);
-  background: transparent !important;
-  box-shadow: none !important;
-}
-
+.variable-highlight-overlay,
 .json-editor-overlay {
   position: absolute;
   inset: 0;
@@ -2291,11 +2283,39 @@ select option {
   background: transparent;
   white-space: pre-wrap;
   word-wrap: break-word;
-  font-family: var(--font-mono);
+  font-family: inherit;
   font-size: inherit;
   line-height: inherit;
   color: var(--text-primary);
   z-index: 0;
+}
+
+.json-editor-overlay {
+  font-family: var(--font-mono);
+}
+
+.variable-highlight-overlay-singleline {
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.variable-highlight-overlay-multiline {
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.variable-input-highlighted {
+  position: relative;
+  z-index: 1;
+  color: transparent !important;
+  caret-color: var(--text-primary);
+  background: transparent !important;
+}
+
+.json-editor-shell .variable-input-highlighted {
+  box-shadow: none !important;
 }
 
 .json-editor-shell .variable-field {
