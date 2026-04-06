@@ -6,6 +6,12 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-04-06
+
+### Fixed
+
+- The Settings updater card now keeps the available-update details and install action in one explicit UI state, preventing Windows builds from getting stuck showing `Checking...` while the release text says an update is available but the `Install update` button is missing.
+
 ## [0.10.0] - 2026-04-06
 
 ### Added

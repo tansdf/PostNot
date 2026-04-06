@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
 
   import { checkForUpdates, getSettings, installUpdate, updateSettings } from "$lib/api/commands";
-  import { createDefaultSettings, type AppSettings, type UpdateCheckResult } from "$lib/api/types";
+  import { createDefaultSettings, type AppSettings, type AvailableUpdate } from "$lib/api/types";
   import { notifications } from "$lib/stores/notifications.svelte";
   import { applyTheme, applyUiScale } from "$lib/theme";
 
@@ -30,7 +30,8 @@
   let isLoading = $state(true);
   let isSaving = $state(false);
   let errorText = $state("");
-  let updateResult = $state<UpdateCheckResult | null>(null);
+  let availableUpdate = $state<AvailableUpdate | null>(null);
+  let isUpdaterConfigured = $state<boolean | null>(null);
   let updateCheckedAt = $state<string | null>(null);
   let updateErrorText = $state("");
   let updatePhase = $state<"idle" | "checking" | "installing">("idle");
@@ -51,16 +52,16 @@
       return updateErrorText;
     }
 
-    if (!updateResult) {
+    if (isUpdaterConfigured === null) {
       return "Check manually whenever you want to look for a newer desktop build.";
     }
 
-    if (!updateResult.configured) {
+    if (!isUpdaterConfigured) {
       return "Updater support is not configured for this build yet.";
     }
 
-    if (updateResult.update) {
-      return `Version ${updateResult.update.version} is available and ready to install.`;
+    if (availableUpdate) {
+      return `Version ${availableUpdate.version} is available and ready to install.`;
     }
 
     return `You're already on the latest signed release (${currentVersion}).`;
@@ -133,7 +134,6 @@
   async function handleCheckForUpdates() {
     updatePhase = "checking";
     updateErrorText = "";
-    updateResult = null;
 
     try {
       const result = await withTimeout(
@@ -142,7 +142,8 @@
         "Update check timed out. Please try again."
       );
 
-      updateResult = result;
+      isUpdaterConfigured = result.configured;
+      availableUpdate = result.update;
       updateCheckedAt = new Date().toISOString();
       updatePhase = "idle";
 
@@ -159,11 +160,11 @@
   }
 
   async function handleInstallUpdate() {
-    if (!updateResult?.update) {
+    if (!availableUpdate) {
       return;
     }
 
-    const targetVersion = updateResult.update.version;
+    const targetVersion = availableUpdate.version;
     updatePhase = "installing";
     updateErrorText = "";
 
@@ -174,7 +175,7 @@
       );
       await installUpdate();
 
-      updateResult = null;
+      availableUpdate = null;
       updateCheckedAt = new Date().toISOString();
       notifications.success(
         `The update installer for v${targetVersion} has been handed off. If PostNot is still open, you can close it and let the installer finish.`,
@@ -271,21 +272,21 @@
               <p>{updatesStatusText}</p>
             {/if}
 
-            {#if updateResult?.update}
+            {#if availableUpdate}
               <div class="settings-update-meta">
-                <strong>Available: v{updateResult.update.version}</strong>
-                {#if updateResult.update.date}
-                  <span>Published {new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(updateResult.update.date))}</span>
+                <strong>Available: v{availableUpdate.version}</strong>
+                {#if availableUpdate.date}
+                  <span>Published {new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(availableUpdate.date))}</span>
                 {/if}
               </div>
 
-              {#if updateResult.update.body}
-                <pre class="history-preview settings-update-notes">{updateResult.update.body}</pre>
+              {#if availableUpdate.body}
+                <pre class="history-preview settings-update-notes">{availableUpdate.body}</pre>
               {/if}
             {/if}
           </div>
 
-          {#if updateResult?.update}
+          {#if availableUpdate}
             <div class="settings-inline-actions">
               <button
                 class="send-button"
