@@ -31,6 +31,58 @@
   let isLoading = $state(true);
   let isSaving = $state(false);
   let errorText = $state("");
+  type UpdateNoteToken =
+    | { kind: "text"; value: string }
+    | { kind: "strong"; value: string };
+
+  function formatDateTime(value: string | null | undefined) {
+    if (!value) {
+      return "";
+    }
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return "";
+    }
+
+    return new Intl.DateTimeFormat(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short"
+    }).format(parsed);
+  }
+
+  function parseUpdateNotes(body: string | null | undefined): UpdateNoteToken[][] {
+    if (!body) {
+      return [];
+    }
+
+    return body.split(/\r?\n/).map((line) => {
+      const tokens: UpdateNoteToken[] = [];
+      const pattern = /(\*\*[^*]+\*\*)/g;
+      let lastIndex = 0;
+
+      for (const match of line.matchAll(pattern)) {
+        const matched = match[0];
+        const start = match.index ?? 0;
+
+        if (start > lastIndex) {
+          tokens.push({ kind: "text", value: line.slice(lastIndex, start) });
+        }
+
+        if (matched.startsWith("**") && matched.endsWith("**")) {
+          tokens.push({ kind: "strong", value: matched.slice(2, -2) });
+        }
+
+        lastIndex = start + matched.length;
+      }
+
+      if (lastIndex < line.length) {
+        tokens.push({ kind: "text", value: line.slice(lastIndex) });
+      }
+
+      return tokens;
+    });
+  }
 
   const currentVersion = __APP_VERSION__;
   const updatesStatusText = $derived.by(() => {
@@ -68,15 +120,9 @@
     return `${updater.errorText} You can still install v${updater.availableUpdate.version} from the earlier successful check.`;
   });
   const checkedAtLabel = $derived.by(() => {
-    if (!updater.lastCheckedAt) {
-      return "";
-    }
-
-    return new Intl.DateTimeFormat(undefined, {
-      dateStyle: "medium",
-      timeStyle: "short"
-    }).format(new Date(updater.lastCheckedAt));
+    return formatDateTime(updater.lastCheckedAt);
   });
+  const parsedUpdateNotes = $derived.by(() => parseUpdateNotes(updater.availableUpdate?.body));
 
   onMount(loadSettings);
 
@@ -200,8 +246,8 @@
             {#if updater.availableUpdate}
               <div class="settings-update-meta">
                 <strong>Available: v{updater.availableUpdate.version}</strong>
-                {#if updater.availableUpdate.date}
-                  <span>Published {new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(updater.availableUpdate.date))}</span>
+                {#if formatDateTime(updater.availableUpdate.date)}
+                  <span>Published {formatDateTime(updater.availableUpdate.date)}</span>
                 {/if}
               </div>
 
@@ -213,7 +259,23 @@
               {/if}
 
               {#if updater.availableUpdate.body}
-                <pre class="history-preview settings-update-notes">{updater.availableUpdate.body}</pre>
+                <div class="history-preview settings-update-notes settings-update-markdown">
+                  {#each parsedUpdateNotes as line, lineIndex (lineIndex)}
+                    <p class="settings-update-markdown-line">
+                      {#if line.length === 0}
+                        <br />
+                      {:else}
+                        {#each line as token, tokenIndex (tokenIndex)}
+                          {#if token.kind === "text"}
+                            {token.value}
+                          {:else}
+                            <strong>{token.value}</strong>
+                          {/if}
+                        {/each}
+                      {/if}
+                    </p>
+                  {/each}
+                </div>
               {/if}
             {/if}
           </div>

@@ -6,9 +6,12 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.10.3] - 2026-04-07
+
 ### Fixed
 
 - The Settings updater card now keeps the ready-to-install state visible during refreshes and preserves the backend install handoff if a later update check fails.
+- The Settings page no longer fails to open when updater metadata includes an unexpected publish date value.
 
 ## [0.10.2] - 2026-04-07
 

@@ -1303,6 +1303,25 @@ select option {
   max-height: 10.5rem;
 }
 
+.settings-update-markdown {
+  font-family: var(--font-sans);
+  line-height: 1.5;
+}
+
+.settings-update-markdown-line {
+  margin: 0;
+}
+
+.settings-update-markdown a {
+  color: var(--bg-accent);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.settings-update-markdown a:hover {
+  color: var(--bg-accent-strong);
+}
+
 .settings-update-feedback {
   display: grid;
   gap: 4px;
