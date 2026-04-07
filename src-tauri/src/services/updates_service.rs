@@ -15,8 +15,6 @@ const UPDATER_PUBLIC_KEY: &str =
     "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlFM0FDRjNBNTMzRkJERjkKUldUNXZUOVRPczg2bmlUNzdBdlFvS1Z0RHBzc1JyMXgxUDNCclRuVmsvZGVZUCttcEVaTzNySmgK";
 
 pub async fn check_for_updates(app: &AppHandle, state: &AppState) -> AppResult<UpdateCheckResult> {
-    state.clear_pending_update()?;
-
     let update = app
         .updater_builder()
         .pubkey(UPDATER_PUBLIC_KEY)
@@ -46,6 +44,8 @@ pub async fn check_for_updates(app: &AppHandle, state: &AppState) -> AppResult<U
             update: Some(metadata),
         });
     }
+
+    state.clear_pending_update()?;
 
     Ok(UpdateCheckResult {
         configured: true,

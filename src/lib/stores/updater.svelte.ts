@@ -23,6 +23,18 @@ class UpdaterStore {
     return this.phase === "installing";
   }
 
+  get isRefreshInFlight() {
+    return this.phase === "checking" && !!this.availableUpdate;
+  }
+
+  get checkButtonLabel() {
+    if (this.phase !== "checking") {
+      return this.availableUpdate ? "Refresh" : "Check now";
+    }
+
+    return this.availableUpdate ? "Refreshing..." : "Checking...";
+  }
+
   async initialize() {
     if (!browser || this.initialized || this.isBootstrapping) {
       return;

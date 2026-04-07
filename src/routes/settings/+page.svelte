@@ -34,12 +34,16 @@
 
   const currentVersion = __APP_VERSION__;
   const updatesStatusText = $derived.by(() => {
-    if (updater.phase === "checking") {
-      return "Checking GitHub Releases for a newer signed build...";
-    }
-
     if (updater.phase === "installing") {
       return "Downloading and applying the available update...";
+    }
+
+    if (updater.availableUpdate) {
+      return `Version ${updater.availableUpdate.version} is available and ready to install.`;
+    }
+
+    if (updater.phase === "checking") {
+      return "Checking GitHub Releases for a newer signed build...";
     }
 
     if (updater.errorText) {
@@ -54,11 +58,14 @@
       return "Updater support is not configured for this build yet.";
     }
 
-    if (updater.availableUpdate) {
-      return `Version ${updater.availableUpdate.version} is available and ready to install.`;
+    return `You're already on the latest signed release (${currentVersion}).`;
+  });
+  const updatesSecondaryText = $derived.by(() => {
+    if (!updater.errorText || !updater.availableUpdate) {
+      return "";
     }
 
-    return `You're already on the latest signed release (${currentVersion}).`;
+    return `${updater.errorText} You can still install v${updater.availableUpdate.version} from the earlier successful check.`;
   });
   const checkedAtLabel = $derived.by(() => {
     if (!updater.lastCheckedAt) {
@@ -164,7 +171,7 @@
               disabled={isLoading || updater.isChecking || updater.isInstalling}
               onclick={() => updater.checkManually()}
             >
-              {updater.isChecking ? "Checking..." : "Check now"}
+              {updater.checkButtonLabel}
             </button>
           </div>
 
@@ -181,7 +188,7 @@
           </div>
 
           <div class="settings-updates-summary">
-            {#if updater.errorText}
+            {#if updater.errorText && !updater.availableUpdate}
               <div class="settings-update-feedback settings-update-feedback-error">
                 <strong>Update check failed</strong>
                 <p>{updater.errorText}</p>
@@ -197,6 +204,13 @@
                   <span>Published {new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(updater.availableUpdate.date))}</span>
                 {/if}
               </div>
+
+              {#if updatesSecondaryText}
+                <div class="settings-update-feedback">
+                  <strong>Refresh issue</strong>
+                  <p>{updatesSecondaryText}</p>
+                </div>
+              {/if}
 
               {#if updater.availableUpdate.body}
                 <pre class="history-preview settings-update-notes">{updater.availableUpdate.body}</pre>
