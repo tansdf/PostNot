@@ -55,12 +55,14 @@
   let selectedHistoryDetail: HistoryEntryDetail | null = $state(null);
   let activeSavedRequestId = $state("");
   let activeSavedRequestCollectionId = $state("");
+  let activeSavedRequestParentId: string | null = $state(null);
   let isSaveDialogOpen = $state(false);
   let isCurlImportDialogOpen = $state(false);
   let curlImportSource = $state("");
   let isImportingCurl = $state(false);
   let curlImportErrorText = $state("");
   let saveTargetCollectionId = $state("");
+  let saveTargetParentId: string | null = $state(null);
   let lastLoadedSavedRequestId = $state("");
   let isLoadingSavedRequest = $state(false);
 
@@ -258,6 +260,7 @@
       response = null;
       activeSavedRequestId = savedRequest.id;
       activeSavedRequestCollectionId = savedRequest.collectionId;
+      activeSavedRequestParentId = savedRequest.parentId ?? null;
       lastLoadedSavedRequestId = savedRequest.id;
       requestSaveErrorText = "";
       collections.resetError();
@@ -302,6 +305,7 @@
 
     saveTargetCollectionId =
       collections.selectedCollectionId || activeSavedRequestCollectionId || collections.collections[0].id;
+    saveTargetParentId = activeSavedRequestParentId ?? null;
     isSaveDialogOpen = true;
   }
 
@@ -311,7 +315,7 @@
       return;
     }
 
-    const savedRequest = await collections.saveNewRequest(saveTargetCollectionId, request);
+    const savedRequest = await collections.saveNewRequest(saveTargetCollectionId, request, saveTargetParentId);
 
     if (!savedRequest) {
       requestSaveErrorText = collections.errorText;
@@ -320,6 +324,7 @@
 
     activeSavedRequestId = savedRequest.id;
     activeSavedRequestCollectionId = savedRequest.collectionId;
+    activeSavedRequestParentId = savedRequest.parentId ?? null;
     lastLoadedSavedRequestId = savedRequest.id;
     requestSaveErrorText = "";
     isSaveDialogOpen = false;
@@ -334,6 +339,7 @@
   function closeSaveDialog() {
     isSaveDialogOpen = false;
     requestSaveErrorText = "";
+    saveTargetParentId = null;
   }
 
   async function handleNewRequest() {
@@ -342,6 +348,7 @@
     requestSaveErrorText = "";
     activeSavedRequestId = "";
     activeSavedRequestCollectionId = "";
+    activeSavedRequestParentId = null;
     lastLoadedSavedRequestId = "";
     await goto(resolve("/"), {
       replaceState: true,
@@ -379,6 +386,7 @@
       requestSaveErrorText = "";
       activeSavedRequestId = "";
       activeSavedRequestCollectionId = "";
+      activeSavedRequestParentId = null;
       lastLoadedSavedRequestId = "";
       closeCurlImportDialog();
       await goto(resolve("/"), {
@@ -516,7 +524,11 @@
                   type="button"
                   role="option"
                   aria-selected={saveTargetCollectionId === collection.id}
-                  onclick={() => (saveTargetCollectionId = collection.id)}
+                  onclick={async () => {
+                    saveTargetCollectionId = collection.id;
+                    saveTargetParentId = null;
+                    await collections.loadCollectionItems(collection.id);
+                  }}
                 >
                   <strong>{collection.name}</strong>
                   <span>{collection.requestCount} request{collection.requestCount === 1 ? "" : "s"}</span>
@@ -524,6 +536,27 @@
               {/each}
             </div>
           </div>
+
+          {#if saveTargetCollectionId}
+            <div>
+              <span class="field-label">Choose a folder</span>
+              <div class="save-target-list" role="listbox" aria-label="Choose a folder">
+                {#each collections.folderTargets(saveTargetCollectionId) as folderTarget (`${saveTargetCollectionId}-${folderTarget.id ?? "root"}`)}
+                  <button
+                    class={["save-target-button", saveTargetParentId === folderTarget.id && "save-target-active"]}
+                    type="button"
+                    role="option"
+                    aria-selected={saveTargetParentId === folderTarget.id}
+                    onclick={() => (saveTargetParentId = folderTarget.id)}
+                    style={`--tree-depth:${folderTarget.depth};`}
+                  >
+                    <strong>{folderTarget.name}</strong>
+                    <span>{folderTarget.id ? "Folder" : "Top level"}</span>
+                  </button>
+                {/each}
+              </div>
+            </div>
+          {/if}
 
           <div class="collections-page-actions">
             <button class="send-button" type="button" onclick={confirmSaveRequest} disabled={collections.isSavingRequest}>

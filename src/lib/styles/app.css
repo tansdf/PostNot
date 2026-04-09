@@ -814,6 +814,7 @@ select option {
 .save-target-button,
 .collection-select,
 .sidebar-collection-button,
+.sidebar-folder-button,
 .sidebar-request-link,
 .variable-suggestion {
   box-sizing: border-box;
@@ -1111,6 +1112,12 @@ select option {
   gap: 10px;
 }
 
+.sidebar-item-tree,
+.sidebar-folder-group {
+  display: grid;
+  gap: 8px;
+}
+
 .sidebar-collection-stack {
   width: 100%;
   padding-bottom: 12px;
@@ -1131,6 +1138,7 @@ select option {
 }
 
 .sidebar-collection-button,
+.sidebar-folder-button,
 .sidebar-request-link {
   border: 0;
   padding: 0;
@@ -1177,6 +1185,7 @@ select option {
 }
 
 .sidebar-collection-meta,
+.sidebar-folder-button span,
 .sidebar-request-link span {
   color: rgba(248, 243, 231, 0.74);
   font-size: 0.82rem;
@@ -1187,12 +1196,20 @@ select option {
   border-top: 1px solid rgba(248, 243, 231, 0.12);
 }
 
+.sidebar-folder-button,
 .sidebar-request-link {
-  padding: 8px 10px;
+  width: 100%;
+  padding: 8px 10px 8px calc(10px + var(--tree-depth, 0) * 16px);
   border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
+.sidebar-folder-button {
+  display: grid;
+  gap: 4px;
+}
+
+.sidebar-folder-button:hover,
 .sidebar-request-link:hover,
 .sidebar-request-active {
   background: rgba(248, 243, 231, 0.08);
@@ -1442,10 +1459,28 @@ select option {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
-  padding: 14px;
+  padding: 14px 14px 14px calc(14px + var(--tree-depth, 0) * 22px);
   border-radius: var(--radius-md);
   background: var(--surface-subtle);
   border: 1px solid transparent;
+}
+
+.collection-item-tree {
+  display: grid;
+  gap: 10px;
+}
+
+.collection-folder-item {
+  background: color-mix(in srgb, var(--surface-subtle) 78%, var(--control-selected-bg) 22%);
+}
+
+.collection-item-title {
+  display: block;
+}
+
+.collection-item-kind {
+  color: var(--text-secondary);
+  font-weight: 500;
 }
 
 .collection-item-active {
@@ -2009,7 +2044,7 @@ select option {
   border-radius: var(--radius-md);
   background: var(--bg-panel-strong);
   color: var(--text-primary);
-  padding: 12px 14px;
+  padding: 12px 14px 12px calc(14px + var(--tree-depth, 0) * 18px);
   text-align: left;
   display: grid;
   gap: 4px;

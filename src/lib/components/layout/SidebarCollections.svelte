@@ -5,9 +5,14 @@
   import { onMount } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
 
+  import { getCollectionSidebarState, saveCollectionSidebarState } from "$lib/api/commands";
+  import type { CollectionItemSummary } from "$lib/api/types";
   import { collections } from "$lib/stores/collections.svelte";
 
-  let expandedCollectionIds = new SvelteSet<string>();
+  let expandedCollectionIds = $state(new SvelteSet<string>());
+  let expandedFolderIds = $state(new SvelteSet<string>());
+  let hasLoadedSidebarState = $state(false);
+  let isSavingSidebarState = false;
 
   function formatUpdatedAt(value: string) {
     try {
@@ -21,8 +26,78 @@
   }
 
   onMount(() => {
-    void collections.ensureLoaded();
+    void initializeSidebarState();
   });
+
+  async function initializeSidebarState() {
+    await collections.ensureLoaded();
+
+    try {
+      const sidebarState = await getCollectionSidebarState();
+      expandedCollectionIds = new SvelteSet(sidebarState.expandedCollectionIds);
+      expandedFolderIds = new SvelteSet(sidebarState.expandedFolderIds);
+
+      const validExpandedCollectionIds = sidebarState.expandedCollectionIds.filter((collectionId) =>
+        collections.collections.some((collection) => collection.id === collectionId)
+      );
+
+      if (validExpandedCollectionIds.length > 0) {
+        await Promise.all(
+          validExpandedCollectionIds.map((collectionId) => collections.loadCollectionItems(collectionId))
+        );
+      }
+
+      await pruneAndPersistExpandedState();
+    } finally {
+      hasLoadedSidebarState = true;
+    }
+  }
+
+  async function persistSidebarState() {
+    if (!hasLoadedSidebarState || isSavingSidebarState) {
+      return;
+    }
+
+    isSavingSidebarState = true;
+
+    try {
+      await saveCollectionSidebarState({
+        expandedCollectionIds: Array.from(expandedCollectionIds),
+        expandedFolderIds: Array.from(expandedFolderIds)
+      });
+    } finally {
+      isSavingSidebarState = false;
+    }
+  }
+
+  async function pruneAndPersistExpandedState() {
+    const validCollectionIds = new Set(collections.collections.map((collection) => collection.id));
+    const validFolderIds = new Set<string>();
+
+    for (const items of Object.values(collections.collectionItemsByCollection)) {
+      collectFolderIds(items, validFolderIds);
+    }
+
+    let didChange = false;
+
+    for (const collectionId of Array.from(expandedCollectionIds)) {
+      if (!validCollectionIds.has(collectionId)) {
+        expandedCollectionIds.delete(collectionId);
+        didChange = true;
+      }
+    }
+
+    for (const folderId of Array.from(expandedFolderIds)) {
+      if (!validFolderIds.has(folderId)) {
+        expandedFolderIds.delete(folderId);
+        didChange = true;
+      }
+    }
+
+    if (didChange) {
+      await persistSidebarState();
+    }
+  }
 
   async function handleCreateCollection() {
     const collection = await collections.createBlankCollection();
@@ -41,20 +116,54 @@
   async function toggleCollection(collectionId: string) {
     if (expandedCollectionIds.has(collectionId)) {
       expandedCollectionIds.delete(collectionId);
+      await persistSidebarState();
       return;
     }
 
     expandedCollectionIds.add(collectionId);
 
-    if (!(collections.savedRequestsByCollection[collectionId]?.length)) {
-      await collections.loadSavedRequests(collectionId);
+    if (!(collections.collectionItemsByCollection[collectionId]?.length)) {
+      await collections.loadCollectionItems(collectionId);
     }
+
+    await persistSidebarState();
+  }
+
+  async function toggleFolder(folderId: string) {
+    if (expandedFolderIds.has(folderId)) {
+      expandedFolderIds.delete(folderId);
+      await persistSidebarState();
+      return;
+    }
+
+    expandedFolderIds.add(folderId);
+    await persistSidebarState();
   }
 
   async function openSavedRequest(collectionId: string, itemId: string) {
     await collections.selectCollection(collectionId);
     await goto(resolve(`/?savedRequestId=${encodeURIComponent(itemId)}`));
   }
+
+  function collectFolderIds(items: CollectionItemSummary[], target: Set<string>) {
+    for (const item of items) {
+      if (item.kind !== "folder") {
+        continue;
+      }
+
+      target.add(item.id);
+      collectFolderIds(item.children, target);
+    }
+  }
+
+  $effect(() => {
+    void collections.collections;
+    void collections.collectionItemsByCollection;
+
+    if (hasLoadedSidebarState) {
+      void pruneAndPersistExpandedState();
+    }
+  });
 </script>
 
 <section class="sidebar-section">
@@ -109,21 +218,59 @@
 
             {#if expandedCollectionIds.has(collection.id)}
               <div class="sidebar-request-stack">
-                {#if collections.isSavedRequestsLoading && !(collections.savedRequestsByCollection[collection.id]?.length)}
-                  <span class="sidebar-collection-meta">Loading requests...</span>
-                {:else if (collections.savedRequestsByCollection[collection.id] ?? []).length === 0}
+                {#if collections.isCollectionItemsLoading && !(collections.collectionItemsByCollection[collection.id]?.length)}
+                  <span class="sidebar-collection-meta">Loading items...</span>
+                {:else if (collections.collectionItemsByCollection[collection.id] ?? []).length === 0}
                   <span class="sidebar-collection-meta">No saved requests yet.</span>
                 {:else}
-                  {#each collections.savedRequestsByCollection[collection.id] ?? [] as item (item.id)}
-                    <button
-                      class={["sidebar-request-link", page.url.searchParams.get("savedRequestId") === item.id && "sidebar-request-active"]}
-                      type="button"
-                      onclick={() => openSavedRequest(collection.id, item.id)}
-                    >
-                      <strong class="sidebar-request-name">{#if item.name}{item.name}{:else}<span class={`method-badge method-${item.method.toLowerCase()}`}>{item.method}</span> {item.url}{/if}</strong>
-                      <span class="sidebar-request-url"><span class={`method-badge method-${item.method.toLowerCase()}`}>{item.method}</span> {item.url}</span>
-                    </button>
-                  {/each}
+                  {#snippet renderSidebarItems(items: CollectionItemSummary[], depth: number)}
+                    <div class="sidebar-item-tree">
+                      {#each items as item (item.id)}
+                        {#if item.kind === "folder"}
+                          <div class="sidebar-folder-group">
+                            <button
+                              class="sidebar-folder-button"
+                              type="button"
+                              onclick={() => toggleFolder(item.id)}
+                              aria-expanded={expandedFolderIds.has(item.id)}
+                              style={`--tree-depth:${depth};`}
+                            >
+                              <span class={["sidebar-toggle-icon", expandedFolderIds.has(item.id) && "sidebar-toggle-icon-expanded"]} aria-hidden="true">
+                                &gt;
+                              </span>
+                              <strong>{item.name}</strong>
+                              <span class="sidebar-collection-meta">{item.children.length} item{item.children.length === 1 ? "" : "s"}</span>
+                            </button>
+
+                            {#if expandedFolderIds.has(item.id)}
+                              {@render renderSidebarItems(item.children, depth + 1)}
+                            {/if}
+                          </div>
+                        {:else}
+                          <button
+                            class={["sidebar-request-link", page.url.searchParams.get("savedRequestId") === item.id && "sidebar-request-active"]}
+                            type="button"
+                            onclick={() => openSavedRequest(collection.id, item.id)}
+                            style={`--tree-depth:${depth};`}
+                          >
+                            <strong class="sidebar-request-name">
+                              {#if item.name}
+                                {item.name}
+                              {:else}
+                                <span class={`method-badge method-${item.method?.toLowerCase() ?? "get"}`}>{item.method ?? "GET"}</span> {item.url ?? ""}
+                              {/if}
+                            </strong>
+                            <span class="sidebar-request-url">
+                              <span class={`method-badge method-${item.method?.toLowerCase() ?? "get"}`}>{item.method ?? "GET"}</span>
+                              {item.url ?? ""}
+                            </span>
+                          </button>
+                        {/if}
+                      {/each}
+                    </div>
+                  {/snippet}
+
+                  {@render renderSidebarItems(collections.collectionItemsByCollection[collection.id] ?? [], 0)}
                 {/if}
               </div>
             {/if}

@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::{
     domain::{
-        collections::CreateCollectionInput,
+        collections::{CreateCollectionFolderInput, CreateCollectionInput},
         environments::{
             EnvironmentInput, EnvironmentVariable, ImportEnvironmentInput, ImportEnvironmentResult,
         },
@@ -307,57 +307,71 @@ async fn import_postman_collection(pool: &SqlitePool, source: &str) -> AppResult
     )
     .await?;
 
-    let mut requests = Vec::new();
-    collect_postman_requests(&collection.item, &mut Vec::new(), &mut requests)?;
+    let imported_request_count =
+        import_postman_items(pool, &created_collection.id, None, &collection.item).await?;
 
-    if requests.is_empty() {
+    if imported_request_count == 0 {
         return Err(AppError::Message(
             "No requests were found in this Postman collection.".to_string(),
         ));
     }
 
-    for request in &requests {
-        collections_service::save_request(pool, &created_collection.id, request).await?;
-    }
-
     Ok(ImportResult {
         collection_id: created_collection.id,
         collection_name: created_collection.name,
-        imported_request_count: requests.len(),
+        imported_request_count,
         created_collection: true,
     })
 }
 
-fn collect_postman_requests(
+async fn import_postman_items(
+    pool: &SqlitePool,
+    collection_id: &str,
+    parent_id: Option<&str>,
     items: &[PostmanItem],
-    path: &mut Vec<String>,
-    requests: &mut Vec<SendRequestPayload>,
-) -> AppResult<()> {
-    for item in items {
+) -> AppResult<usize> {
+    let mut imported_request_count = 0usize;
+    let mut stack: Vec<(Option<String>, &PostmanItem)> = items
+        .iter()
+        .rev()
+        .map(|item| (parent_id.map(|value| value.to_string()), item))
+        .collect();
+
+    while let Some((current_parent_id, item)) = stack.pop() {
         if !item.item.is_empty() {
-            if !item.name.trim().is_empty() {
-                path.push(item.name.trim().to_string());
-            }
-            collect_postman_requests(&item.item, path, requests)?;
-            if !item.name.trim().is_empty() {
-                path.pop();
+            let folder = collections_service::create_collection_folder(
+                pool,
+                collection_id,
+                &CreateCollectionFolderInput {
+                    name: normalized_folder_name(&item.name),
+                    parent_id: current_parent_id.clone(),
+                },
+            )
+            .await?;
+
+            for child in item.item.iter().rev() {
+                stack.push((Some(folder.id.clone()), child));
             }
             continue;
         }
 
         if let Some(request) = &item.request {
-            requests.push(map_postman_request(item, request, path)?);
+            let request = map_postman_request(item, request)?;
+            collections_service::save_request(
+                pool,
+                collection_id,
+                current_parent_id.as_deref(),
+                &request,
+            )
+            .await?;
+            imported_request_count += 1;
         }
     }
 
-    Ok(())
+    Ok(imported_request_count)
 }
 
-fn map_postman_request(
-    item: &PostmanItem,
-    request: &PostmanRequest,
-    path: &[String],
-) -> AppResult<SendRequestPayload> {
+fn map_postman_request(item: &PostmanItem, request: &PostmanRequest) -> AppResult<SendRequestPayload> {
     let mut query_params = Vec::new();
     let url = match &request.url {
         PostmanUrl::Text(value) => value.trim().to_string(),
@@ -390,7 +404,7 @@ fn map_postman_request(
 
     let body = map_postman_body(request.body.as_ref());
     let auth = map_postman_auth(request.auth.as_ref());
-    let name = build_imported_request_name(path, &item.name);
+    let name = imported_request_name(&item.name);
 
     Ok(SendRequestPayload {
         name,
@@ -578,7 +592,7 @@ async fn import_curl_request(
             (created.id, created.name, true)
         };
 
-    collections_service::save_request(pool, &collection_id, &request).await?;
+    collections_service::save_request(pool, &collection_id, None, &request).await?;
 
     Ok(ImportResult {
         collection_id,
@@ -712,20 +726,21 @@ fn looks_like_json(value: &str) -> bool {
         || (trimmed.starts_with('[') && trimmed.ends_with(']'))
 }
 
-fn build_imported_request_name(path: &[String], item_name: &str) -> String {
+fn imported_request_name(item_name: &str) -> String {
     let trimmed_name = item_name.trim();
-    if path.is_empty() {
-        return if trimmed_name.is_empty() {
-            "Imported request".to_string()
-        } else {
-            trimmed_name.to_string()
-        };
-    }
-
     if trimmed_name.is_empty() {
-        path.join(" / ")
+        "Imported request".to_string()
     } else {
-        format!("{} / {}", path.join(" / "), trimmed_name)
+        trimmed_name.to_string()
+    }
+}
+
+fn normalized_folder_name(folder_name: &str) -> String {
+    let trimmed_name = folder_name.trim();
+    if trimmed_name.is_empty() {
+        "Imported folder".to_string()
+    } else {
+        trimmed_name.to_string()
     }
 }
 

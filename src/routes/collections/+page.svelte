@@ -3,6 +3,7 @@
   import { resolve } from "$app/paths";
   import { page } from "$app/state";
 
+  import type { CollectionItemSummary } from "$lib/api/types";
   import CollectionsPanel from "$lib/components/collections/CollectionsPanel.svelte";
   import { exportCollection, importRequests } from "$lib/api/commands";
   import { notifications } from "$lib/stores/notifications.svelte";
@@ -62,6 +63,20 @@
     }
   }
 
+  async function handleCreateFolder(parentId?: string) {
+    const collection = collections.selectedCollection;
+    if (!collection) {
+      return;
+    }
+
+    const name = window.prompt(parentId ? "Folder name for the new subfolder:" : "Folder name:", "New folder")?.trim();
+    if (!name) {
+      return;
+    }
+
+    await collections.createFolder(collection.id, name, parentId ?? null);
+  }
+
   async function handleDeleteCollection(collectionId: string) {
     if (!window.confirm("Delete this collection and all saved requests inside it?")) {
       return;
@@ -82,17 +97,22 @@
     await goto(resolve(`/?savedRequestId=${encodeURIComponent(itemId)}`));
   }
 
-  async function handleDeleteSavedRequest(itemId: string) {
+  async function handleDeleteCollectionItem(item: CollectionItemSummary) {
     const collection = collections.selectedCollection;
     if (!collection) {
       return;
     }
 
-    if (!window.confirm("Delete this saved request?")) {
+    const message =
+      item.kind === "folder"
+        ? "Delete this folder and everything inside it?"
+        : "Delete this saved request?";
+
+    if (!window.confirm(message)) {
       return;
     }
 
-    await collections.removeSavedRequestItem(collection.id, itemId);
+    await collections.removeCollectionItem(collection.id, item.id, item.name || "Collection item");
     await collections.loadCollections(collection.id);
   }
 
@@ -173,21 +193,24 @@
 
 <CollectionsPanel
     collection={collections.selectedCollection}
-    savedRequests={collections.selectedSavedRequests}
+    collectionItems={collections.selectedCollectionItems}
     isCollectionsLoading={collections.isCollectionsLoading}
-    isSavedRequestsLoading={collections.isSavedRequestsLoading}
+    isCollectionItemsLoading={collections.isCollectionItemsLoading}
     {isSavingCollection}
+    isCreatingFolder={collections.isCreatingFolder}
     pendingDeleteCollectionId={collections.pendingDeleteCollectionId}
-    pendingDeleteSavedRequestId={collections.pendingDeleteSavedRequestId}
+    pendingDeleteCollectionItemId={collections.pendingDeleteCollectionItemId}
     errorText={collections.errorText}
     {isImporting}
     {isExporting}
     onOpenImport={openImportModal}
+    onCreateRootFolder={() => handleCreateFolder()}
+    onCreateChildFolder={(parentId: string) => handleCreateFolder(parentId)}
     onExportCollection={handleExportCollection}
     onSaveCollection={handleSaveCollection}
     onDeleteCollection={handleDeleteCollection}
     onOpenSavedRequest={handleOpenSavedRequest}
-    onDeleteSavedRequest={handleDeleteSavedRequest}
+    onDeleteCollectionItem={handleDeleteCollectionItem}
   />
 
   {#if isImportModalOpen}

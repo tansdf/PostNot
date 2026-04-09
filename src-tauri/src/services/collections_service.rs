@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use chrono::Utc;
 use sqlx::{Row, SqlitePool};
 use uuid::Uuid;
@@ -5,7 +7,8 @@ use uuid::Uuid;
 use crate::{
     domain::{
         collections::{
-            CollectionSummary, CreateCollectionInput, SavedRequestDetail, SavedRequestSummary,
+            CollectionItemSummary, CollectionSummary, CreateCollectionFolderInput,
+            CreateCollectionInput, SavedRequestDetail, SavedRequestSummary,
         },
         requests::SendRequestPayload,
     },
@@ -35,6 +38,16 @@ pub async fn list_collections(pool: &SqlitePool) -> AppResult<Vec<CollectionSumm
     Ok(rows.into_iter().map(map_collection_summary).collect())
 }
 
+pub async fn list_collection_items(
+    pool: &SqlitePool,
+    collection_id: &str,
+) -> AppResult<Vec<CollectionItemSummary>> {
+    ensure_collection_exists(pool, collection_id).await?;
+
+    let rows = list_collection_item_rows(pool, collection_id).await?;
+    Ok(build_collection_item_tree(rows))
+}
+
 pub async fn create_collection(
     pool: &SqlitePool,
     input: &CreateCollectionInput,
@@ -61,6 +74,46 @@ pub async fn create_collection(
     .await?;
 
     get_collection(pool, &id).await
+}
+
+pub async fn create_collection_folder(
+    pool: &SqlitePool,
+    collection_id: &str,
+    input: &CreateCollectionFolderInput,
+) -> AppResult<CollectionItemSummary> {
+    let name = input.name.trim();
+    if name.is_empty() {
+        return Err(AppError::Message("Folder name is required.".to_string()));
+    }
+
+    ensure_collection_exists(pool, collection_id).await?;
+    validate_parent_folder(pool, collection_id, input.parent_id.as_deref()).await?;
+
+    let item_id = Uuid::new_v4().to_string();
+    let now = now_iso();
+    let sort_order = next_sort_order(pool, collection_id, input.parent_id.as_deref()).await?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO collection_items (
+          id, collection_id, parent_id, kind, name, sort_order, method, url,
+          query_params_json, headers_json, body_json, auth_json,
+          prerequest_script, test_script, created_at, updated_at
+        ) VALUES (?1, ?2, ?3, 'folder', ?4, ?5, NULL, NULL, '[]', '[]', '{}', '{}', '', '', ?6, ?7)
+        "#,
+    )
+    .bind(&item_id)
+    .bind(collection_id)
+    .bind(input.parent_id.as_deref())
+    .bind(name)
+    .bind(sort_order)
+    .bind(&now)
+    .bind(&now)
+    .execute(pool)
+    .await?;
+
+    touch_collection(pool, collection_id).await?;
+    get_collection_item_summary(pool, &item_id).await
 }
 
 pub async fn update_collection(
@@ -107,10 +160,10 @@ pub async fn list_saved_requests(
 ) -> AppResult<Vec<SavedRequestSummary>> {
     let rows = sqlx::query(
         r#"
-        SELECT id, collection_id, name, method, url, updated_at
+        SELECT id, collection_id, parent_id, name, method, url, updated_at
         FROM collection_items
-        WHERE collection_id = ?1 AND kind = 'request' AND parent_id IS NULL
-        ORDER BY sort_order ASC, updated_at DESC
+        WHERE collection_id = ?1 AND kind = 'request'
+        ORDER BY updated_at DESC, name ASC
         "#,
     )
     .bind(collection_id)
@@ -126,10 +179,10 @@ pub async fn list_saved_request_details(
 ) -> AppResult<Vec<SavedRequestDetail>> {
     let rows = sqlx::query(
         r#"
-        SELECT id, collection_id, name, method, url, query_params_json, headers_json, body_json, auth_json, updated_at
+        SELECT id, collection_id, parent_id, name, method, url, query_params_json, headers_json, body_json, auth_json, updated_at
         FROM collection_items
-        WHERE collection_id = ?1 AND kind = 'request' AND parent_id IS NULL
-        ORDER BY sort_order ASC, updated_at DESC
+        WHERE collection_id = ?1 AND kind = 'request'
+        ORDER BY updated_at DESC, name ASC
         "#,
     )
     .bind(collection_id)
@@ -142,27 +195,16 @@ pub async fn list_saved_request_details(
 pub async fn save_request(
     pool: &SqlitePool,
     collection_id: &str,
+    parent_id: Option<&str>,
     request: &SendRequestPayload,
 ) -> AppResult<SavedRequestSummary> {
-    let collection_name: Option<String> =
-        sqlx::query_scalar("SELECT name FROM collections WHERE id = ?1")
-            .bind(collection_id)
-            .fetch_optional(pool)
-            .await?;
-
-    if collection_name.is_none() {
-        return Err(AppError::Message("Collection not found.".to_string()));
-    }
+    ensure_collection_exists(pool, collection_id).await?;
+    validate_parent_folder(pool, collection_id, parent_id).await?;
 
     let item_id = Uuid::new_v4().to_string();
     let item_name = saved_request_name(request);
     let now = now_iso();
-    let sort_order: i64 = sqlx::query_scalar(
-        "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM collection_items WHERE collection_id = ?1 AND parent_id IS NULL",
-    )
-    .bind(collection_id)
-    .fetch_one(pool)
-    .await?;
+    let sort_order = next_sort_order(pool, collection_id, parent_id).await?;
 
     sqlx::query(
         r#"
@@ -170,11 +212,12 @@ pub async fn save_request(
           id, collection_id, parent_id, kind, name, sort_order, method, url,
           query_params_json, headers_json, body_json, auth_json,
           prerequest_script, test_script, created_at, updated_at
-        ) VALUES (?1, ?2, NULL, 'request', ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, '', '', ?11, ?12)
+        ) VALUES (?1, ?2, ?3, 'request', ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, '', '', ?12, ?13)
         "#,
     )
     .bind(&item_id)
     .bind(collection_id)
+    .bind(parent_id)
     .bind(&item_name)
     .bind(sort_order)
     .bind(&request.method)
@@ -244,7 +287,7 @@ pub async fn update_saved_request(
 pub async fn get_saved_request(pool: &SqlitePool, item_id: &str) -> AppResult<SavedRequestDetail> {
     let row = sqlx::query(
         r#"
-        SELECT id, collection_id, name, method, url, query_params_json, headers_json, body_json, auth_json, updated_at
+        SELECT id, collection_id, parent_id, name, method, url, query_params_json, headers_json, body_json, auth_json, updated_at
         FROM collection_items
         WHERE id = ?1 AND kind = 'request'
         "#,
@@ -257,6 +300,7 @@ pub async fn get_saved_request(pool: &SqlitePool, item_id: &str) -> AppResult<Sa
     Ok(SavedRequestDetail {
         id: row.get("id"),
         collection_id: row.get("collection_id"),
+        parent_id: row.get("parent_id"),
         name: row.get("name"),
         updated_at: row.get("updated_at"),
         request: SendRequestPayload {
@@ -271,23 +315,38 @@ pub async fn get_saved_request(pool: &SqlitePool, item_id: &str) -> AppResult<Sa
     })
 }
 
-pub async fn delete_saved_request(pool: &SqlitePool, item_id: &str) -> AppResult<()> {
+pub async fn delete_collection_item(pool: &SqlitePool, item_id: &str) -> AppResult<()> {
     let collection_id: Option<String> =
         sqlx::query_scalar("SELECT collection_id FROM collection_items WHERE id = ?1")
             .bind(item_id)
             .fetch_optional(pool)
             .await?;
 
+    let Some(collection_id) = collection_id else {
+        return Err(AppError::Message("Collection item not found.".to_string()));
+    };
+
     sqlx::query("DELETE FROM collection_items WHERE id = ?1")
         .bind(item_id)
         .execute(pool)
         .await?;
 
-    if let Some(collection_id) = collection_id {
-        touch_collection(pool, &collection_id).await?;
+    touch_collection(pool, &collection_id).await?;
+    Ok(())
+}
+
+pub async fn delete_saved_request(pool: &SqlitePool, item_id: &str) -> AppResult<()> {
+    let exists: Option<String> =
+        sqlx::query_scalar("SELECT id FROM collection_items WHERE id = ?1 AND kind = 'request'")
+            .bind(item_id)
+            .fetch_optional(pool)
+            .await?;
+
+    if exists.is_none() {
+        return Err(AppError::Message("Saved request not found.".to_string()));
     }
 
-    Ok(())
+    delete_collection_item(pool, item_id).await
 }
 
 pub async fn get_collection(
@@ -318,12 +377,77 @@ pub async fn get_collection(
     Ok(map_collection_summary(row))
 }
 
+async fn ensure_collection_exists(pool: &SqlitePool, collection_id: &str) -> AppResult<()> {
+    let exists: Option<String> = sqlx::query_scalar("SELECT id FROM collections WHERE id = ?1")
+        .bind(collection_id)
+        .fetch_optional(pool)
+        .await?;
+
+    if exists.is_none() {
+        return Err(AppError::Message("Collection not found.".to_string()));
+    }
+
+    Ok(())
+}
+
+async fn validate_parent_folder(
+    pool: &SqlitePool,
+    collection_id: &str,
+    parent_id: Option<&str>,
+) -> AppResult<()> {
+    let Some(parent_id) = parent_id else {
+        return Ok(());
+    };
+
+    let row = sqlx::query(
+        "SELECT kind FROM collection_items WHERE id = ?1 AND collection_id = ?2",
+    )
+    .bind(parent_id)
+    .bind(collection_id)
+    .fetch_optional(pool)
+    .await?
+    .ok_or_else(|| AppError::Message("Target folder not found.".to_string()))?;
+
+    let kind: String = row.get("kind");
+    if kind != "folder" {
+        return Err(AppError::Message(
+            "Target parent must be a folder.".to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
+async fn next_sort_order(
+    pool: &SqlitePool,
+    collection_id: &str,
+    parent_id: Option<&str>,
+) -> AppResult<i64> {
+    let sort_order: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COALESCE(MAX(sort_order), -1) + 1
+        FROM collection_items
+        WHERE collection_id = ?1
+          AND (
+            (?2 IS NULL AND parent_id IS NULL)
+            OR parent_id = ?2
+          )
+        "#,
+    )
+    .bind(collection_id)
+    .bind(parent_id)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(sort_order)
+}
+
 async fn get_saved_request_summary(
     pool: &SqlitePool,
     item_id: &str,
 ) -> AppResult<SavedRequestSummary> {
     let row = sqlx::query(
-        "SELECT id, collection_id, name, method, url, updated_at FROM collection_items WHERE id = ?1 AND kind = 'request'",
+        "SELECT id, collection_id, parent_id, name, method, url, updated_at FROM collection_items WHERE id = ?1 AND kind = 'request'",
     )
     .bind(item_id)
     .fetch_optional(pool)
@@ -331,6 +455,121 @@ async fn get_saved_request_summary(
     .ok_or_else(|| AppError::Message("Saved request not found.".to_string()))?;
 
     Ok(map_saved_request_summary(row))
+}
+
+async fn get_collection_item_summary(
+    pool: &SqlitePool,
+    item_id: &str,
+) -> AppResult<CollectionItemSummary> {
+    let row = sqlx::query(
+        r#"
+        SELECT id, collection_id, parent_id, kind, name, method, url, updated_at
+        FROM collection_items
+        WHERE id = ?1
+        "#,
+    )
+    .bind(item_id)
+    .fetch_optional(pool)
+    .await?
+    .ok_or_else(|| AppError::Message("Collection item not found.".to_string()))?;
+
+    Ok(CollectionItemSummary {
+        id: row.get("id"),
+        collection_id: row.get("collection_id"),
+        parent_id: row.get("parent_id"),
+        kind: row.get("kind"),
+        name: row.get("name"),
+        method: row.get("method"),
+        url: row.get("url"),
+        updated_at: row.get("updated_at"),
+        children: Vec::new(),
+    })
+}
+
+async fn list_collection_item_rows(
+    pool: &SqlitePool,
+    collection_id: &str,
+) -> AppResult<Vec<CollectionItemRow>> {
+    let rows = sqlx::query(
+        r#"
+        SELECT id, collection_id, parent_id, kind, name, method, url, updated_at, sort_order
+        FROM collection_items
+        WHERE collection_id = ?1
+        ORDER BY sort_order ASC, updated_at DESC, name ASC
+        "#,
+    )
+    .bind(collection_id)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|row| CollectionItemRow {
+            id: row.get("id"),
+            collection_id: row.get("collection_id"),
+            parent_id: row.get("parent_id"),
+            kind: row.get("kind"),
+            name: row.get("name"),
+            method: row.get("method"),
+            url: row.get("url"),
+            updated_at: row.get("updated_at"),
+            sort_order: row.get("sort_order"),
+        })
+        .collect())
+}
+
+fn build_collection_item_tree(rows: Vec<CollectionItemRow>) -> Vec<CollectionItemSummary> {
+    let mut children_by_parent: HashMap<Option<String>, Vec<CollectionItemRow>> = HashMap::new();
+
+    for row in rows {
+        children_by_parent
+            .entry(row.parent_id.clone())
+            .or_default()
+            .push(row);
+    }
+
+    for children in children_by_parent.values_mut() {
+        children.sort_by(|left, right| {
+            left.sort_order
+                .cmp(&right.sort_order)
+                .then_with(|| right.updated_at.cmp(&left.updated_at))
+                .then_with(|| left.name.cmp(&right.name))
+        });
+    }
+
+    build_collection_item_branch(&mut children_by_parent, None)
+}
+
+fn build_collection_item_branch(
+    children_by_parent: &mut HashMap<Option<String>, Vec<CollectionItemRow>>,
+    parent_id: Option<&str>,
+) -> Vec<CollectionItemSummary> {
+    let key = parent_id.map(|value| value.to_string());
+    let Some(rows) = children_by_parent.remove(&key) else {
+        return Vec::new();
+    };
+
+    rows.into_iter()
+        .map(|row| {
+            let children = if row.kind == "folder" {
+                build_collection_item_branch(children_by_parent, Some(&row.id))
+            } else {
+                Vec::new()
+            };
+
+            CollectionItemSummary {
+                id: row.id,
+                collection_id: row.collection_id,
+                parent_id: row.parent_id,
+                kind: row.kind,
+                name: row.name,
+                method: row.method,
+                url: row.url,
+                updated_at: row.updated_at,
+                children,
+            }
+        })
+        .collect()
 }
 
 async fn touch_collection(pool: &SqlitePool, collection_id: &str) -> AppResult<()> {
@@ -357,6 +596,7 @@ fn map_saved_request_summary(row: sqlx::sqlite::SqliteRow) -> SavedRequestSummar
     SavedRequestSummary {
         id: row.get("id"),
         collection_id: row.get("collection_id"),
+        parent_id: row.get("parent_id"),
         name: row.get("name"),
         method: row.get("method"),
         url: row.get("url"),
@@ -368,6 +608,7 @@ fn map_saved_request_detail(row: sqlx::sqlite::SqliteRow) -> AppResult<SavedRequ
     Ok(SavedRequestDetail {
         id: row.get("id"),
         collection_id: row.get("collection_id"),
+        parent_id: row.get("parent_id"),
         name: row.get("name"),
         updated_at: row.get("updated_at"),
         request: SendRequestPayload {
@@ -393,4 +634,17 @@ fn saved_request_name(request: &SendRequestPayload) -> String {
 
 fn now_iso() -> String {
     Utc::now().to_rfc3339()
+}
+
+#[derive(Debug)]
+struct CollectionItemRow {
+    id: String,
+    collection_id: String,
+    parent_id: Option<String>,
+    kind: String,
+    name: String,
+    method: Option<String>,
+    url: Option<String>,
+    updated_at: String,
+    sort_order: i64,
 }

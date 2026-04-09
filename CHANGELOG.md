@@ -6,6 +6,19 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-04-09
+
+### Added
+
+- Collection folders with nested sidebar and collection-view browsing, including root folders and subfolders for organizing saved requests.
+- Folder-aware request saving so new saved requests can be placed directly at the collection root or inside a chosen folder.
+- Persisted collection sidebar expansion state, so open and closed collections and folders are restored after restarting the app.
+
+### Changed
+
+- Postman collection import now recreates folder structure instead of flattening folder names into saved request titles.
+- Postman collection export now preserves nested folders when writing Collection v2.1 JSON.
+
 ## [0.10.3] - 2026-04-07
 
 ### Fixed

@@ -69,13 +69,13 @@ This section reflects the code currently implemented in the repository.
 - Multipart request composition with native file selection
 - App-level floating notification system for action feedback
 - Settings page wired to backend persistence
+- Signed in-app update checks and install handoff from Settings
 - History panel wired to backend persistence
 - History detail inspection from persisted snapshots
 - Clear history action
 
 ### Not Yet Implemented
 
-- Tauri updater integration
 - Multi-tab workflow
 - Pre-request scripts
 - Test scripts
@@ -105,6 +105,7 @@ Responsibilities:
 - Load and persist settings
 - Persist request history
 - Load environment metadata from SQLite while storing secret environment values in the OS credential store
+- Coordinate signed release checks and install handoff for the Settings updater flow
 - Resolve app data paths
 - Expose a stable Tauri command surface to the UI
 

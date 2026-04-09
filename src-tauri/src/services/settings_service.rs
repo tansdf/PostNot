@@ -1,6 +1,9 @@
 use sqlx::{Row, SqlitePool};
 
-use crate::{domain::settings::AppSettings, error::AppResult};
+use crate::{
+    domain::{collections::CollectionSidebarState, settings::AppSettings},
+    error::AppResult,
+};
 
 const THEME_KEY: &str = "theme";
 const UI_SCALE_KEY: &str = "ui_scale";
@@ -10,6 +13,7 @@ const VALIDATE_TLS_KEY: &str = "validate_tls";
 const HISTORY_LIMIT_KEY: &str = "history_limit";
 const NOTIFICATION_TIMEOUT_MS_KEY: &str = "notification_timeout_ms";
 const LAST_UPDATE_CHECKED_AT_KEY: &str = "last_update_checked_at";
+const COLLECTION_SIDEBAR_STATE_KEY: &str = "collection_sidebar_state";
 const DEFAULT_UI_SCALE: f64 = 1.0;
 const MIN_UI_SCALE: f64 = 0.6;
 const MAX_UI_SCALE: f64 = 1.5;
@@ -93,6 +97,36 @@ pub async fn save_last_update_checked_at(pool: &SqlitePool, checked_at: &str) ->
         pool,
         LAST_UPDATE_CHECKED_AT_KEY,
         &serde_json::to_string(&Some(checked_at.to_string()))?,
+    )
+    .await
+}
+
+pub async fn get_collection_sidebar_state(
+    pool: &SqlitePool,
+) -> AppResult<CollectionSidebarState> {
+    let value_json: Option<String> =
+        sqlx::query_scalar("SELECT value_json FROM app_settings WHERE key = ?1")
+            .bind(COLLECTION_SIDEBAR_STATE_KEY)
+            .fetch_optional(pool)
+            .await?;
+
+    match value_json {
+        Some(value_json) => Ok(serde_json::from_str(&value_json)?),
+        None => Ok(CollectionSidebarState {
+            expanded_collection_ids: Vec::new(),
+            expanded_folder_ids: Vec::new(),
+        }),
+    }
+}
+
+pub async fn save_collection_sidebar_state(
+    pool: &SqlitePool,
+    state: &CollectionSidebarState,
+) -> AppResult<()> {
+    upsert_setting(
+        pool,
+        COLLECTION_SIDEBAR_STATE_KEY,
+        &serde_json::to_string(state)?,
     )
     .await
 }

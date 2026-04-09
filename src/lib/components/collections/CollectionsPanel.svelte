@@ -1,40 +1,46 @@
 <script lang="ts">
-  import type { CollectionSummary, SavedRequestSummary } from "$lib/api/types";
+  import type { CollectionItemSummary, CollectionSummary } from "$lib/api/types";
 
   let {
     collection = null,
-    savedRequests = [],
+    collectionItems = [],
     isCollectionsLoading = false,
-    isSavedRequestsLoading = false,
+    isCollectionItemsLoading = false,
     isSavingCollection = false,
+    isCreatingFolder = false,
     pendingDeleteCollectionId = "",
-    pendingDeleteSavedRequestId = "",
+    pendingDeleteCollectionItemId = "",
     errorText = "",
     isImporting = false,
     isExporting = false,
     onOpenImport = () => {},
+    onCreateRootFolder = () => {},
+    onCreateChildFolder = () => {},
     onExportCollection = () => {},
     onSaveCollection = () => false,
     onDeleteCollection = () => {},
     onOpenSavedRequest = () => {},
-    onDeleteSavedRequest = () => {},
+    onDeleteCollectionItem = () => {},
   }: {
     collection?: CollectionSummary | null;
-    savedRequests?: SavedRequestSummary[];
+    collectionItems?: CollectionItemSummary[];
     isCollectionsLoading?: boolean;
-    isSavedRequestsLoading?: boolean;
+    isCollectionItemsLoading?: boolean;
     isSavingCollection?: boolean;
+    isCreatingFolder?: boolean;
     pendingDeleteCollectionId?: string;
-    pendingDeleteSavedRequestId?: string;
+    pendingDeleteCollectionItemId?: string;
     errorText?: string;
     isImporting?: boolean;
     isExporting?: boolean;
     onOpenImport?: () => Promise<void> | void;
+    onCreateRootFolder?: () => Promise<void> | void;
+    onCreateChildFolder?: (parentId: string) => Promise<void> | void;
     onExportCollection?: () => Promise<void> | void;
     onSaveCollection?: (name: string, description: string) => Promise<boolean> | boolean;
     onDeleteCollection?: (collectionId: string) => Promise<void> | void;
     onOpenSavedRequest?: (itemId: string) => Promise<void> | void;
-    onDeleteSavedRequest?: (itemId: string) => Promise<void> | void;
+    onDeleteCollectionItem?: (item: CollectionItemSummary) => Promise<void> | void;
   } = $props();
 
   let editableCollectionId = $state("");
@@ -84,6 +90,9 @@
       <div class="request-section-title">
         <h1>Collection View</h1>
         <button class="system-button" type="button" onclick={onOpenImport}>Import</button>
+        <button class="system-button" type="button" onclick={onCreateRootFolder} disabled={!collection || isCreatingFolder}>
+          {isCreatingFolder ? "Creating..." : "New folder"}
+        </button>
         <button class="system-button" type="button" onclick={onExportCollection} disabled={!collection || isExporting}>
           {isExporting ? "Exporting..." : "Export"}
         </button>
@@ -150,42 +159,77 @@
 
   <section class="panel collections-page-panel">
     <div class="collections-column-header">
-      <h2>Saved Requests</h2>
+      <h2>Collection Items</h2>
       {#if collection}
-        <span class="history-meta">{isSavedRequestsLoading ? "Refreshing..." : `${savedRequests.length} item${savedRequests.length === 1 ? "" : "s"}`}</span>
+        <span class="history-meta">
+          {isCollectionItemsLoading
+            ? "Refreshing..."
+            : `${collection.requestCount} request${collection.requestCount === 1 ? "" : "s"}`}
+        </span>
       {/if}
     </div>
 
     {#if !collection}
-      <div class="empty-state">Select a collection to inspect its saved requests.</div>
-    {:else if savedRequests.length === 0 && !isSavedRequestsLoading}
-      <div class="empty-state">No saved requests yet. Use the `Save` button in the request editor to add one here.</div>
+      <div class="empty-state">Select a collection to inspect its folders and saved requests.</div>
+    {:else if collectionItems.length === 0 && !isCollectionItemsLoading}
+      <div class="empty-state">No folders or saved requests yet. Use `New folder` or the request editor `Save` flow to start organizing.</div>
     {:else}
-      <div class="collections-list">
-        {#each savedRequests as item (item.id)}
-          <article class="collection-item">
-            <div class="saved-request-meta">
-              <strong>{#if item.name}{item.name}{:else}<span class={`method-badge method-${item.method.toLowerCase()}`}>{item.method}</span> {item.url}{/if}</strong>
-              <span><span class={`method-badge method-${item.method.toLowerCase()}`}>{item.method}</span> {item.url}</span>
-              <span class="history-meta">Updated {formatUpdatedAt(item.updatedAt)}</span>
-            </div>
+      {#snippet renderItems(items: CollectionItemSummary[], depth: number)}
+        <div class="collection-item-tree">
+          {#each items as item (item.id)}
+            <article class={["collection-item", item.kind === "folder" && "collection-folder-item"]} style={`--tree-depth:${depth};`}>
+              <div class="saved-request-meta">
+                <strong class="collection-item-title">
+                  {#if item.kind === "folder"}
+                    <span class="collection-item-kind">Folder</span> {item.name}
+                  {:else}
+                    {#if item.name}
+                      {item.name}
+                    {:else}
+                      <span class={`method-badge method-${item.method?.toLowerCase() ?? "get"}`}>{item.method ?? "GET"}</span> {item.url ?? ""}
+                    {/if}
+                  {/if}
+                </strong>
 
-            <div class="saved-request-actions">
-              <button class="tab-button" type="button" onclick={() => onOpenSavedRequest(item.id)}>
-                Open in Requests
-              </button>
-              <button
-                class="icon-button"
-                type="button"
-                onclick={() => onDeleteSavedRequest(item.id)}
-                disabled={pendingDeleteSavedRequestId === item.id}
-              >
-                {pendingDeleteSavedRequestId === item.id ? "Deleting..." : "Delete"}
-              </button>
-            </div>
-          </article>
-        {/each}
-      </div>
+                {#if item.kind === "folder"}
+                  <span>{item.children.length} item{item.children.length === 1 ? "" : "s"}</span>
+                {:else}
+                  <span><span class={`method-badge method-${item.method?.toLowerCase() ?? "get"}`}>{item.method ?? "GET"}</span> {item.url ?? ""}</span>
+                {/if}
+
+                <span class="history-meta">Updated {formatUpdatedAt(item.updatedAt)}</span>
+              </div>
+
+              <div class="saved-request-actions">
+                {#if item.kind === "folder"}
+                  <button class="tab-button" type="button" onclick={() => onCreateChildFolder(item.id)}>
+                    Add subfolder
+                  </button>
+                {:else}
+                  <button class="tab-button" type="button" onclick={() => onOpenSavedRequest(item.id)}>
+                    Open in Requests
+                  </button>
+                {/if}
+
+                <button
+                  class="icon-button"
+                  type="button"
+                  onclick={() => onDeleteCollectionItem(item)}
+                  disabled={pendingDeleteCollectionItemId === item.id}
+                >
+                  {pendingDeleteCollectionItemId === item.id ? "Deleting..." : "Delete"}
+                </button>
+              </div>
+            </article>
+
+            {#if item.kind === "folder" && item.children.length > 0}
+              {@render renderItems(item.children, depth + 1)}
+            {/if}
+          {/each}
+        </div>
+      {/snippet}
+
+      {@render renderItems(collectionItems, 0)}
     {/if}
   </section>
 </div>

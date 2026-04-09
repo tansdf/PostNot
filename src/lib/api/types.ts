@@ -130,6 +130,28 @@ export type CreateCollectionInput = {
   description: string;
 };
 
+export type CreateCollectionFolderInput = {
+  name: string;
+  parentId?: string | null;
+};
+
+export type CollectionItemSummary = {
+  id: string;
+  collectionId: string;
+  parentId?: string | null;
+  kind: "folder" | "request";
+  name: string;
+  method?: HttpMethod | null;
+  url?: string | null;
+  updatedAt: string;
+  children: CollectionItemSummary[];
+};
+
+export type CollectionSidebarState = {
+  expandedCollectionIds: string[];
+  expandedFolderIds: string[];
+};
+
 export type ImportFormat = "postman" | "curl";
 
 export type ImportRequestInput = {
@@ -156,6 +178,7 @@ export type ImportedRequestDraft = {
 export type SavedRequestSummary = {
   id: string;
   collectionId: string;
+  parentId?: string | null;
   name: string;
   method: HttpMethod;
   url: string;
@@ -165,6 +188,7 @@ export type SavedRequestSummary = {
 export type SavedRequestDetail = {
   id: string;
   collectionId: string;
+  parentId?: string | null;
   name: string;
   updatedAt: string;
   request: RequestDraft;

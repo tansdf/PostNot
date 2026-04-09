@@ -5,7 +5,7 @@ use sqlx::SqlitePool;
 
 use crate::{
     domain::{
-        collections::SavedRequestDetail,
+        collections::{CollectionItemSummary, SavedRequestDetail},
         environments::EnvironmentVariable,
         exports::ExportResult,
         requests::{FileRow, KeyValueRow, RequestAuth, RequestBody},
@@ -19,7 +19,12 @@ pub async fn export_collection(
     collection_id: &str,
 ) -> AppResult<Option<ExportResult>> {
     let collection = collections_service::get_collection(pool, collection_id).await?;
+    let items = collections_service::list_collection_items(pool, collection_id).await?;
     let requests = collections_service::list_saved_request_details(pool, collection_id).await?;
+    let requests_by_id = requests
+        .into_iter()
+        .map(|request| (request.id.clone(), request))
+        .collect();
 
     let payload = PostmanCollectionExport {
         info: PostmanCollectionInfoExport {
@@ -28,7 +33,7 @@ pub async fn export_collection(
             schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
                 .to_string(),
         },
-        item: requests.iter().map(map_saved_request_item).collect(),
+        item: map_collection_items(&items, &requests_by_id)?,
     };
 
     let json = serde_json::to_string_pretty(&payload)?;
@@ -108,10 +113,38 @@ async fn save_json_file(
     .map_err(|error| AppError::Message(error.to_string()))?
 }
 
+fn map_collection_items(
+    items: &[CollectionItemSummary],
+    requests_by_id: &std::collections::HashMap<String, SavedRequestDetail>,
+) -> AppResult<Vec<PostmanCollectionItemExport>> {
+    items.iter()
+        .map(|item| match item.kind.as_str() {
+            "folder" => Ok(PostmanCollectionItemExport {
+                name: item.name.clone(),
+                request: None,
+                item: map_collection_items(&item.children, requests_by_id)?,
+            }),
+            "request" => {
+                let request = requests_by_id.get(&item.id).ok_or_else(|| {
+                    AppError::Message(format!(
+                        "Saved request details were missing for collection item {}.",
+                        item.id
+                    ))
+                })?;
+                Ok(map_saved_request_item(request))
+            }
+            _ => Err(AppError::Message(format!(
+                "Unsupported collection item kind: {}",
+                item.kind
+            ))),
+        })
+        .collect()
+}
+
 fn map_saved_request_item(request: &SavedRequestDetail) -> PostmanCollectionItemExport {
     PostmanCollectionItemExport {
         name: request.name.clone(),
-        request: PostmanRequestExport {
+        request: Some(PostmanRequestExport {
             method: request.request.method.clone(),
             header: request
                 .request
@@ -123,7 +156,8 @@ fn map_saved_request_item(request: &SavedRequestDetail) -> PostmanCollectionItem
             auth: map_auth(&request.request.auth),
             body: map_body(&request.request.body),
             url: map_url(&request.request.url, &request.request.query_params),
-        },
+        }),
+        item: Vec::new(),
     }
 }
 
@@ -374,7 +408,10 @@ struct PostmanCollectionInfoExport {
 #[derive(Debug, Serialize)]
 struct PostmanCollectionItemExport {
     name: String,
-    request: PostmanRequestExport,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    request: Option<PostmanRequestExport>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    item: Vec<PostmanCollectionItemExport>,
 }
 
 #[derive(Debug, Serialize)]

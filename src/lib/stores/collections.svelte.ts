@@ -1,42 +1,66 @@
 import { browser } from "$app/environment";
 import {
   createCollection,
+  createCollectionFolder,
   deleteCollection,
-  deleteSavedRequest,
+  deleteCollectionItem,
+  listCollectionItems,
   listCollections,
-  listSavedRequests,
   saveRequestToCollection,
   updateCollection as updateCollectionCommand,
   updateSavedRequest as updateSavedRequestCommand
 } from "$lib/api/commands";
-import type { CollectionSummary, CreateCollectionInput, RequestDraft, SavedRequestSummary } from "$lib/api/types";
+import type {
+  CollectionItemSummary,
+  CollectionSummary,
+  CreateCollectionInput,
+  RequestDraft
+} from "$lib/api/types";
 import { notifications } from "$lib/stores/notifications.svelte";
+
+type FolderTarget = {
+  id: string | null;
+  name: string;
+  depth: number;
+};
 
 class CollectionsStore {
   initialized = $state(false);
   isCollectionsLoading = $state(false);
-  isSavedRequestsLoading = $state(false);
+  isCollectionItemsLoading = $state(false);
   isCreatingCollection = $state(false);
+  isCreatingFolder = $state(false);
   isSavingRequest = $state(false);
   selectedCollectionId = $state("");
   collections = $state.raw<CollectionSummary[]>([]);
-  savedRequestsByCollection = $state.raw<Record<string, SavedRequestSummary[]>>({});
+  collectionItemsByCollection = $state.raw<Record<string, CollectionItemSummary[]>>({});
   pendingDeleteCollectionId = $state("");
-  pendingDeleteSavedRequestId = $state("");
+  pendingDeleteCollectionItemId = $state("");
   errorText = $state("");
 
   get selectedCollection(): CollectionSummary | null {
     return this.collections.find((c) => c.id === this.selectedCollectionId) ?? null;
   }
 
-  get selectedSavedRequests(): SavedRequestSummary[] {
+  get selectedCollectionItems(): CollectionItemSummary[] {
     return this.selectedCollectionId
-      ? this.savedRequestsByCollection[this.selectedCollectionId] ?? []
+      ? this.collectionItemsByCollection[this.selectedCollectionId] ?? []
       : [];
   }
 
   resetError() {
     this.errorText = "";
+  }
+
+  folderTargets(collectionId: string): FolderTarget[] {
+    if (!collectionId) {
+      return [{ id: null, name: "Collection root", depth: 0 }];
+    }
+
+    return [
+      { id: null, name: "Collection root", depth: 0 },
+      ...flattenFolderTargets(this.collectionItemsByCollection[collectionId] ?? [], 0)
+    ];
   }
 
   async ensureLoaded(preferredCollectionId = this.selectedCollectionId) {
@@ -62,9 +86,9 @@ class CollectionsStore {
       this.errorText = "";
 
       if (nextId) {
-        await this.loadSavedRequests(nextId);
+        await this.loadCollectionItems(nextId);
       } else {
-        this.savedRequestsByCollection = {};
+        this.collectionItemsByCollection = {};
       }
     } catch (error) {
       this.initialized = true;
@@ -74,27 +98,27 @@ class CollectionsStore {
     }
   }
 
-  async loadSavedRequests(collectionId: string) {
+  async loadCollectionItems(collectionId: string) {
     if (!browser || !collectionId) return;
-    this.isSavedRequestsLoading = true;
+    this.isCollectionItemsLoading = true;
 
     try {
-      const savedRequests = await listSavedRequests(collectionId);
-      this.savedRequestsByCollection = {
-        ...this.savedRequestsByCollection,
-        [collectionId]: savedRequests
+      const items = await listCollectionItems(collectionId);
+      this.collectionItemsByCollection = {
+        ...this.collectionItemsByCollection,
+        [collectionId]: items
       };
       this.errorText = "";
     } catch (error) {
       this.errorText = error instanceof Error ? error.message : String(error);
     } finally {
-      this.isSavedRequestsLoading = false;
+      this.isCollectionItemsLoading = false;
     }
   }
 
   async selectCollection(collectionId: string) {
     this.selectedCollectionId = collectionId;
-    await this.loadSavedRequests(collectionId);
+    await this.loadCollectionItems(collectionId);
   }
 
   async createBlankCollection() {
@@ -116,6 +140,25 @@ class CollectionsStore {
     }
   }
 
+  async createFolder(collectionId: string, name: string, parentId?: string | null) {
+    this.isCreatingFolder = true;
+
+    try {
+      const folder = await createCollectionFolder(collectionId, {
+        name: name.trim(),
+        parentId: parentId ?? null
+      });
+      await Promise.all([this.loadCollections(collectionId), this.loadCollectionItems(collectionId)]);
+      notifications.success(folder.name, "Folder created");
+      return folder;
+    } catch (error) {
+      this.errorText = error instanceof Error ? error.message : String(error);
+      return null;
+    } finally {
+      this.isCreatingFolder = false;
+    }
+  }
+
   async saveDetails(collectionId: string, input: CreateCollectionInput) {
     try {
       const collection = await updateCollectionCommand(collectionId, input);
@@ -134,8 +177,8 @@ class CollectionsStore {
 
     try {
       await deleteCollection(collectionId);
-      const { [collectionId]: _, ...rest } = this.savedRequestsByCollection;
-      this.savedRequestsByCollection = rest;
+      const { [collectionId]: _, ...rest } = this.collectionItemsByCollection;
+      this.collectionItemsByCollection = rest;
 
       const preferredId = this.selectedCollectionId === collectionId ? "" : this.selectedCollectionId;
       await this.loadCollections(preferredId);
@@ -147,12 +190,12 @@ class CollectionsStore {
     }
   }
 
-  async saveNewRequest(collectionId: string, request: RequestDraft) {
+  async saveNewRequest(collectionId: string, request: RequestDraft, parentId?: string | null) {
     this.isSavingRequest = true;
 
     try {
-      const savedRequest = await saveRequestToCollection(collectionId, request);
-      await Promise.all([this.loadCollections(collectionId), this.loadSavedRequests(collectionId)]);
+      const savedRequest = await saveRequestToCollection(collectionId, request, parentId);
+      await Promise.all([this.loadCollections(collectionId), this.loadCollectionItems(collectionId)]);
       notifications.success(savedRequest.name, "Request saved");
       return savedRequest;
     } catch (error) {
@@ -168,7 +211,7 @@ class CollectionsStore {
 
     try {
       const savedRequest = await updateSavedRequestCommand(itemId, request);
-      await Promise.all([this.loadCollections(collectionId), this.loadSavedRequests(collectionId)]);
+      await Promise.all([this.loadCollections(collectionId), this.loadCollectionItems(collectionId)]);
       notifications.success(savedRequest.name, "Request updated");
       return savedRequest;
     } catch (error) {
@@ -179,21 +222,36 @@ class CollectionsStore {
     }
   }
 
-  async removeSavedRequestItem(collectionId: string, itemId: string) {
-    this.pendingDeleteSavedRequestId = itemId;
-    const savedRequestName =
-      (this.savedRequestsByCollection[collectionId] ?? []).find((item) => item.id === itemId)?.name || "Saved request";
+  async removeCollectionItem(collectionId: string, itemId: string, itemName: string) {
+    this.pendingDeleteCollectionItemId = itemId;
 
     try {
-      await deleteSavedRequest(itemId);
-      await Promise.all([this.loadCollections(collectionId), this.loadSavedRequests(collectionId)]);
-      notifications.success(savedRequestName, "Saved request deleted");
+      await deleteCollectionItem(itemId);
+      await Promise.all([this.loadCollections(collectionId), this.loadCollectionItems(collectionId)]);
+      notifications.success(itemName, "Collection item deleted");
     } catch (error) {
       this.errorText = error instanceof Error ? error.message : String(error);
     } finally {
-      this.pendingDeleteSavedRequestId = "";
+      this.pendingDeleteCollectionItemId = "";
     }
   }
+}
+
+function flattenFolderTargets(items: CollectionItemSummary[], depth: number): FolderTarget[] {
+  return items.flatMap((item) => {
+    if (item.kind !== "folder") {
+      return [];
+    }
+
+    return [
+      {
+        id: item.id,
+        name: item.name,
+        depth
+      },
+      ...flattenFolderTargets(item.children, depth + 1)
+    ];
+  });
 }
 
 export const collections = new CollectionsStore();

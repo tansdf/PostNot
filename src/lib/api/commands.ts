@@ -1,6 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import {
+  type CollectionItemSummary,
+  type CollectionSidebarState,
   type CollectionSummary,
+  type CreateCollectionFolderInput,
   type CreateCollectionInput,
   type CurlImportInput,
   createDefaultSettings,
@@ -89,10 +92,39 @@ function createMockSavedRequests(): SavedRequestSummary[] {
     {
       id: "mock-saved-request-1",
       collectionId: "mock-collection-1",
+      parentId: "mock-folder-1",
       name: "Sample request",
       method: "GET" as const,
       url: "https://jsonplaceholder.typicode.com/todos/1",
       updatedAt: new Date().toISOString()
+    }
+  ];
+}
+
+function createMockCollectionItems(): CollectionItemSummary[] {
+  return [
+    {
+      id: "mock-folder-1",
+      collectionId: "mock-collection-1",
+      parentId: null,
+      kind: "folder",
+      name: "Examples",
+      method: null,
+      url: null,
+      updatedAt: new Date().toISOString(),
+      children: [
+        {
+          id: "mock-saved-request-1",
+          collectionId: "mock-collection-1",
+          parentId: "mock-folder-1",
+          kind: "request",
+          name: "Sample request",
+          method: "GET",
+          url: "https://jsonplaceholder.typicode.com/todos/1",
+          updatedAt: new Date().toISOString(),
+          children: []
+        }
+      ]
     }
   ];
 }
@@ -190,6 +222,7 @@ function createMockSavedRequestDetail(id: string): SavedRequestDetail {
   return {
     id,
     collectionId: "mock-collection-1",
+    parentId: "mock-folder-1",
     name: "Sample request",
     updatedAt: new Date().toISOString(),
     request: {
@@ -311,6 +344,25 @@ export async function listCollections(): Promise<CollectionSummary[]> {
   return invoke<CollectionSummary[]>("list_collections");
 }
 
+export async function getCollectionSidebarState(): Promise<CollectionSidebarState> {
+  if (!hasTauriRuntime()) {
+    return {
+      expandedCollectionIds: [],
+      expandedFolderIds: []
+    };
+  }
+
+  return invoke<CollectionSidebarState>("get_collection_sidebar_state");
+}
+
+export async function saveCollectionSidebarState(sidebarState: CollectionSidebarState): Promise<void> {
+  if (!hasTauriRuntime()) {
+    return;
+  }
+
+  await invoke("save_collection_sidebar_state", { sidebarState });
+}
+
 export async function createCollection(input: CreateCollectionInput): Promise<CollectionSummary> {
   if (!hasTauriRuntime()) {
     return {
@@ -323,6 +375,35 @@ export async function createCollection(input: CreateCollectionInput): Promise<Co
   }
 
   return invoke<CollectionSummary>("create_collection", { input });
+}
+
+export async function listCollectionItems(collectionId: string): Promise<CollectionItemSummary[]> {
+  if (!hasTauriRuntime()) {
+    return createMockCollectionItems().filter((item) => item.collectionId === collectionId);
+  }
+
+  return invoke<CollectionItemSummary[]>("list_collection_items", { collectionId });
+}
+
+export async function createCollectionFolder(
+  collectionId: string,
+  input: CreateCollectionFolderInput
+): Promise<CollectionItemSummary> {
+  if (!hasTauriRuntime()) {
+    return {
+      id: `mock-folder-${Date.now()}`,
+      collectionId,
+      parentId: input.parentId ?? null,
+      kind: "folder",
+      name: input.name,
+      method: null,
+      url: null,
+      updatedAt: new Date().toISOString(),
+      children: []
+    };
+  }
+
+  return invoke<CollectionItemSummary>("create_collection_folder", { collectionId, input });
 }
 
 export async function updateCollection(collectionId: string, input: CreateCollectionInput): Promise<CollectionSummary> {
@@ -355,11 +436,16 @@ export async function listSavedRequests(collectionId: string): Promise<SavedRequ
   return invoke<SavedRequestSummary[]>("list_saved_requests", { collectionId });
 }
 
-export async function saveRequestToCollection(collectionId: string, request: RequestDraft): Promise<SavedRequestSummary> {
+export async function saveRequestToCollection(
+  collectionId: string,
+  request: RequestDraft,
+  parentId?: string | null
+): Promise<SavedRequestSummary> {
   if (!hasTauriRuntime()) {
     return {
       id: `mock-saved-request-${Date.now()}`,
       collectionId,
+      parentId: parentId ?? null,
       name: request.name,
       method: request.method,
       url: request.url,
@@ -367,7 +453,7 @@ export async function saveRequestToCollection(collectionId: string, request: Req
     };
   }
 
-  return invoke<SavedRequestSummary>("save_request_to_collection", { collectionId, request });
+  return invoke<SavedRequestSummary>("save_request_to_collection", { collectionId, parentId, request });
 }
 
 export async function updateSavedRequest(itemId: string, request: RequestDraft): Promise<SavedRequestSummary> {
@@ -399,6 +485,14 @@ export async function deleteSavedRequest(itemId: string): Promise<void> {
   }
 
   await invoke("delete_saved_request", { itemId });
+}
+
+export async function deleteCollectionItem(itemId: string): Promise<void> {
+  if (!hasTauriRuntime()) {
+    return;
+  }
+
+  await invoke("delete_collection_item", { itemId });
 }
 
 export async function exportCollection(collectionId: string): Promise<ExportResult | null> {

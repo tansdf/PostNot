@@ -4,7 +4,9 @@ use crate::{
     app_state::AppState,
     domain::{
         collections::{
-            CollectionSummary, CreateCollectionInput, SavedRequestDetail, SavedRequestSummary,
+            CollectionItemSummary, CollectionSidebarState, CollectionSummary,
+            CreateCollectionFolderInput,
+            CreateCollectionInput, SavedRequestDetail, SavedRequestSummary,
         },
         exports::ExportResult,
         requests::SendRequestPayload,
@@ -19,11 +21,44 @@ pub async fn list_collections(state: State<'_, AppState>) -> AppResult<Vec<Colle
 }
 
 #[tauri::command]
+pub async fn get_collection_sidebar_state(
+    state: State<'_, AppState>,
+) -> AppResult<CollectionSidebarState> {
+    crate::services::settings_service::get_collection_sidebar_state(state.db()).await
+}
+
+#[tauri::command]
+pub async fn save_collection_sidebar_state(
+    state: State<'_, AppState>,
+    sidebar_state: CollectionSidebarState,
+) -> AppResult<()> {
+    crate::services::settings_service::save_collection_sidebar_state(state.db(), &sidebar_state)
+        .await
+}
+
+#[tauri::command]
 pub async fn create_collection(
     state: State<'_, AppState>,
     input: CreateCollectionInput,
 ) -> AppResult<CollectionSummary> {
     collections_service::create_collection(state.db(), &input).await
+}
+
+#[tauri::command]
+pub async fn list_collection_items(
+    state: State<'_, AppState>,
+    collection_id: String,
+) -> AppResult<Vec<CollectionItemSummary>> {
+    collections_service::list_collection_items(state.db(), &collection_id).await
+}
+
+#[tauri::command]
+pub async fn create_collection_folder(
+    state: State<'_, AppState>,
+    collection_id: String,
+    input: CreateCollectionFolderInput,
+) -> AppResult<CollectionItemSummary> {
+    collections_service::create_collection_folder(state.db(), &collection_id, &input).await
 }
 
 #[tauri::command]
@@ -52,9 +87,11 @@ pub async fn list_saved_requests(
 pub async fn save_request_to_collection(
     state: State<'_, AppState>,
     collection_id: String,
+    parent_id: Option<String>,
     request: SendRequestPayload,
 ) -> AppResult<SavedRequestSummary> {
-    collections_service::save_request(state.db(), &collection_id, &request).await
+    collections_service::save_request(state.db(), &collection_id, parent_id.as_deref(), &request)
+        .await
 }
 
 #[tauri::command]
@@ -72,6 +109,14 @@ pub async fn get_saved_request(
     item_id: String,
 ) -> AppResult<SavedRequestDetail> {
     collections_service::get_saved_request(state.db(), &item_id).await
+}
+
+#[tauri::command]
+pub async fn delete_collection_item(
+    state: State<'_, AppState>,
+    item_id: String,
+) -> AppResult<()> {
+    collections_service::delete_collection_item(state.db(), &item_id).await
 }
 
 #[tauri::command]
