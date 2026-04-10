@@ -7,20 +7,21 @@ Local-first desktop API client for people who want a fast desktop tool for APIs 
 
 > PostNot is a fully AI-generated software project. The codebase was produced end-to-end by AI agents, with no human-written code in the repository.
 
-PostNot is built for working with HTTP APIs on your own machine, with local persistence, collections, environments, secret handling, import/export, and a focused desktop workflow.
+PostNot is built for working with HTTP APIs on your own machine, with local persistence, collections and folders, environments, secret handling, import/export, and a focused desktop workflow.
 
 ## What It Does
 
 - Compose and send HTTP requests from a desktop-native UI
-- Save requests into collections
+- Save requests into collections and nested folders
 - Work with environments and `{{variable}}` substitution
+- Use built-in dynamic variables like Postman-style `$guid` and `$timestamp`
 - Store secret environment values in the OS credential store
 - Inspect request history locally
 - Import from Postman collections and environments
 - Import from cURL
 - Export collections and environments back to Postman-compatible JSON
 - Attach local files to multipart requests
-- Use floating notifications, persisted settings, and in-app update checks
+- Use floating notifications, persisted settings, and signed in-app update checks
 
 ## Why PostNot
 
@@ -31,7 +32,7 @@ PostNot is built for working with HTTP APIs on your own machine, with local pers
 
 ## Current Status
 
-PostNot is still pre-1.0 and evolving deliberately. The core workflow is already real and usable, but the product is still growing in areas like richer request organization, broader workflow polish, and update-channel decisions.
+PostNot is still pre-1.0 and evolving deliberately. The core workflow is already real and usable, but the product is still growing in areas like scripting, multi-request workflow, broader polish, and updater channel decisions.
 
 ## Privacy And Storage
 

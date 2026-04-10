@@ -59,6 +59,7 @@ This section reflects the code currently implemented in the repository.
 - Persisted request history in SQLite
 - Cancel in-flight request
 - Collections and saved requests
+- Collection folders with nested request organization
 - Environments and variable resolution
 - OS-backed secret storage for secret environment variables
 - Postman collection JSON import
@@ -67,9 +68,10 @@ This section reflects the code currently implemented in the repository.
 - Postman environment JSON export
 - cURL command import
 - Multipart request composition with native file selection
+- Built-in dynamic variables at request runtime
 - App-level floating notification system for action feedback
 - Settings page wired to backend persistence
-- Signed in-app update checks and install handoff from Settings
+- Signed in-app update checks, startup refresh, and install handoff
 - History panel wired to backend persistence
 - History detail inspection from persisted snapshots
 - Clear history action
@@ -115,10 +117,11 @@ Responsibilities:
 2. Frontend builds a typed request payload
 3. Frontend invokes `send_request`
 4. Rust loads persisted request settings from SQLite
-5. Rust executes the request with `reqwest`
-6. Rust returns response metadata and body to the UI
-7. Rust writes a history entry to SQLite, redacting secret-derived environment substitutions back to their original `{{variable}}` form
-8. Frontend reloads history and renders the latest response
+5. Rust resolves environment variables and built-in dynamic variables
+6. Rust executes the request with `reqwest`
+7. Rust returns response metadata and body to the UI
+8. Rust writes a history entry to SQLite, redacting secret-derived environment substitutions back to their original `{{variable}}` form
+9. Frontend reloads history and renders the latest response
 
 ## 5. Actual Folder Structure
 
@@ -137,14 +140,26 @@ PostNot/
         commands.ts
         types.ts
       components/
+        collections/
+          CollectionsPanel.svelte
         history/
+          HistoryDetail.svelte
           HistoryPanel.svelte
         layout/
           AppShell.svelte
+          NotificationHost.svelte
+          SidebarCollections.svelte
         request/
           RequestEditor.svelte
+          VariableField.svelte
         response/
+          JsonViewer.svelte
           ResponseViewer.svelte
+      stores/
+        collections.svelte.ts
+        notifications.svelte.ts
+        updater.svelte.ts
+      theme.ts
       styles/
         tokens.css
         app.css
@@ -152,6 +167,10 @@ PostNot/
       +layout.svelte
       +layout.ts
       +page.svelte
+      collections/
+        +page.svelte
+      environments/
+        +page.svelte
       settings/
         +page.svelte
   src-tauri/
@@ -171,21 +190,37 @@ PostNot/
       error.rs
       commands/
         mod.rs
+        collections.rs
+        environments.rs
+        imports.rs
         requests.rs
         settings.rs
         history.rs
+        updates.rs
       db/
         mod.rs
       domain/
+        collections.rs
+        environments.rs
+        exports.rs
+        imports.rs
+        updates.rs
         mod.rs
         requests.rs
         settings.rs
         history.rs
       services/
+        collections_service.rs
+        environments_service.rs
+        exports_service.rs
+        imports_service.rs
         mod.rs
         http_client.rs
+        secret_store_service.rs
         settings_service.rs
         history_service.rs
+        updates_service.rs
+        window_state_service.rs
       storage/
         mod.rs
         paths.rs
@@ -238,10 +273,13 @@ Represents persisted request behavior settings.
 Fields:
 
 - theme
+- interface zoom
 - request timeout in milliseconds
 - follow redirects flag
 - validate TLS flag
 - history limit
+- notification timeout in milliseconds
+- last successful update check timestamp
 
 ### History Entry Summary
 
@@ -286,10 +324,14 @@ CREATE TABLE app_settings (
 Current keys written by the app:
 
 - `theme`
+- `ui_scale`
 - `request_timeout_ms`
 - `follow_redirects`
 - `validate_tls`
 - `history_limit`
+- `notification_timeout_ms`
+- `last_update_checked_at`
+- `collection_sidebar_state`
 
 #### `history_entries`
 
@@ -319,17 +361,25 @@ Implementation notes:
 - failed requests are also persisted with `error_text`
 - history is pruned based on the persisted `history_limit` setting
 
-### Tables Present But Not Yet Used By The UI
+### Other Actively Used Tables
 
-The initial migration also creates these tables for planned work:
+#### `collections`
 
-- `collections`
-- `collection_items`
-- `environments`
+Stores saved request collections.
 
-`collections` and `collection_items` are now wired into the runtime UI and command surface for flat collections of saved requests.
+#### `collection_items`
 
-`environments` is now wired into the runtime UI and command surface for single-active-environment variable resolution.
+Stores both saved requests and folders within a collection tree.
+
+Implementation notes:
+
+- `kind` distinguishes folders from saved requests
+- `parent_id` allows nested folders and request placement inside folders
+- `prerequest_script` and `test_script` columns exist but are not yet executed by the app
+
+#### `environments`
+
+Stores environment metadata, active-state, and non-secret variable definitions. Secret values are kept in the OS credential store.
 
 ## 8. Runtime Behavior
 
@@ -341,7 +391,9 @@ At startup, the Tauri app:
 2. creates the SQLite database if missing
 3. applies SQL migrations
 4. ensures default settings exist
-5. stores the SQLite pool in app state
+5. initializes the OS-backed secret store
+6. stores the SQLite pool and secret store in app state
+7. restores and tracks the main window size and position
 
 ### Request Execution
 
@@ -357,6 +409,7 @@ For each request send, Rust also:
 
 - loads the currently active environment, if one exists
 - resolves `{{variable}}` placeholders in URL, query params, headers, body text, form fields, and auth values
+- expands built-in dynamic variables such as `$guid`, `$timestamp`, and related runtime helpers
 - sends the resolved request payload
 
 ### History Persistence
@@ -389,11 +442,17 @@ Commands currently exposed to the frontend:
 - `pick_multipart_files`
 - `get_settings`
 - `update_settings`
+- `check_for_updates`
+- `install_update`
 - `list_history`
 - `get_history_entry`
 - `clear_history`
 - `list_collections`
+- `get_collection_sidebar_state`
+- `save_collection_sidebar_state`
 - `create_collection`
+- `list_collection_items`
+- `create_collection_folder`
 - `update_collection`
 - `delete_collection`
 - `list_saved_requests`
@@ -420,11 +479,17 @@ Commands currently exposed to the frontend:
 - `pick_multipart_files`: opens a native file picker and returns selected local file paths for multipart requests
 - `get_settings`: loads current settings from SQLite
 - `update_settings`: persists settings and returns the saved values
+- `check_for_updates`: checks the configured signed updater feed for a newer release
+- `install_update`: hands the available signed update off to the native installer
 - `list_history`: returns recent history entries ordered by execution time descending
 - `get_history_entry`: returns a stored request snapshot and response metadata for one history entry
 - `clear_history`: deletes all stored history entries
 - `list_collections`: returns saved request collections with request counts
+- `get_collection_sidebar_state`: loads persisted sidebar expansion state for collections and folders
+- `save_collection_sidebar_state`: persists sidebar expansion state for collections and folders
 - `create_collection`: creates a new collection for saved requests
+- `list_collection_items`: returns the nested folder and request tree for one collection
+- `create_collection_folder`: creates a folder at the collection root or inside another folder
 - `update_collection`: updates one collection's name and description
 - `delete_collection`: removes a collection and its saved requests
 - `list_saved_requests`: lists saved requests within one collection
@@ -453,6 +518,8 @@ Current UI sections:
 - request profile summary using persisted settings
 - active environment selector
 - request editor
+- save flow with collection and folder target selection
+- cURL import modal
 - request-level save/update action
 - response viewer
 - history panel
@@ -463,20 +530,24 @@ Current UI sections:
 Current UI sections:
 
 - theme selector
+- interface zoom selector
 - request timeout input
 - history limit input
+- notification timeout input
 - follow redirects toggle
 - validate TLS toggle
+- updater status and install surface
 - persisted save action
 
 ### Collections Page
 
 Current UI sections:
 
-- sidebar collection browser with saved request stack
+- collection browser with nested folders and saved requests
 - dedicated collection editor view
+- root-folder and subfolder creation
 - collection import/export actions
-- saved request list for the selected collection
+- selected collection tree for folders and saved requests
 - open-in-requests and delete actions for saved requests
 
 ### Environments Page
@@ -515,8 +586,10 @@ Ship a usable desktop app that can compose and execute HTTP requests locally, pe
 - request execution through Rust
 - request cancellation
 - collections and saved requests
+- collection folders with nested browsing
 - sidebar-first collection browsing and dedicated collection editing
 - environments and variable resolution
+- built-in dynamic request variables
 - Postman collection JSON import
 - Postman environment JSON import
 - Postman collection JSON export
@@ -531,11 +604,13 @@ Ship a usable desktop app that can compose and execute HTTP requests locally, pe
 - history panel
 - history detail inspection
 - clear history action
-- signed updater checks and install flow from Settings
+- signed updater checks with startup refresh and install flow
 
 ### Milestone 1 Remaining
 
 - tighter error handling and UX polish
+- request scripting
+- multi-request workflow decisions
 
 Manual end-to-end verification via `tauri dev` has already been completed for the current milestone state.
 
@@ -543,11 +618,11 @@ Manual end-to-end verification via `tauri dev` has already been completed for th
 
 Recommended implementation order from the current state:
 
-1. Add collection folders and richer request organization
+1. Add request scripting through pre-request and test scripts
 2. Continue tightening error handling and desktop UX polish
-3. Improve import/export compatibility and remaining desktop polish
-4. Decide whether updater discovery should stay on GitHub's stable-only `/latest` endpoint or move to a custom prerelease-aware manifest
-5. Evaluate multi-tab workflow and request-level productivity features
+3. Decide whether updater discovery should stay on GitHub's stable-only `/latest` endpoint or move to a custom prerelease-aware manifest
+4. Evaluate multi-tab workflow and other request-level productivity features
+5. Improve import/export compatibility and remaining desktop polish
 
 ## 14. Open Decisions
 
@@ -562,4 +637,4 @@ These are still unresolved:
 
 Treat the repository as being in an active Milestone 1 state, not full MVP completion.
 
-The design is now grounded in what the code actually does: persisted settings influence request execution, history is stored in SQLite with secret-derived environment values redacted, secret environment values live in the OS credential store, environments resolve variables at send time, collections are part of the working UI, import can pull requests in from Postman collections and cURL, multipart requests can now attach local files, and the desktop shell can check GitHub Releases for signed updater builds from Settings. The next work should stay focused on request organization, updater channel decisions, multi-tab decisions, and remaining UX polish.
+The design is now grounded in what the code actually does: persisted settings influence request execution, history is stored in SQLite with secret-derived environment values redacted, secret environment values live in the OS credential store, environments resolve variables at send time, collections support nested folders in the working UI, import can pull requests in from Postman collections and cURL, multipart requests can attach local files, built-in dynamic variables resolve at runtime, and the desktop shell can check GitHub Releases for signed updater builds both on launch and from Settings. The next work should stay focused on request scripting, updater channel decisions, multi-tab decisions, and remaining UX polish.

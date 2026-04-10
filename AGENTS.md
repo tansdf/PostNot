@@ -12,7 +12,7 @@ PostNot is a local-first desktop API client built with:
 - TypeScript
 - SQLite
 
-The app already supports request execution, history, collections, environments, secret environment storage, import/export flows, notifications, settings, and signed in-app update checks from Settings.
+The app already supports request execution, history, collections with nested folders, environments, secret environment storage, import/export flows, notifications, settings, and signed in-app update checks.
 
 ## Canonical Working Directory
 
@@ -55,14 +55,16 @@ Implemented now:
 - Postman environment import/export
 - cURL import
 - multipart request composition with local file uploads
+- built-in dynamic request variables
 - floating notifications
-- signed in-app update checks from Settings
+- signed in-app update checks with silent startup refresh
 - window size and position restore
 
 Still intentionally open:
 
-- collection folders and richer request organization
 - multi-tab workflow decisions
+- pre-request scripts
+- test scripts
 - additional UX polish and error handling
 - updater channel decision for prereleases vs stable-only discovery
 
