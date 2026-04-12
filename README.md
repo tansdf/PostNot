@@ -11,7 +11,7 @@ PostNot is built for working with HTTP APIs on your own machine, with local pers
 
 ## Website
 
-The static project landing page (features, screenshots, links to GitHub and releases) lives in [`docs/`](docs/). Enable [GitHub Pages](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site) for this repository with the **`/docs`** folder on your default branch; the site will be served at **https://tansdf.github.io/PostNot/**.
+**Live site:** [post-not.com](https://post-not.com/) — project landing page (features, screenshots, links to GitHub and releases). It is served through [GitHub Pages](https://pages.github.com/) from the [`docs/`](docs/) folder on the default branch, with the **post-not.com** custom domain configured in the repository Pages settings.
 
 ## What It Does
 
