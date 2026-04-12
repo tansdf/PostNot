@@ -6,6 +6,25 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-04-13
+
+### Added
+
+- Shared folder SVG definitions in `src/lib/icons/folderPaths.ts` and a reusable `FolderGlyph` component for the sidebar and collection views.
+
+### Changed
+
+- Collection items UI distinguishes folders from saved requests more clearly: folder header block, tree guide lines, item counts, and reduced duplicate method/URL lines for unnamed requests.
+- Collection detail editing resets reliably when switching collections via a keyed `CollectionDetailForm` instead of syncing drafts in an effect.
+- Sidebar collections: nested folder contents use the same vertical guide style as the Collection Items panel, with tighter padding so content sits closer to the rule; expanded folder rows use the same left accent treatment as folder cards in Collection Items.
+- Sidebar folder rows use a single open/closed folder icon (chevron removed); save-request folder targets use clearer root vs folder styling.
+- Collection sidebar state uses `SvelteSet` without an extra `$state` wrapper, with hydration applied via set mutation instead of wholesale replacement.
+
+### Fixed
+
+- Script editor environment-variable deduplication avoids a raw `Set` instance in component scope (Svelte 5 autofixer hygiene).
+- Request editor script placeholders use module constants so multiline examples parse correctly in markup.
+
 ## [0.12.0] - 2026-04-12
 
 ### Added

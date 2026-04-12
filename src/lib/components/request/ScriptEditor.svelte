@@ -263,17 +263,17 @@
   }
 
   function uniqueEnvironmentVariableNames(rows: EnvironmentVariable[]) {
-    const seen = new Set<string>();
+    const seen: Record<string, true> = {};
     const result: ScriptCompletion[] = [];
 
     for (const row of rows) {
       const key = row.key.trim();
       const lookupKey = key.toLowerCase();
-      if (!row.enabled || !key || seen.has(lookupKey)) {
+      if (!row.enabled || !key || seen[lookupKey]) {
         continue;
       }
 
-      seen.add(lookupKey);
+      seen[lookupKey] = true;
       result.push({
         id: `env-${lookupKey}`,
         label: key,

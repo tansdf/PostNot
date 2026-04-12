@@ -1176,6 +1176,22 @@ select option {
   gap: 8px;
 }
 
+.sidebar-folder-group-nested,
+.sidebar-item-tree-nested {
+  margin-top: 2px;
+  margin-left: 2px;
+  padding-left: 10px;
+  border-left: 2px solid color-mix(in srgb, var(--border-soft) 55%, var(--control-selected-bg) 45%);
+  gap: 6px;
+}
+
+/* Rows sit beside the guide line; depth spacing is smaller so we do not stack two full indents. */
+.sidebar-folder-group-nested > .sidebar-folder-button,
+.sidebar-item-tree-nested .sidebar-folder-button,
+.sidebar-item-tree-nested .sidebar-request-link {
+  padding-left: calc(6px + var(--tree-depth, 0) * 8px);
+}
+
 .sidebar-collection-stack {
   width: 100%;
   padding-bottom: 12px;
@@ -1263,8 +1279,68 @@ select option {
 }
 
 .sidebar-folder-button {
-  display: grid;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.sidebar-folder-button.sidebar-folder-open {
+  background: linear-gradient(
+    125deg,
+    color-mix(in srgb, var(--sidebar-card-bg) 76%, var(--control-selected-bg) 24%),
+    var(--sidebar-card-bg)
+  );
+  border: 1px solid color-mix(in srgb, var(--control-selected-bg) 32%, var(--sidebar-card-border));
+  box-shadow: inset 3px 0 0 0 color-mix(in srgb, var(--control-selected-bg) 72%, transparent);
+}
+
+.sidebar-folder-button.sidebar-folder-open:hover,
+.sidebar-folder-button.sidebar-folder-open:focus-visible {
+  background: linear-gradient(
+    125deg,
+    color-mix(in srgb, var(--sidebar-card-bg) 68%, var(--control-selected-bg) 32%),
+    color-mix(in srgb, var(--sidebar-card-bg) 90%, var(--control-selected-bg) 10%)
+  );
+  border-color: color-mix(in srgb, var(--control-selected-bg) 42%, var(--sidebar-card-border));
+  box-shadow: inset 3px 0 0 0 color-mix(in srgb, var(--control-selected-bg) 82%, transparent);
+}
+
+.sidebar-folder-button .sidebar-folder-icon {
+  flex-shrink: 0;
+  padding-top: 3px;
+  line-height: 0;
+  color: rgba(248, 243, 231, 0.72);
+}
+
+.sidebar-folder-button.sidebar-folder-open .sidebar-folder-icon {
+  color: color-mix(in srgb, rgba(248, 243, 231, 0.88) 55%, var(--control-selected-bg) 45%);
+}
+
+.sidebar-folder-icon .tree-folder-icon-svg {
+  width: 1.15rem;
+  height: 1.15rem;
+  display: block;
+}
+
+.sidebar-folder-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
   gap: 4px;
+  align-items: flex-start;
+}
+
+.sidebar-folder-name {
+  font-size: 0.92rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.sidebar-folder-count {
+  font-size: 0.78rem;
+  line-height: 1.2;
 }
 
 .sidebar-folder-button:hover,
@@ -1528,12 +1604,108 @@ select option {
   gap: 10px;
 }
 
+.collection-item-tree-nested {
+  margin-top: 2px;
+  margin-left: 4px;
+  padding-left: 18px;
+  border-left: 2px solid color-mix(in srgb, var(--border-soft) 55%, var(--control-selected-bg) 45%);
+  gap: 8px;
+}
+
 .collection-folder-item {
-  background: color-mix(in srgb, var(--surface-subtle) 78%, var(--control-selected-bg) 22%);
+  background: linear-gradient(
+    125deg,
+    color-mix(in srgb, var(--surface-subtle) 82%, var(--control-selected-bg) 18%),
+    var(--surface-subtle)
+  );
+  border-color: color-mix(in srgb, var(--control-selected-bg) 22%, transparent);
+  box-shadow: inset 3px 0 0 0 color-mix(in srgb, var(--control-selected-bg) 72%, transparent);
+}
+
+.collection-folder-heading {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.collection-folder-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: color-mix(in srgb, var(--control-selected-bg) 55%, var(--text-secondary));
+}
+
+.collection-folder-heading-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.collection-folder-eyebrow {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.collection-folder-name {
+  margin: 0;
+  font-size: 1.05rem;
+  line-height: 1.3;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.collection-folder-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin-top: 10px;
+}
+
+.collection-folder-count-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 11px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--control-selected-bg);
+  background: color-mix(in srgb, var(--control-selected-bg) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--control-selected-bg) 32%, transparent);
+}
+
+.collection-request-subline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 6px;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.collection-request-url-line,
+.collection-request-url-inline {
+  font-family: var(--font-mono);
+  font-size: 0.86rem;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.tree-folder-icon-svg {
+  display: block;
+  width: 1.35rem;
+  height: 1.35rem;
 }
 
 .collection-item-title {
-  display: block;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
 }
 
 .collection-item-kind {
@@ -2108,6 +2280,15 @@ select option {
   gap: 4px;
 }
 
+.save-target-folder {
+  border-color: color-mix(in srgb, var(--control-selected-bg) 26%, var(--border-soft));
+  box-shadow: inset 3px 0 0 0 color-mix(in srgb, var(--control-selected-bg) 48%, transparent);
+}
+
+.save-target-root {
+  background: color-mix(in srgb, var(--surface-subtle) 35%, var(--bg-panel-strong));
+}
+
 .save-target-button:hover {
   background: var(--control-hover-bg);
 }
@@ -2121,6 +2302,10 @@ select option {
   border-color: var(--control-selected-border);
   background: var(--control-selected-bg);
   color: var(--control-selected-text);
+}
+
+.save-target-active.save-target-folder {
+  box-shadow: none;
 }
 
 .save-target-active:hover {

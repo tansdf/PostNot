@@ -54,6 +54,13 @@
     { id: "scripts", label: "Scripts" }
   ] as const;
 
+  const PRE_REQUEST_SCRIPT_PLACEHOLDER =
+    "pn.request.upsertHeader('X-Trace-Id', pn.variables.get('trace_id') ?? 'local-run');";
+
+  const TEST_SCRIPT_PLACEHOLDER = `pn.test('status is 200', () => {
+  pn.expect(pn.response.code).toBe(200);
+});`;
+
   function splitUrlAndQuery(value: string) {
     const hashIndex = value.indexOf("#");
     const hash = hashIndex >= 0 ? value.slice(hashIndex) : "";
@@ -903,7 +910,7 @@
             bind:value={request.preRequestScript}
             {environmentVariables}
             scriptKind="preRequest"
-            placeholder={"pn.request.upsertHeader('X-Trace-Id', pn.variables.get('trace_id') ?? 'local-run');"}
+            placeholder={PRE_REQUEST_SCRIPT_PLACEHOLDER}
           />
         </section>
 
@@ -919,7 +926,7 @@
             bind:value={request.testScript}
             {environmentVariables}
             scriptKind="test"
-            placeholder={"pn.test('status is 200', () => {\n  pn.expect(pn.response.code).toBe(200);\n});"}
+            placeholder={TEST_SCRIPT_PLACEHOLDER}
           />
         </section>
       </div>

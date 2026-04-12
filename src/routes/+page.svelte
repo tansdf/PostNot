@@ -588,7 +588,11 @@
               <div class="save-target-list" role="listbox" aria-label="Choose a folder">
                 {#each collections.folderTargets(saveTargetCollectionId) as folderTarget (`${saveTargetCollectionId}-${folderTarget.id ?? "root"}`)}
                   <button
-                    class={["save-target-button", saveTargetParentId === folderTarget.id && "save-target-active"]}
+                    class={[
+                      "save-target-button",
+                      folderTarget.id ? "save-target-folder" : "save-target-root",
+                      saveTargetParentId === folderTarget.id && "save-target-active"
+                    ]}
                     type="button"
                     role="option"
                     aria-selected={saveTargetParentId === folderTarget.id}
@@ -596,7 +600,7 @@
                     style={`--tree-depth:${folderTarget.depth};`}
                   >
                     <strong>{folderTarget.name}</strong>
-                    <span>{folderTarget.id ? "Folder" : "Top level"}</span>
+                    <span>{folderTarget.id ? "Folder" : "Collection root"}</span>
                   </button>
                 {/each}
               </div>

@@ -75,12 +75,11 @@ This section reflects the code currently implemented in the repository.
 - History panel wired to backend persistence
 - History detail inspection from persisted snapshots
 - Clear history action
+- Pre-request scripts and test scripts for saved requests (executed in the frontend as sandboxed JavaScript before send and after response)
 
 ### Not Yet Implemented
 
 - Multi-tab workflow
-- Pre-request scripts
-- Test scripts
 
 ## 4. High-Level Architecture
 
@@ -90,9 +89,10 @@ The app is split into two layers.
 
 Responsibilities:
 
-- Render request editor, response viewer, settings page, and history panel
+- Render request editor (including script editors), response viewer, settings page, and history panel
 - Manage page-level UI state
 - Render global floating notifications for cross-screen action feedback
+- Run saved-request pre-request and test scripts in JavaScript before and after invoking `send_request`
 - Invoke typed Tauri commands for persistence and request execution
 - Provide a desktop-oriented workflow without browser networking
 
@@ -114,14 +114,15 @@ Responsibilities:
 ### Data Flow
 
 1. User edits a request in the UI
-2. Frontend builds a typed request payload
-3. Frontend invokes `send_request`
+2. On send, the frontend runs the pre-request script (if any) against a draft copy and either stops with a script error surface or proceeds with the mutated draft as the payload
+3. Frontend invokes `send_request` with that payload
 4. Rust loads persisted request settings from SQLite
 5. Rust resolves environment variables and built-in dynamic variables
 6. Rust executes the request with `reqwest`
 7. Rust returns response metadata and body to the UI
 8. Rust writes a history entry to SQLite, redacting secret-derived environment substitutions back to their original `{{variable}}` form
-9. Frontend reloads history and renders the latest response
+9. Frontend runs the test script (if any) against the returned response for assertion output
+10. Frontend reloads history and renders the latest response and script results
 
 ## 5. Actual Folder Structure
 
@@ -141,7 +142,10 @@ PostNot/
         types.ts
       components/
         collections/
+          CollectionDetailForm.svelte
           CollectionsPanel.svelte
+        icons/
+          FolderGlyph.svelte
         history/
           HistoryDetail.svelte
           HistoryPanel.svelte
@@ -151,10 +155,14 @@ PostNot/
           SidebarCollections.svelte
         request/
           RequestEditor.svelte
+          ScriptEditor.svelte
           VariableField.svelte
         response/
           JsonViewer.svelte
           ResponseViewer.svelte
+      icons/
+        folderPaths.ts
+      request-scripts.ts
       stores/
         collections.svelte.ts
         notifications.svelte.ts
@@ -375,7 +383,7 @@ Implementation notes:
 
 - `kind` distinguishes folders from saved requests
 - `parent_id` allows nested folders and request placement inside folders
-- `prerequest_script` and `test_script` columns exist but are not yet executed by the app
+- `prerequest_script` and `test_script` are persisted per saved request; the UI runs them in the frontend (`request-scripts.ts`) before invoking Rust for send (pre-request) and after the response returns (tests), not inside the native HTTP layer
 
 #### `environments`
 
@@ -405,12 +413,16 @@ For each request send, Rust currently applies these persisted settings:
 
 This means the settings page already changes actual network behavior, not just UI state.
 
-For each request send, Rust also:
+For each request send, the frontend may first run the saved request's pre-request script against a draft copy (with the active environment's variables) to mutate headers, query params, URL, and related fields. Errors from that step surface in the UI without calling Rust.
+
+For each request send, Rust then:
 
 - loads the currently active environment, if one exists
 - resolves `{{variable}}` placeholders in URL, query params, headers, body text, form fields, and auth values
 - expands built-in dynamic variables such as `$guid`, `$timestamp`, and related runtime helpers
 - sends the resolved request payload
+
+After Rust returns a response (or error), the frontend may run the saved test script and record assertion results for display in the response panel.
 
 ### History Persistence
 
@@ -517,7 +529,7 @@ Current UI sections:
 
 - request profile summary using persisted settings
 - active environment selector
-- request editor
+- request editor with pre-request and test script editors (`ScriptEditor.svelte`)
 - save flow with collection and folder target selection
 - cURL import modal
 - request-level save/update action
@@ -544,10 +556,11 @@ Current UI sections:
 Current UI sections:
 
 - collection browser with nested folders and saved requests
-- dedicated collection editor view
+- dedicated collection editor view (`CollectionDetailForm.svelte` for metadata drafts)
 - root-folder and subfolder creation
 - collection import/export actions
-- selected collection tree for folders and saved requests
+- selected collection tree for folders and saved requests with vertical tree guides and folder open/closed icons (`FolderGlyph.svelte` + shared SVG paths in `folderPaths.ts`)
+- matching sidebar tree styling for nested collections (see `SidebarCollections.svelte` and `app.css`)
 - open-in-requests and delete actions for saved requests
 
 ### Environments Page
@@ -605,12 +618,14 @@ Ship a usable desktop app that can compose and execute HTTP requests locally, pe
 - history detail inspection
 - clear history action
 - signed updater checks with startup refresh and install flow
+- pre-request and test scripts on saved requests (frontend execution around the native send)
+- collections sidebar and collections panel folder trees with shared `FolderGlyph` styling
 
 ### Milestone 1 Remaining
 
 - tighter error handling and UX polish
-- request scripting
 - multi-request workflow decisions
+- richer scripting surface (collection-level scripts, broader `pn` API parity, and execution model hardening)
 
 Manual end-to-end verification via `tauri dev` has already been completed for the current milestone state.
 
@@ -618,11 +633,11 @@ Manual end-to-end verification via `tauri dev` has already been completed for th
 
 Recommended implementation order from the current state:
 
-1. Add request scripting through pre-request and test scripts
-2. Continue tightening error handling and desktop UX polish
-3. Decide whether updater discovery should stay on GitHub's stable-only `/latest` endpoint or move to a custom prerelease-aware manifest
-4. Evaluate multi-tab workflow and other request-level productivity features
-5. Improve import/export compatibility and remaining desktop polish
+1. Continue tightening error handling and desktop UX polish
+2. Decide whether updater discovery should stay on GitHub's stable-only `/latest` endpoint or move to a custom prerelease-aware manifest
+3. Evaluate multi-tab workflow and other request-level productivity features
+4. Improve import/export compatibility and remaining desktop polish
+5. Extend request scripting (API surface, safety, and optional collection-level behavior)
 
 ## 14. Open Decisions
 
@@ -637,4 +652,4 @@ These are still unresolved:
 
 Treat the repository as being in an active Milestone 1 state, not full MVP completion.
 
-The design is now grounded in what the code actually does: persisted settings influence request execution, history is stored in SQLite with secret-derived environment values redacted, secret environment values live in the OS credential store, environments resolve variables at send time, collections support nested folders in the working UI, import can pull requests in from Postman collections and cURL, multipart requests can attach local files, built-in dynamic variables resolve at runtime, and the desktop shell can check GitHub Releases for signed updater builds both on launch and from Settings. The next work should stay focused on request scripting, updater channel decisions, multi-tab decisions, and remaining UX polish.
+The design is now grounded in what the code actually does: persisted settings influence request execution, history is stored in SQLite with secret-derived environment values redacted, secret environment values live in the OS credential store, environments resolve variables at send time, collections support nested folders in the working UI with consistent sidebar and collections-panel tree affordances, saved requests can run pre-request and test scripts in the frontend before and after native execution, import can pull requests in from Postman collections and cURL, multipart requests can attach local files, built-in dynamic variables resolve at runtime, and the desktop shell can check GitHub Releases for signed updater builds both on launch and from Settings. The next work should stay focused on updater channel decisions, multi-tab decisions, scripting depth, and remaining UX polish.

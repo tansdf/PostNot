@@ -7,10 +7,11 @@
 
   import { getCollectionSidebarState, saveCollectionSidebarState } from "$lib/api/commands";
   import type { CollectionItemSummary } from "$lib/api/types";
+  import FolderGlyph from "$lib/components/icons/FolderGlyph.svelte";
   import { collections } from "$lib/stores/collections.svelte";
 
-  let expandedCollectionIds = $state(new SvelteSet<string>());
-  let expandedFolderIds = $state(new SvelteSet<string>());
+  let expandedCollectionIds = new SvelteSet<string>();
+  let expandedFolderIds = new SvelteSet<string>();
   let hasLoadedSidebarState = $state(false);
   let isSavingSidebarState = false;
 
@@ -34,8 +35,14 @@
 
     try {
       const sidebarState = await getCollectionSidebarState();
-      expandedCollectionIds = new SvelteSet(sidebarState.expandedCollectionIds);
-      expandedFolderIds = new SvelteSet(sidebarState.expandedFolderIds);
+      expandedCollectionIds.clear();
+      for (const id of sidebarState.expandedCollectionIds) {
+        expandedCollectionIds.add(id);
+      }
+      expandedFolderIds.clear();
+      for (const id of sidebarState.expandedFolderIds) {
+        expandedFolderIds.add(id);
+      }
 
       const validExpandedCollectionIds = sidebarState.expandedCollectionIds.filter((collectionId) =>
         collections.collections.some((collection) => collection.id === collectionId)
@@ -224,22 +231,33 @@
                   <span class="sidebar-collection-meta">No saved requests yet.</span>
                 {:else}
                   {#snippet renderSidebarItems(items: CollectionItemSummary[], depth: number)}
-                    <div class="sidebar-item-tree">
+                    <div class={["sidebar-item-tree", depth > 0 && "sidebar-item-tree-nested"]}>
                       {#each items as item (item.id)}
                         {#if item.kind === "folder"}
-                          <div class="sidebar-folder-group">
+                          <div class={["sidebar-folder-group", depth > 0 && "sidebar-folder-group-nested"]}>
                             <button
-                              class="sidebar-folder-button"
+                              class={[
+                                "sidebar-folder-button",
+                                expandedFolderIds.has(item.id) && "sidebar-folder-open"
+                              ]}
                               type="button"
                               onclick={() => toggleFolder(item.id)}
                               aria-expanded={expandedFolderIds.has(item.id)}
                               style={`--tree-depth:${depth};`}
                             >
-                              <span class={["sidebar-toggle-icon", expandedFolderIds.has(item.id) && "sidebar-toggle-icon-expanded"]} aria-hidden="true">
-                                &gt;
+                              <span class="sidebar-folder-icon" aria-hidden="true">
+                                <FolderGlyph
+                                  variant={expandedFolderIds.has(item.id) ? "sidebar-open" : "sidebar-closed"}
+                                />
                               </span>
-                              <strong>{item.name}</strong>
-                              <span class="sidebar-collection-meta">{item.children.length} item{item.children.length === 1 ? "" : "s"}</span>
+                              <span class="sidebar-folder-text">
+                                <strong class="sidebar-folder-name">{item.name}</strong>
+                                <span class="sidebar-collection-meta sidebar-folder-count">
+                                  {item.children.length === 0
+                                    ? "Empty"
+                                    : `${item.children.length} item${item.children.length === 1 ? "" : "s"}`}
+                                </span>
+                              </span>
                             </button>
 
                             {#if expandedFolderIds.has(item.id)}

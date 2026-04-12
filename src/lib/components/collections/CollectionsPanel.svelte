@@ -1,6 +1,9 @@
 <script lang="ts">
   import type { CollectionItemSummary, CollectionSummary } from "$lib/api/types";
 
+  import FolderGlyph from "$lib/components/icons/FolderGlyph.svelte";
+  import CollectionDetailForm from "./CollectionDetailForm.svelte";
+
   let {
     collection = null,
     collectionItems = [],
@@ -43,24 +46,6 @@
     onDeleteCollectionItem?: (item: CollectionItemSummary) => Promise<void> | void;
   } = $props();
 
-  let editableCollectionId = $state("");
-  let draftName = $state("");
-  let draftDescription = $state("");
-
-  $effect(() => {
-    const nextId = collection?.id ?? "";
-    if (nextId !== editableCollectionId) {
-      editableCollectionId = nextId;
-      if (collection) {
-        draftName = collection.name;
-        draftDescription = collection.description;
-      } else {
-        draftName = "";
-        draftDescription = "";
-      }
-    }
-  });
-
   function formatUpdatedAt(value: string) {
     try {
       return new Intl.DateTimeFormat(undefined, {
@@ -72,16 +57,14 @@
     }
   }
 
-  async function handleSubmit() {
-    if (!collection) {
-      return;
+  function folderContentsLabel(childCount: number) {
+    if (childCount === 0) {
+      return "Empty folder";
     }
 
-    const saved = await onSaveCollection(draftName, draftDescription);
-    if (saved && collection.id === editableCollectionId) {
-      editableCollectionId = collection.id;
-    }
+    return `${childCount} item${childCount === 1 ? "" : "s"}`;
   }
+
 </script>
 
 <div class="workspace-grid">
@@ -112,46 +95,15 @@
     {/if}
 
     {#if collection}
-      <form class="collections-detail-form" onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
-        <div class="detail-facts">
-          <div class="detail-kv-item">
-            <span class="field-label">Saved requests</span>
-            <strong>{collection.requestCount}</strong>
-          </div>
-          <div class="detail-kv-item detail-wide">
-            <span class="field-label">Last updated</span>
-            <strong>{formatUpdatedAt(collection.updatedAt)}</strong>
-          </div>
-        </div>
-
-        <label>
-          <span class="field-label">Collection name</span>
-          <input class="text-input" bind:value={draftName} placeholder="Untitled collection" required />
-        </label>
-
-        <label>
-          <span class="field-label">Description</span>
-          <textarea
-            class="text-input collection-description-input"
-            bind:value={draftDescription}
-            placeholder="Describe what this collection is for"
-          ></textarea>
-        </label>
-
-        <div class="collections-page-actions">
-          <button class="send-button" type="submit" disabled={isSavingCollection}>
-            {isSavingCollection ? "Saving..." : "Save collection"}
-          </button>
-          <button
-            class="icon-button"
-            type="button"
-            onclick={() => collection && onDeleteCollection(collection.id)}
-            disabled={pendingDeleteCollectionId === collection.id}
-          >
-            {pendingDeleteCollectionId === collection.id ? "Deleting..." : "Delete collection"}
-          </button>
-        </div>
-      </form>
+      {#key collection.id}
+        <CollectionDetailForm
+          {collection}
+          {isSavingCollection}
+          {pendingDeleteCollectionId}
+          {onSaveCollection}
+          {onDeleteCollection}
+        />
+      {/key}
     {:else}
       <div class="empty-state">Pick a collection from the sidebar or create one with the `+` button.</div>
     {/if}
@@ -175,29 +127,46 @@
       <div class="empty-state">No folders or saved requests yet. Use `New folder` or the request editor `Save` flow to start organizing.</div>
     {:else}
       {#snippet renderItems(items: CollectionItemSummary[], depth: number)}
-        <div class="collection-item-tree">
+        <div class={["collection-item-tree", depth > 0 && "collection-item-tree-nested"]}>
           {#each items as item (item.id)}
-            <article class={["collection-item", item.kind === "folder" && "collection-folder-item"]} style={`--tree-depth:${depth};`}>
+            <article
+              class={["collection-item", item.kind === "folder" && "collection-folder-item"]}
+              style={`--tree-depth:${depth};`}
+            >
               <div class="saved-request-meta">
-                <strong class="collection-item-title">
-                  {#if item.kind === "folder"}
-                    <span class="collection-item-kind">Folder</span> {item.name}
-                  {:else}
+                {#if item.kind === "folder"}
+                  <div class="collection-folder-heading">
+                    <span class="collection-folder-icon" aria-hidden="true">
+                      <FolderGlyph variant="panel-closed" />
+                    </span>
+                    <div class="collection-folder-heading-text">
+                      <span class="collection-folder-eyebrow">Folder</span>
+                      <strong class="collection-folder-name">{item.name}</strong>
+                    </div>
+                  </div>
+                  <div class="collection-folder-meta">
+                    <span class="collection-folder-count-badge">{folderContentsLabel(item.children.length)}</span>
+                    <span class="history-meta">Updated {formatUpdatedAt(item.updatedAt)}</span>
+                  </div>
+                {:else}
+                  <strong class="collection-item-title">
                     {#if item.name}
                       {item.name}
                     {:else}
-                      <span class={`method-badge method-${item.method?.toLowerCase() ?? "get"}`}>{item.method ?? "GET"}</span> {item.url ?? ""}
+                      <span class={`method-badge method-${item.method?.toLowerCase() ?? "get"}`}>{item.method ?? "GET"}</span>
+                      <span class="collection-request-url-inline">{item.url ?? ""}</span>
                     {/if}
+                  </strong>
+
+                  {#if item.name}
+                    <div class="collection-request-subline">
+                      <span class={`method-badge method-${item.method?.toLowerCase() ?? "get"}`}>{item.method ?? "GET"}</span>
+                      <span class="collection-request-url-line">{item.url ?? ""}</span>
+                    </div>
                   {/if}
-                </strong>
 
-                {#if item.kind === "folder"}
-                  <span>{item.children.length} item{item.children.length === 1 ? "" : "s"}</span>
-                {:else}
-                  <span><span class={`method-badge method-${item.method?.toLowerCase() ?? "get"}`}>{item.method ?? "GET"}</span> {item.url ?? ""}</span>
+                  <span class="history-meta">Updated {formatUpdatedAt(item.updatedAt)}</span>
                 {/if}
-
-                <span class="history-meta">Updated {formatUpdatedAt(item.updatedAt)}</span>
               </div>
 
               <div class="saved-request-actions">
