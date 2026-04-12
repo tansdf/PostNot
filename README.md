@@ -9,6 +9,10 @@ Local-first desktop API client for people who want a fast desktop tool for APIs 
 
 PostNot is built for working with HTTP APIs on your own machine, with local persistence, collections and folders, environments, secret handling, import/export, and a focused desktop workflow.
 
+## Website
+
+The static project landing page (features, screenshots, links to GitHub and releases) lives in [`docs/`](docs/). Enable [GitHub Pages](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site) for this repository with the **`/docs`** folder on your default branch; the site will be served at **https://tansdf.github.io/PostNot/**.
+
 ## What It Does
 
 - Compose and send HTTP requests from a desktop-native UI
