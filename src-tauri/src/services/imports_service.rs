@@ -49,7 +49,32 @@ struct PostmanItem {
     name: String,
     #[serde(default)]
     item: Vec<PostmanItem>,
+    #[serde(default)]
+    event: Vec<PostmanEvent>,
     request: Option<PostmanRequest>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PostmanEvent {
+    #[serde(default)]
+    listen: String,
+    #[serde(default)]
+    script: Option<PostmanScript>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PostmanScript {
+    #[serde(default)]
+    exec: PostmanScriptExec,
+}
+
+#[derive(Debug, Deserialize, Default)]
+#[serde(untagged)]
+enum PostmanScriptExec {
+    Text(String),
+    Lines(Vec<String>),
+    #[default]
+    Empty,
 }
 
 #[derive(Debug, Deserialize)]
@@ -405,6 +430,8 @@ fn map_postman_request(item: &PostmanItem, request: &PostmanRequest) -> AppResul
     let body = map_postman_body(request.body.as_ref());
     let auth = map_postman_auth(request.auth.as_ref());
     let name = imported_request_name(&item.name);
+    let pre_request_script = join_postman_script_events(&item.event, "prerequest");
+    let test_script = join_postman_script_events(&item.event, "test");
 
     Ok(SendRequestPayload {
         name,
@@ -422,7 +449,28 @@ fn map_postman_request(item: &PostmanItem, request: &PostmanRequest) -> AppResul
         },
         body,
         auth,
+        pre_request_script,
+        test_script,
     })
+}
+
+fn join_postman_script_events(events: &[PostmanEvent], listen: &str) -> String {
+    events
+        .iter()
+        .filter(|event| event.listen.eq_ignore_ascii_case(listen))
+        .filter_map(|event| event.script.as_ref())
+        .map(postman_script_to_string)
+        .filter(|script| !script.trim().is_empty())
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
+fn postman_script_to_string(script: &PostmanScript) -> String {
+    match &script.exec {
+        PostmanScriptExec::Text(value) => value.clone(),
+        PostmanScriptExec::Lines(lines) => lines.join("\n"),
+        PostmanScriptExec::Empty => String::new(),
+    }
 }
 
 fn map_postman_body(body: Option<&PostmanBody>) -> RequestBody {
@@ -717,6 +765,8 @@ fn parse_curl_command(source: &str) -> AppResult<SendRequestPayload> {
             files: vec![],
         },
         auth,
+        pre_request_script: String::new(),
+        test_script: String::new(),
     })
 }
 

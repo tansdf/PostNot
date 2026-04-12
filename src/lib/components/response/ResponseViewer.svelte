@@ -1,8 +1,14 @@
 <script lang="ts">
-  import type { ResponsePayload } from "$lib/api/types";
+  import type { RequestScriptExecution, ResponsePayload } from "$lib/api/types";
   import JsonViewer from "$lib/components/response/JsonViewer.svelte";
 
-  let { response = null }: { response?: ResponsePayload | null } = $props();
+  let {
+    response = null,
+    scriptExecution = null
+  }: {
+    response?: ResponsePayload | null;
+    scriptExecution?: RequestScriptExecution | null;
+  } = $props();
 </script>
 
 <section class="panel response-panel">
@@ -21,6 +27,42 @@
   {#if response}
     {#if response.errorText}
       <div class="response-error">{response.errorText}</div>
+    {/if}
+
+    {#if scriptExecution?.preRequestErrorText}
+      <div class="response-error">{scriptExecution.preRequestErrorText}</div>
+    {/if}
+
+    {#if scriptExecution?.testScriptErrorText}
+      <div class="response-error">{scriptExecution.testScriptErrorText}</div>
+    {/if}
+
+    {#if scriptExecution && scriptExecution.tests.length > 0}
+      <div class="response-tests">
+        <div class="editor-header">
+          <h3>Tests</h3>
+          <span class="history-meta">
+            {scriptExecution.tests.filter((test) => test.status === "passed").length} passed
+            ·
+            {scriptExecution.tests.filter((test) => test.status === "failed").length} failed
+          </span>
+        </div>
+
+        <div class="response-test-list">
+          {#each scriptExecution.tests as test (test.id)}
+            <article class={["response-test-card", test.status === "failed" && "response-test-card-failed"]}>
+              <div class="response-test-header">
+                <strong>{test.name}</strong>
+                <span>{test.status === "passed" ? "Passed" : "Failed"}</span>
+              </div>
+
+              {#if test.errorText}
+                <p>{test.errorText}</p>
+              {/if}
+            </article>
+          {/each}
+        </div>
+      </div>
     {/if}
 
     <div class="response-columns">

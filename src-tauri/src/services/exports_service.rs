@@ -122,6 +122,7 @@ fn map_collection_items(
             "folder" => Ok(PostmanCollectionItemExport {
                 name: item.name.clone(),
                 request: None,
+                event: Vec::new(),
                 item: map_collection_items(&item.children, requests_by_id)?,
             }),
             "request" => {
@@ -157,8 +158,41 @@ fn map_saved_request_item(request: &SavedRequestDetail) -> PostmanCollectionItem
             body: map_body(&request.request.body),
             url: map_url(&request.request.url, &request.request.query_params),
         }),
+        event: build_events(
+            &request.request.pre_request_script,
+            &request.request.test_script,
+        ),
         item: Vec::new(),
     }
+}
+
+fn build_events(pre_request_script: &str, test_script: &str) -> Vec<PostmanEventExport> {
+    let mut events = Vec::new();
+
+    if !pre_request_script.trim().is_empty() {
+        events.push(PostmanEventExport {
+            listen: "prerequest".to_string(),
+            script: PostmanScriptExport {
+                script_type: "text/javascript".to_string(),
+                exec: pre_request_script
+                    .lines()
+                    .map(|line| line.to_string())
+                    .collect(),
+            },
+        });
+    }
+
+    if !test_script.trim().is_empty() {
+        events.push(PostmanEventExport {
+            listen: "test".to_string(),
+            script: PostmanScriptExport {
+                script_type: "text/javascript".to_string(),
+                exec: test_script.lines().map(|line| line.to_string()).collect(),
+            },
+        });
+    }
+
+    events
 }
 
 fn map_url(base_url: &str, query_params: &[KeyValueRow]) -> PostmanUrlExport {
@@ -411,6 +445,8 @@ struct PostmanCollectionItemExport {
     #[serde(skip_serializing_if = "Option::is_none")]
     request: Option<PostmanRequestExport>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
+    event: Vec<PostmanEventExport>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     item: Vec<PostmanCollectionItemExport>,
 }
 
@@ -424,6 +460,19 @@ struct PostmanRequestExport {
     #[serde(skip_serializing_if = "Option::is_none")]
     body: Option<PostmanBodyExport>,
     url: PostmanUrlExport,
+}
+
+#[derive(Debug, Serialize)]
+struct PostmanEventExport {
+    listen: String,
+    script: PostmanScriptExport,
+}
+
+#[derive(Debug, Serialize)]
+struct PostmanScriptExport {
+    #[serde(rename = "type")]
+    script_type: String,
+    exec: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]

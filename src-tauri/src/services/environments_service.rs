@@ -462,6 +462,8 @@ pub fn resolve_request(
                 api_key_value,
                 api_key_in: payload.auth.api_key_in.clone(),
             },
+            pre_request_script: payload.pre_request_script.clone(),
+            test_script: payload.test_script.clone(),
         },
         secret_usage,
     }
@@ -589,6 +591,8 @@ pub fn redact_secret_history_payload(
             },
             api_key_in: resolved.auth.api_key_in.clone(),
         },
+        pre_request_script: original.pre_request_script.clone(),
+        test_script: original.test_script.clone(),
     }
 }
 
@@ -1270,6 +1274,8 @@ mod tests {
                 api_key_value: String::new(),
                 api_key_in: "header".to_string(),
             },
+            pre_request_script: "pn.request.addHeader('X-Test', '1');".to_string(),
+            test_script: "pn.test('status is ok', () => {});".to_string(),
         };
 
         let environment = crate::domain::environments::EnvironmentDetail {
@@ -1325,6 +1331,8 @@ mod tests {
             history_snapshot.auth.bearer_token,
             payload.auth.bearer_token
         );
+        assert_eq!(history_snapshot.pre_request_script, payload.pre_request_script);
+        assert_eq!(history_snapshot.test_script, payload.test_script);
     }
 
     #[test]
@@ -1360,6 +1368,8 @@ mod tests {
                 api_key_value: String::new(),
                 api_key_in: "header".to_string(),
             },
+            pre_request_script: String::new(),
+            test_script: String::new(),
         };
 
         let resolved = environments_service::resolve_request(&payload, None);

@@ -6,6 +6,26 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-04-12
+
+### Added
+
+- Request scripting with saved pre-request and test script fields on requests.
+- A PostNot scripting runtime exposed as `pn`, including request mutation helpers, environment variable access, response helpers, and basic assertion/test APIs.
+- Script editing autocomplete for common `pn` APIs and active environment variable names.
+
+### Changed
+
+- Postman collection import and export now round-trip request pre-request and test scripts through item `event` blocks.
+- Script authoring uses PostNot-branded `pn` helpers instead of Postman-style `pm` naming.
+
+### Fixed
+
+- Request sending no longer fails with `The object can not be cloned.` when pre-request scripts run against the current Svelte request draft state.
+- Script autocomplete keyboard navigation now keeps the current selection stable while moving through suggestions.
+- Script autocomplete now matches the active script context so test-only helpers are not suggested in pre-request scripts, and expectation-chain completions are reachable.
+- Collection request detail loading now includes persisted script fields consistently across save/load and export paths.
+
 ## [0.11.0] - 2026-04-09
 
 ### Added

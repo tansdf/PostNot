@@ -50,6 +50,8 @@ export type RequestDraft = {
   headers: KeyValueRow[];
   body: RequestBody;
   auth: RequestAuth;
+  preRequestScript: string;
+  testScript: string;
 };
 
 export type ResponsePayload = {
@@ -231,6 +233,19 @@ export type ExportResult = {
   filePath: string;
 };
 
+export type ScriptTestResult = {
+  id: string;
+  name: string;
+  status: "passed" | "failed";
+  errorText: string;
+};
+
+export type RequestScriptExecution = {
+  preRequestErrorText: string;
+  testScriptErrorText: string;
+  tests: ScriptTestResult[];
+};
+
 function createId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();
@@ -288,7 +303,9 @@ export function createRequestDraft(): RequestDraft {
       apiKeyName: "",
       apiKeyValue: "",
       apiKeyIn: "header"
-    }
+    },
+    preRequestScript: "",
+    testScript: ""
   };
 }
 

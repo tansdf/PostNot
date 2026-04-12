@@ -23,12 +23,18 @@
     EnvironmentSummary,
     HistoryEntryDetail,
     HistoryEntrySummary,
+    RequestScriptExecution,
     ResponsePayload
   } from "$lib/api/types";
   import { createDefaultSettings, createRequestDraft } from "$lib/api/types";
   import HistoryPanel from "$lib/components/history/HistoryPanel.svelte";
   import RequestEditor from "$lib/components/request/RequestEditor.svelte";
   import ResponseViewer from "$lib/components/response/ResponseViewer.svelte";
+  import {
+    createEmptyRequestScriptExecution,
+    runPreRequestScript,
+    runTestScript
+  } from "$lib/request-scripts";
   import { collections } from "$lib/stores/collections.svelte";
   import { notifications } from "$lib/stores/notifications.svelte";
 
@@ -53,6 +59,7 @@
   let environmentsErrorText = $state("");
   let selectedHistoryId = $state("");
   let selectedHistoryDetail: HistoryEntryDetail | null = $state(null);
+  let scriptExecution: RequestScriptExecution = $state(createEmptyRequestScriptExecution());
   let activeSavedRequestId = $state("");
   let activeSavedRequestCollectionId = $state("");
   let activeSavedRequestParentId: string | null = $state(null);
@@ -202,10 +209,45 @@
   async function handleSend() {
     isSending = true;
     isCancelingRequest = false;
+    scriptExecution = createEmptyRequestScriptExecution();
 
     try {
-      const sendResult = await sendRequest(request);
+      const preparedRequest = runPreRequestScript(request, activeEnvironmentDetail?.variables ?? []);
+      if (preparedRequest.errorText) {
+        scriptExecution = {
+          ...createEmptyRequestScriptExecution(),
+          preRequestErrorText: preparedRequest.errorText
+        };
+        response = {
+          statusCode: null,
+          statusText: "Pre-request script failed",
+          durationMs: 0,
+          sizeBytes: 0,
+          headers: [],
+          bodyText: "",
+          errorText: "",
+          executedAt: new Date().toISOString()
+        };
+        return;
+      }
+
+      const sendResult = await sendRequest(preparedRequest.request);
       response = sendResult.response;
+      scriptExecution = runTestScript(request, sendResult.response, activeEnvironmentDetail?.variables ?? []);
+
+      if (scriptExecution.testScriptErrorText) {
+        notifications.warning(
+          `The response was received, but the test script stopped early: ${scriptExecution.testScriptErrorText}`,
+          "Test script error"
+        );
+      } else if (scriptExecution.tests.some((test) => test.status === "failed")) {
+        const failedCount = scriptExecution.tests.filter((test) => test.status === "failed").length;
+        notifications.warning(
+          `${failedCount} scripted test${failedCount === 1 ? "" : "s"} failed for this response.`,
+          "Tests failed"
+        );
+      }
+
       if (sendResult.historyPersistenceError) {
         notifications.warning(
           `The response is shown, but this run was not saved to history: ${sendResult.historyPersistenceError}`,
@@ -258,6 +300,7 @@
       await collections.ensureLoaded(savedRequest.collectionId);
       request = structuredClone(savedRequest.request);
       response = null;
+      scriptExecution = createEmptyRequestScriptExecution();
       activeSavedRequestId = savedRequest.id;
       activeSavedRequestCollectionId = savedRequest.collectionId;
       activeSavedRequestParentId = savedRequest.parentId ?? null;
@@ -345,6 +388,7 @@
   async function handleNewRequest() {
     request = createRequestDraft();
     response = null;
+    scriptExecution = createEmptyRequestScriptExecution();
     requestSaveErrorText = "";
     activeSavedRequestId = "";
     activeSavedRequestCollectionId = "";
@@ -383,6 +427,7 @@
       const imported = await importCurlRequestToDraft({ source });
       request = structuredClone(imported.request);
       response = null;
+      scriptExecution = createEmptyRequestScriptExecution();
       requestSaveErrorText = "";
       activeSavedRequestId = "";
       activeSavedRequestCollectionId = "";
@@ -478,7 +523,7 @@
       <div class="response-error">{requestSaveErrorText}</div>
     {/if}
 
-    <ResponseViewer {response} />
+    <ResponseViewer {response} {scriptExecution} />
     <HistoryPanel
       items={history}
       isLoading={isHistoryLoading}

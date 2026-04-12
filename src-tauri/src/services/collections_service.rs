@@ -179,7 +179,7 @@ pub async fn list_saved_request_details(
 ) -> AppResult<Vec<SavedRequestDetail>> {
     let rows = sqlx::query(
         r#"
-        SELECT id, collection_id, parent_id, name, method, url, query_params_json, headers_json, body_json, auth_json, updated_at
+        SELECT id, collection_id, parent_id, name, method, url, query_params_json, headers_json, body_json, auth_json, prerequest_script, test_script, updated_at
         FROM collection_items
         WHERE collection_id = ?1 AND kind = 'request'
         ORDER BY updated_at DESC, name ASC
@@ -212,7 +212,7 @@ pub async fn save_request(
           id, collection_id, parent_id, kind, name, sort_order, method, url,
           query_params_json, headers_json, body_json, auth_json,
           prerequest_script, test_script, created_at, updated_at
-        ) VALUES (?1, ?2, ?3, 'request', ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, '', '', ?12, ?13)
+        ) VALUES (?1, ?2, ?3, 'request', ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
         "#,
     )
     .bind(&item_id)
@@ -226,6 +226,8 @@ pub async fn save_request(
     .bind(serde_json::to_string(&request.headers)?)
     .bind(serde_json::to_string(&request.body)?)
     .bind(serde_json::to_string(&request.auth)?)
+    .bind(&request.pre_request_script)
+    .bind(&request.test_script)
     .bind(&now)
     .bind(&now)
     .execute(pool)
@@ -264,7 +266,9 @@ pub async fn update_saved_request(
             headers_json = ?6,
             body_json = ?7,
             auth_json = ?8,
-            updated_at = ?9
+            prerequest_script = ?9,
+            test_script = ?10,
+            updated_at = ?11
         WHERE id = ?1 AND kind = 'request'
         "#,
     )
@@ -276,6 +280,8 @@ pub async fn update_saved_request(
     .bind(serde_json::to_string(&request.headers)?)
     .bind(serde_json::to_string(&request.body)?)
     .bind(serde_json::to_string(&request.auth)?)
+    .bind(&request.pre_request_script)
+    .bind(&request.test_script)
     .bind(&now)
     .execute(pool)
     .await?;
@@ -287,7 +293,7 @@ pub async fn update_saved_request(
 pub async fn get_saved_request(pool: &SqlitePool, item_id: &str) -> AppResult<SavedRequestDetail> {
     let row = sqlx::query(
         r#"
-        SELECT id, collection_id, parent_id, name, method, url, query_params_json, headers_json, body_json, auth_json, updated_at
+        SELECT id, collection_id, parent_id, name, method, url, query_params_json, headers_json, body_json, auth_json, prerequest_script, test_script, updated_at
         FROM collection_items
         WHERE id = ?1 AND kind = 'request'
         "#,
@@ -311,6 +317,8 @@ pub async fn get_saved_request(pool: &SqlitePool, item_id: &str) -> AppResult<Sa
             headers: serde_json::from_str(&row.get::<String, _>("headers_json"))?,
             body: serde_json::from_str(&row.get::<String, _>("body_json"))?,
             auth: serde_json::from_str(&row.get::<String, _>("auth_json"))?,
+            pre_request_script: row.get("prerequest_script"),
+            test_script: row.get("test_script"),
         },
     })
 }
@@ -619,6 +627,8 @@ fn map_saved_request_detail(row: sqlx::sqlite::SqliteRow) -> AppResult<SavedRequ
             headers: serde_json::from_str(&row.get::<String, _>("headers_json"))?,
             body: serde_json::from_str(&row.get::<String, _>("body_json"))?,
             auth: serde_json::from_str(&row.get::<String, _>("auth_json"))?,
+            pre_request_script: row.get("prerequest_script"),
+            test_script: row.get("test_script"),
         },
     })
 }

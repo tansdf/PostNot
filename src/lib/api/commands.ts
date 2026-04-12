@@ -191,7 +191,9 @@ function createMockHistoryDetail(id: string): HistoryEntryDetail {
         apiKeyName: "",
         apiKeyValue: "",
         apiKeyIn: "header" as const
-      }
+      },
+      preRequestScript: "",
+      testScript: ""
     },
     responseHeaders: [
       {
@@ -245,7 +247,9 @@ function createMockSavedRequestDetail(id: string): SavedRequestDetail {
         apiKeyName: "",
         apiKeyValue: "",
         apiKeyIn: "header"
-      }
+      },
+      preRequestScript: "",
+      testScript: ""
     }
   };
 }
@@ -563,7 +567,9 @@ export async function importCurlRequestToDraft(input: CurlImportInput): Promise<
           apiKeyName: "",
           apiKeyValue: "",
           apiKeyIn: "header"
-        }
+        },
+        preRequestScript: "",
+        testScript: ""
       }
     };
   }

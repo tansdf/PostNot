@@ -51,6 +51,10 @@ pub struct SendRequestPayload {
     pub headers: Vec<KeyValueRow>,
     pub body: RequestBody,
     pub auth: RequestAuth,
+    #[serde(default)]
+    pub pre_request_script: String,
+    #[serde(default)]
+    pub test_script: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

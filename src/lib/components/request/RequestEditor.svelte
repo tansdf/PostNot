@@ -10,6 +10,7 @@
     type KeyValueRow,
     type RequestDraft
   } from "$lib/api/types";
+  import ScriptEditor from "$lib/components/request/ScriptEditor.svelte";
   import VariableField from "$lib/components/request/VariableField.svelte";
 
   let {
@@ -40,7 +41,7 @@
     onSave?: () => Promise<void> | void;
   } = $props();
 
-  let activePanel: "query" | "headers" | "body" | "auth" = $state("query");
+  let activePanel: "query" | "headers" | "body" | "auth" | "scripts" = $state("query");
   let jsonValidationError = $state("");
   let multipartErrorText = $state("");
   let isPickingMultipartFiles = $state(false);
@@ -49,7 +50,8 @@
     { id: "query", label: "Query" },
     { id: "headers", label: "Headers" },
     { id: "body", label: "Body" },
-    { id: "auth", label: "Auth" }
+    { id: "auth", label: "Auth" },
+    { id: "scripts", label: "Scripts" }
   ] as const;
 
   function splitUrlAndQuery(value: string) {
@@ -879,6 +881,48 @@
           </label>
         </div>
       {/if}
+    </div>
+  {/if}
+
+  {#if activePanel === "scripts"}
+    <div class="editor-block">
+      <div class="editor-header">
+        <h2>Scripts</h2>
+      </div>
+
+      <div class="request-script-grid">
+        <section class="request-script-card">
+          <div class="editor-header">
+            <h3>Pre-request Script</h3>
+          </div>
+          <p class="field-help">
+            Runs before send. Use `pn.variables.get("name")`, `pn.request.upsertHeader(...)`,
+            `pn.request.upsertQueryParam(...)`, `pn.request.setJsonBody(...)`, or `pn.request.setBearerToken(...)`.
+          </p>
+          <ScriptEditor
+            bind:value={request.preRequestScript}
+            {environmentVariables}
+            scriptKind="preRequest"
+            placeholder={"pn.request.upsertHeader('X-Trace-Id', pn.variables.get('trace_id') ?? 'local-run');"}
+          />
+        </section>
+
+        <section class="request-script-card">
+          <div class="editor-header">
+            <h3>Test Script</h3>
+          </div>
+          <p class="field-help">
+            Runs after the response arrives. Use `pn.test(...)`, `pn.expect(...)`, `pn.response.code`,
+            `pn.response.header("content-type")`, `pn.response.text()`, or `pn.response.json()`.
+          </p>
+          <ScriptEditor
+            bind:value={request.testScript}
+            {environmentVariables}
+            scriptKind="test"
+            placeholder={"pn.test('status is 200', () => {\n  pn.expect(pn.response.code).toBe(200);\n});"}
+          />
+        </section>
+      </div>
     </div>
   {/if}
 </section>
