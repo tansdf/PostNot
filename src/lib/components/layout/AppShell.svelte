@@ -2,6 +2,7 @@
   import type { Snippet } from "svelte";
   import { resolve } from "$app/paths";
   import { page } from "$app/state";
+  import CollectionDragController from "$lib/components/layout/CollectionDragController.svelte";
   import NotificationHost from "$lib/components/layout/NotificationHost.svelte";
   import SidebarCollections from "$lib/components/layout/SidebarCollections.svelte";
   import { updater } from "$lib/stores/updater.svelte";
@@ -53,5 +54,6 @@
     </main>
 
     <NotificationHost />
+    <CollectionDragController />
   </div>
 </div>

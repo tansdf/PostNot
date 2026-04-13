@@ -1,14 +1,15 @@
 use std::collections::HashMap;
 
 use chrono::Utc;
-use sqlx::{Row, SqlitePool};
+use sqlx::{Row, Sqlite, SqlitePool, Transaction};
 use uuid::Uuid;
 
 use crate::{
     domain::{
         collections::{
             CollectionItemSummary, CollectionSummary, CreateCollectionFolderInput,
-            CreateCollectionInput, SavedRequestDetail, SavedRequestSummary,
+            CreateCollectionInput, MoveCollectionItemInput, SavedRequestDetail,
+            SavedRequestSummary,
         },
         requests::SendRequestPayload,
     },
@@ -114,6 +115,118 @@ pub async fn create_collection_folder(
 
     touch_collection(pool, collection_id).await?;
     get_collection_item_summary(pool, &item_id).await
+}
+
+pub async fn move_collection_item(
+    pool: &SqlitePool,
+    item_id: &str,
+    input: &MoveCollectionItemInput,
+) -> AppResult<SavedRequestSummary> {
+    let target_collection_id = input.target_collection_id.trim();
+    if target_collection_id.is_empty() {
+        return Err(AppError::Message(
+            "Target collection is required.".to_string(),
+        ));
+    }
+
+    ensure_collection_exists(pool, target_collection_id).await?;
+    validate_parent_folder(pool, target_collection_id, input.target_parent_id.as_deref()).await?;
+
+    let mut transaction = pool.begin().await?;
+    let item_row = sqlx::query(
+        "SELECT collection_id, parent_id, kind FROM collection_items WHERE id = ?1",
+    )
+    .bind(item_id)
+    .fetch_optional(&mut *transaction)
+    .await?
+    .ok_or_else(|| AppError::Message("Collection item not found.".to_string()))?;
+
+    let source_collection_id: String = item_row.get("collection_id");
+    let source_parent_id: Option<String> = item_row.get("parent_id");
+    let kind: String = item_row.get("kind");
+
+    if kind != "request" {
+        return Err(AppError::Message(
+            "Only saved requests can be moved right now.".to_string(),
+        ));
+    }
+
+    let source_sibling_ids = list_sibling_ids(
+        &mut transaction,
+        &source_collection_id,
+        source_parent_id.as_deref(),
+        Some(item_id),
+    )
+    .await?;
+
+    let same_parent = source_collection_id == target_collection_id
+        && source_parent_id.as_deref() == input.target_parent_id.as_deref();
+
+    let mut destination_sibling_ids = if same_parent {
+        source_sibling_ids.clone()
+    } else {
+        list_sibling_ids(
+            &mut transaction,
+            target_collection_id,
+            input.target_parent_id.as_deref(),
+            Some(item_id),
+        )
+        .await?
+    };
+
+    let insert_index = normalize_target_index(input.target_index, destination_sibling_ids.len());
+    destination_sibling_ids.insert(insert_index, item_id.to_string());
+
+    let now = now_iso();
+
+    sqlx::query(
+        r#"
+        UPDATE collection_items
+        SET collection_id = ?2,
+            parent_id = ?3,
+            updated_at = ?4
+        WHERE id = ?1 AND kind = 'request'
+        "#,
+    )
+    .bind(item_id)
+    .bind(target_collection_id)
+    .bind(input.target_parent_id.as_deref())
+    .bind(&now)
+    .execute(&mut *transaction)
+    .await?;
+
+    if same_parent {
+        resequence_siblings(
+            &mut transaction,
+            target_collection_id,
+            input.target_parent_id.as_deref(),
+            &destination_sibling_ids,
+        )
+        .await?;
+    } else {
+        resequence_siblings(
+            &mut transaction,
+            &source_collection_id,
+            source_parent_id.as_deref(),
+            &source_sibling_ids,
+        )
+        .await?;
+        resequence_siblings(
+            &mut transaction,
+            target_collection_id,
+            input.target_parent_id.as_deref(),
+            &destination_sibling_ids,
+        )
+        .await?;
+    }
+
+    touch_collection_in_transaction(&mut transaction, &source_collection_id, &now).await?;
+    if source_collection_id != target_collection_id {
+        touch_collection_in_transaction(&mut transaction, target_collection_id, &now).await?;
+    }
+
+    transaction.commit().await?;
+    get_saved_request_summary(pool, item_id).await
 }
 
 pub async fn update_collection(
@@ -450,6 +563,64 @@ async fn next_sort_order(
     Ok(sort_order)
 }
 
+async fn list_sibling_ids(
+    transaction: &mut Transaction<'_, Sqlite>,
+    collection_id: &str,
+    parent_id: Option<&str>,
+    exclude_item_id: Option<&str>,
+) -> AppResult<Vec<String>> {
+    let rows = sqlx::query(
+        r#"
+        SELECT id
+        FROM collection_items
+        WHERE collection_id = ?1
+          AND (
+            (?2 IS NULL AND parent_id IS NULL)
+            OR parent_id = ?2
+          )
+          AND (?3 IS NULL OR id != ?3)
+        ORDER BY sort_order ASC, updated_at DESC, name ASC
+        "#,
+    )
+    .bind(collection_id)
+    .bind(parent_id)
+    .bind(exclude_item_id)
+    .fetch_all(&mut **transaction)
+    .await?;
+
+    Ok(rows.into_iter().map(|row| row.get("id")).collect())
+}
+
+async fn resequence_siblings(
+    transaction: &mut Transaction<'_, Sqlite>,
+    collection_id: &str,
+    parent_id: Option<&str>,
+    item_ids: &[String],
+) -> AppResult<()> {
+    for (sort_order, sibling_id) in item_ids.iter().enumerate() {
+        sqlx::query(
+            r#"
+            UPDATE collection_items
+            SET sort_order = ?2
+            WHERE id = ?1
+              AND collection_id = ?3
+              AND (
+                (?4 IS NULL AND parent_id IS NULL)
+                OR parent_id = ?4
+              )
+            "#,
+        )
+        .bind(sibling_id)
+        .bind(sort_order as i64)
+        .bind(collection_id)
+        .bind(parent_id)
+        .execute(&mut **transaction)
+        .await?;
+    }
+
+    Ok(())
+}
+
 async fn get_saved_request_summary(
     pool: &SqlitePool,
     item_id: &str,
@@ -581,13 +752,36 @@ fn build_collection_item_branch(
 }
 
 async fn touch_collection(pool: &SqlitePool, collection_id: &str) -> AppResult<()> {
+    let now = now_iso();
     sqlx::query("UPDATE collections SET updated_at = ?2 WHERE id = ?1")
         .bind(collection_id)
-        .bind(now_iso())
+        .bind(&now)
         .execute(pool)
         .await?;
 
     Ok(())
+}
+
+async fn touch_collection_in_transaction(
+    transaction: &mut Transaction<'_, Sqlite>,
+    collection_id: &str,
+    now: &str,
+) -> AppResult<()> {
+    sqlx::query("UPDATE collections SET updated_at = ?2 WHERE id = ?1")
+        .bind(collection_id)
+        .bind(now)
+        .execute(&mut **transaction)
+        .await?;
+
+    Ok(())
+}
+
+fn normalize_target_index(target_index: Option<i64>, sibling_count: usize) -> usize {
+    match target_index {
+        Some(index) if index > 0 => (index as usize).min(sibling_count),
+        Some(_) => 0,
+        None => sibling_count,
+    }
 }
 
 fn map_collection_summary(row: sqlx::sqlite::SqliteRow) -> CollectionSummary {

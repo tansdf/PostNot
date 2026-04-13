@@ -18,6 +18,7 @@ PostNot is built for working with HTTP APIs on your own machine, with local pers
 - Compose and send HTTP requests from a desktop-native UI
 - Save requests into collections and nested folders
 - Browse those folders in the sidebar and collections page with aligned tree guides and folder icons
+- Reorder saved requests and move them across folders or collections with drag-and-drop from the sidebar and collections page
 - Work with environments and `{{variable}}` substitution
 - Use built-in dynamic variables like Postman-style `$guid` and `$timestamp`
 - Store secret environment values in the OS credential store
@@ -38,7 +39,7 @@ PostNot is built for working with HTTP APIs on your own machine, with local pers
 
 ## Current Status
 
-PostNot is still pre-1.0 and evolving deliberately. The core workflow is already real and usable, but the product is still growing in areas like richer scripting, multi-request workflow, broader polish, and updater channel decisions.
+PostNot is still pre-1.0 and evolving deliberately. The core workflow is already real and usable, including nested collection organization and drag-and-drop request management, but the product is still growing in areas like richer scripting, multi-request workflow, broader polish, and updater channel decisions.
 
 ## Privacy And Storage
 

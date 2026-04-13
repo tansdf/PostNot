@@ -6,6 +6,7 @@ import {
   deleteCollectionItem,
   listCollectionItems,
   listCollections,
+  moveCollectionItem,
   saveRequestToCollection,
   updateCollection as updateCollectionCommand,
   updateSavedRequest as updateSavedRequestCommand
@@ -14,6 +15,7 @@ import type {
   CollectionItemSummary,
   CollectionSummary,
   CreateCollectionInput,
+  MoveCollectionItemInput,
   RequestDraft
 } from "$lib/api/types";
 import { notifications } from "$lib/stores/notifications.svelte";
@@ -31,6 +33,7 @@ class CollectionsStore {
   isCreatingCollection = $state(false);
   isCreatingFolder = $state(false);
   isSavingRequest = $state(false);
+  isMovingCollectionItem = $state(false);
   selectedCollectionId = $state("");
   collections = $state.raw<CollectionSummary[]>([]);
   collectionItemsByCollection = $state.raw<Record<string, CollectionItemSummary[]>>({});
@@ -233,6 +236,30 @@ class CollectionsStore {
       this.errorText = error instanceof Error ? error.message : String(error);
     } finally {
       this.pendingDeleteCollectionItemId = "";
+    }
+  }
+
+  async moveSavedRequest(
+    itemId: string,
+    sourceCollectionId: string,
+    input: MoveCollectionItemInput
+  ) {
+    this.isMovingCollectionItem = true;
+
+    try {
+      const savedRequest = await moveCollectionItem(itemId, input);
+      await this.loadCollections(this.selectedCollectionId || input.targetCollectionId);
+
+      const collectionIds = Array.from(new Set([sourceCollectionId, input.targetCollectionId]));
+      await Promise.all(collectionIds.map((collectionId) => this.loadCollectionItems(collectionId)));
+
+      notifications.success(savedRequest.name || "Saved request", "Request moved");
+      return savedRequest;
+    } catch (error) {
+      this.errorText = error instanceof Error ? error.message : String(error);
+      return null;
+    } finally {
+      this.isMovingCollectionItem = false;
     }
   }
 }

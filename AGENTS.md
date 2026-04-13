@@ -12,7 +12,7 @@ PostNot is a local-first desktop API client built with:
 - TypeScript
 - SQLite
 
-The app already supports request execution, history, collections with nested folders, environments, secret environment storage, import/export flows, notifications, settings, signed in-app update checks, and saved-request pre-request and test scripts (frontend JavaScript execution around the native send).
+The app already supports request execution, history, collections with nested folders and drag-and-drop request moves, environments, secret environment storage, import/export flows, notifications, settings, signed in-app update checks, and saved-request pre-request and test scripts (frontend JavaScript execution around the native send).
 
 ## Canonical Working Directory
 
@@ -48,7 +48,7 @@ Implemented now:
 - persisted settings
 - persisted history with detail inspection
 - request cancellation
-- collections and saved requests
+- collections and saved requests with nested folders and drag-and-drop request moves across the sidebar and Collections page
 - environments with variable resolution
 - OS-backed secret storage for secret environment variables
 - Postman collection import/export
@@ -89,6 +89,18 @@ Run the desktop app locally with:
 ```bash
 npm run tauri dev
 ```
+
+## Windows Dev Run
+
+When a task needs a true native Windows run instead of WSL or WSLg:
+
+- install the standard Windows toolchain first: Node.js, Rust via `rustup`, and Visual Studio Build Tools with the C++ workload
+- avoid running the Windows toolchain directly against the WSL UNC repo path; instead, copy or mirror the repo into a normal local Windows working directory
+- open a regular PowerShell session, or a Visual Studio developer shell if the compiler environment is missing
+- from that local Windows copy, run `npm install`, then `npm run check`, then `npm run tauri dev`
+- if Tauri fails looking for the MSVC toolchain, verify `cl.exe` is available in the current shell before retrying
+
+This approach is mainly for native Windows verification such as drag-and-drop, windowing, or WebView behavior that can differ from WSLg.
 
 ## Runtime Notes
 

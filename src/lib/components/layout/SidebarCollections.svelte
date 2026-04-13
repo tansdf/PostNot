@@ -7,7 +7,11 @@
 
   import { getCollectionSidebarState, saveCollectionSidebarState } from "$lib/api/commands";
   import type { CollectionItemSummary } from "$lib/api/types";
+  import {
+    type DraggedCollectionRequest
+  } from "$lib/collections/drag-and-drop";
   import FolderGlyph from "$lib/components/icons/FolderGlyph.svelte";
+  import { collectionDnd } from "$lib/stores/collection-dnd.svelte";
   import { collections } from "$lib/stores/collections.svelte";
 
   let expandedCollectionIds = new SvelteSet<string>();
@@ -116,11 +120,19 @@
   }
 
   async function openCollection(collectionId: string) {
+    if (collectionDnd.shouldSuppressClick()) {
+      return;
+    }
+
     await collections.selectCollection(collectionId);
     await goto(resolve(`/collections?collectionId=${encodeURIComponent(collectionId)}`));
   }
 
   async function toggleCollection(collectionId: string) {
+    if (collectionDnd.shouldSuppressClick()) {
+      return;
+    }
+
     if (expandedCollectionIds.has(collectionId)) {
       expandedCollectionIds.delete(collectionId);
       await persistSidebarState();
@@ -137,6 +149,10 @@
   }
 
   async function toggleFolder(folderId: string) {
+    if (collectionDnd.shouldSuppressClick()) {
+      return;
+    }
+
     if (expandedFolderIds.has(folderId)) {
       expandedFolderIds.delete(folderId);
       await persistSidebarState();
@@ -148,8 +164,32 @@
   }
 
   async function openSavedRequest(collectionId: string, itemId: string) {
+    if (collectionDnd.shouldSuppressClick()) {
+      return;
+    }
+
     await collections.selectCollection(collectionId);
     await goto(resolve(`/?savedRequestId=${encodeURIComponent(itemId)}`));
+  }
+
+  function createDraggedRequest(item: CollectionItemSummary): DraggedCollectionRequest {
+    return {
+      itemId: item.id,
+      collectionId: item.collectionId,
+      parentId: item.parentId ?? null,
+      name: item.name
+    };
+  }
+
+  function handleRequestPointerDown(event: PointerEvent, item: CollectionItemSummary) {
+    if (event.button !== 0 || collections.isMovingCollectionItem) {
+      return;
+    }
+
+    collectionDnd.beginPotentialDrag(createDraggedRequest(item), event.pointerId, {
+      x: event.clientX,
+      y: event.clientY
+    });
   }
 
   function collectFolderIds(items: CollectionItemSummary[], target: Set<string>) {
@@ -198,9 +238,21 @@
     {:else}
       <div class="sidebar-collection-stack">
         {#each collections.collections as collection (collection.id)}
-          <article class={["sidebar-collection-card", collections.selectedCollectionId === collection.id && "sidebar-collection-active"]}>
+          <article
+            class={[
+              "sidebar-collection-card",
+              collections.selectedCollectionId === collection.id && "sidebar-collection-active",
+              collectionDnd.matchesDropIndicator(collection.id, null, "root") && "sidebar-drop-target-root"
+            ]}
+          >
             <div class="sidebar-collection-row">
-              <button class="sidebar-collection-button" type="button" onclick={() => openCollection(collection.id)}>
+              <button
+                class="sidebar-collection-button"
+                type="button"
+                onclick={() => openCollection(collection.id)}
+                data-collection-drop="root"
+                data-collection-id={collection.id}
+              >
                 <strong>{collection.name}</strong>
                 <span>{collection.requestCount} request{collection.requestCount === 1 ? "" : "s"}</span>
                 <span class="sidebar-collection-meta">Updated {formatUpdatedAt(collection.updatedAt)}</span>
@@ -238,12 +290,19 @@
                             <button
                               class={[
                                 "sidebar-folder-button",
-                                expandedFolderIds.has(item.id) && "sidebar-folder-open"
+                                expandedFolderIds.has(item.id) && "sidebar-folder-open",
+                                collectionDnd.matchesDropIndicator(collection.id, item.id, "before") && "sidebar-drop-target-before",
+                                collectionDnd.matchesDropIndicator(collection.id, item.id, "after") && "sidebar-drop-target-after",
+                                collectionDnd.matchesDropIndicator(collection.id, item.id, "inside") && "sidebar-drop-target-inside"
                               ]}
                               type="button"
                               onclick={() => toggleFolder(item.id)}
                               aria-expanded={expandedFolderIds.has(item.id)}
                               style={`--tree-depth:${depth};`}
+                              data-collection-drop="item"
+                              data-collection-id={collection.id}
+                              data-item-id={item.id}
+                              data-item-kind={item.kind}
                             >
                               <span class="sidebar-folder-icon" aria-hidden="true">
                                 <FolderGlyph
@@ -266,10 +325,21 @@
                           </div>
                         {:else}
                           <button
-                            class={["sidebar-request-link", page.url.searchParams.get("savedRequestId") === item.id && "sidebar-request-active"]}
+                            class={[
+                              "sidebar-request-link",
+                              page.url.searchParams.get("savedRequestId") === item.id && "sidebar-request-active",
+                              collectionDnd.isDraggingRequest(item.id) && "sidebar-request-dragging",
+                              collectionDnd.matchesDropIndicator(collection.id, item.id, "before") && "sidebar-drop-target-before",
+                              collectionDnd.matchesDropIndicator(collection.id, item.id, "after") && "sidebar-drop-target-after"
+                            ]}
                             type="button"
                             onclick={() => openSavedRequest(collection.id, item.id)}
                             style={`--tree-depth:${depth};`}
+                            onpointerdown={(event) => handleRequestPointerDown(event, item)}
+                            data-collection-drop="item"
+                            data-collection-id={collection.id}
+                            data-item-id={item.id}
+                            data-item-kind={item.kind}
                           >
                             <strong class="sidebar-request-name">
                               {#if item.name}

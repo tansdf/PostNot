@@ -28,6 +28,14 @@ pub struct CreateCollectionFolderInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct MoveCollectionItemInput {
+    pub target_collection_id: String,
+    pub target_parent_id: Option<String>,
+    pub target_index: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CollectionItemSummary {
     pub id: String,
     pub collection_id: String,

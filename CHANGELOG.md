@@ -6,6 +6,20 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-04-14
+
+### Added
+
+- Drag-and-drop request management in collection trees, including reordering saved requests, moving them into folders, and moving them across collections from the sidebar or Collections page.
+
+### Changed
+
+- Collection request moves now use one shared interaction model across the sidebar and Collections page, with matching root, folder, and sibling drop targets.
+
+### Fixed
+
+- Desktop collection drag-and-drop no longer depends on native HTML5 drag ghost behavior, avoiding broken visuals in WSLg/Linux webviews and unreliable drag starts in native Windows dev runs.
+
 ## [0.12.1] - 2026-04-13
 
 ### Added

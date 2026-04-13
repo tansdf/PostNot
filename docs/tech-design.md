@@ -60,6 +60,7 @@ This section reflects the code currently implemented in the repository.
 - Cancel in-flight request
 - Collections and saved requests
 - Collection folders with nested request organization
+- Drag-and-drop saved-request moves across collection trees, including reorder, folder moves, and cross-collection placement
 - Environments and variable resolution
 - OS-backed secret storage for secret environment variables
 - Postman collection JSON import
@@ -92,6 +93,7 @@ Responsibilities:
 - Render request editor (including script editors), response viewer, settings page, and history panel
 - Manage page-level UI state
 - Render global floating notifications for cross-screen action feedback
+- Coordinate shared pointer-driven collection drag-and-drop interactions across the sidebar and Collections page
 - Run saved-request pre-request and test scripts in JavaScript before and after invoking `send_request`
 - Invoke typed Tauri commands for persistence and request execution
 - Provide a desktop-oriented workflow without browser networking
@@ -465,6 +467,7 @@ Commands currently exposed to the frontend:
 - `create_collection`
 - `list_collection_items`
 - `create_collection_folder`
+- `move_collection_item`
 - `update_collection`
 - `delete_collection`
 - `list_saved_requests`
@@ -502,6 +505,7 @@ Commands currently exposed to the frontend:
 - `create_collection`: creates a new collection for saved requests
 - `list_collection_items`: returns the nested folder and request tree for one collection
 - `create_collection_folder`: creates a folder at the collection root or inside another folder
+- `move_collection_item`: reorders or relocates a saved request within the collection tree, including moves across folders and collections
 - `update_collection`: updates one collection's name and description
 - `delete_collection`: removes a collection and its saved requests
 - `list_saved_requests`: lists saved requests within one collection
@@ -560,6 +564,7 @@ Current UI sections:
 - root-folder and subfolder creation
 - collection import/export actions
 - selected collection tree for folders and saved requests with vertical tree guides and folder open/closed icons (`FolderGlyph.svelte` + shared SVG paths in `folderPaths.ts`)
+- drag-and-drop saved-request management that matches the sidebar tree: reorder among siblings, move into folders, move across collections, and move back to collection root
 - matching sidebar tree styling for nested collections (see `SidebarCollections.svelte` and `app.css`)
 - open-in-requests and delete actions for saved requests
 
@@ -652,4 +657,4 @@ These are still unresolved:
 
 Treat the repository as being in an active Milestone 1 state, not full MVP completion.
 
-The design is now grounded in what the code actually does: persisted settings influence request execution, history is stored in SQLite with secret-derived environment values redacted, secret environment values live in the OS credential store, environments resolve variables at send time, collections support nested folders in the working UI with consistent sidebar and collections-panel tree affordances, saved requests can run pre-request and test scripts in the frontend before and after native execution, import can pull requests in from Postman collections and cURL, multipart requests can attach local files, built-in dynamic variables resolve at runtime, and the desktop shell can check GitHub Releases for signed updater builds both on launch and from Settings. The next work should stay focused on updater channel decisions, multi-tab decisions, scripting depth, and remaining UX polish.
+The design is now grounded in what the code actually does: persisted settings influence request execution, history is stored in SQLite with secret-derived environment values redacted, secret environment values live in the OS credential store, environments resolve variables at send time, collections support nested folders in the working UI with consistent sidebar and collections-panel tree affordances, saved requests can be reordered or moved across folders and collections through a shared drag-and-drop model, saved requests can run pre-request and test scripts in the frontend before and after native execution, import can pull requests in from Postman collections and cURL, multipart requests can attach local files, built-in dynamic variables resolve at runtime, and the desktop shell can check GitHub Releases for signed updater builds both on launch and from Settings. The next work should stay focused on updater channel decisions, multi-tab decisions, scripting depth, and remaining UX polish.

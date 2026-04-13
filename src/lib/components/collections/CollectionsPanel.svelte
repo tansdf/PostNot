@@ -1,7 +1,12 @@
 <script lang="ts">
   import type { CollectionItemSummary, CollectionSummary } from "$lib/api/types";
 
+  import {
+    type DraggedCollectionRequest
+  } from "$lib/collections/drag-and-drop";
   import FolderGlyph from "$lib/components/icons/FolderGlyph.svelte";
+  import { collectionDnd } from "$lib/stores/collection-dnd.svelte";
+  import { collections } from "$lib/stores/collections.svelte";
   import CollectionDetailForm from "./CollectionDetailForm.svelte";
 
   let {
@@ -65,6 +70,34 @@
     return `${childCount} item${childCount === 1 ? "" : "s"}`;
   }
 
+  function createDraggedRequest(item: CollectionItemSummary): DraggedCollectionRequest {
+    return {
+      itemId: item.id,
+      collectionId: item.collectionId,
+      parentId: item.parentId ?? null,
+      name: item.name
+    };
+  }
+
+  function handleRequestPointerDown(event: PointerEvent, item: CollectionItemSummary) {
+    if (event.button !== 0 || collections.isMovingCollectionItem) {
+      return;
+    }
+
+    collectionDnd.beginPotentialDrag(createDraggedRequest(item), event.pointerId, {
+      x: event.clientX,
+      y: event.clientY
+    });
+  }
+
+  function handleOpenSavedRequestClick(itemId: string) {
+    if (collectionDnd.shouldSuppressClick()) {
+      return;
+    }
+
+    return onOpenSavedRequest(itemId);
+  }
+
 </script>
 
 <div class="workspace-grid">
@@ -123,15 +156,42 @@
 
     {#if !collection}
       <div class="empty-state">Select a collection to inspect its folders and saved requests.</div>
-    {:else if collectionItems.length === 0 && !isCollectionItemsLoading}
-      <div class="empty-state">No folders or saved requests yet. Use `New folder` or the request editor `Save` flow to start organizing.</div>
     {:else}
+      <button
+        class={[
+          "collection-root-drop",
+          collectionDnd.matchesDropIndicator(collection.id, null, "root") && "collection-root-drop-active"
+        ]}
+        type="button"
+        aria-label="Move a saved request to the collection root"
+        data-collection-drop="root"
+        data-collection-id={collection.id}
+      >
+        <strong>Collection root</strong>
+        <span>Drop a saved request here to move it to the top level.</span>
+      </button>
+
+      {#if collectionItems.length === 0 && !isCollectionItemsLoading}
+        <div class="empty-state">No folders or saved requests yet. Use `New folder` or the request editor `Save` flow to start organizing.</div>
+      {:else}
       {#snippet renderItems(items: CollectionItemSummary[], depth: number)}
         <div class={["collection-item-tree", depth > 0 && "collection-item-tree-nested"]}>
           {#each items as item (item.id)}
             <article
-              class={["collection-item", item.kind === "folder" && "collection-folder-item"]}
+              class={[
+                "collection-item",
+                item.kind === "folder" && "collection-folder-item",
+                item.kind === "request" && collectionDnd.isDraggingRequest(item.id) && "collection-item-dragging",
+                collection?.id && collectionDnd.matchesDropIndicator(collection.id, item.id, "before") && "collection-drop-target-before",
+                collection?.id && collectionDnd.matchesDropIndicator(collection.id, item.id, "after") && "collection-drop-target-after",
+                item.kind === "folder" && collection?.id && collectionDnd.matchesDropIndicator(collection.id, item.id, "inside") && "collection-drop-target-inside"
+              ]}
               style={`--tree-depth:${depth};`}
+              onpointerdown={item.kind === "request" ? (event) => handleRequestPointerDown(event, item) : undefined}
+              data-collection-drop={collection ? "item" : undefined}
+              data-collection-id={collection?.id}
+              data-item-id={item.id}
+              data-item-kind={item.kind}
             >
               <div class="saved-request-meta">
                 {#if item.kind === "folder"}
@@ -175,7 +235,7 @@
                     Add subfolder
                   </button>
                 {:else}
-                  <button class="tab-button" type="button" onclick={() => onOpenSavedRequest(item.id)}>
+                  <button class="tab-button" type="button" onclick={() => handleOpenSavedRequestClick(item.id)}>
                     Open in Requests
                   </button>
                 {/if}
@@ -199,6 +259,7 @@
       {/snippet}
 
       {@render renderItems(collectionItems, 0)}
+      {/if}
     {/if}
   </section>
 </div>

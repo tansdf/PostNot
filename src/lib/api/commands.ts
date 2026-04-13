@@ -5,6 +5,7 @@ import {
   type CollectionSummary,
   type CreateCollectionFolderInput,
   type CreateCollectionInput,
+  type MoveCollectionItemInput,
   type CurlImportInput,
   createDefaultSettings,
   type AppSettings,
@@ -408,6 +409,25 @@ export async function createCollectionFolder(
   }
 
   return invoke<CollectionItemSummary>("create_collection_folder", { collectionId, input });
+}
+
+export async function moveCollectionItem(
+  itemId: string,
+  input: MoveCollectionItemInput
+): Promise<SavedRequestSummary> {
+  if (!hasTauriRuntime()) {
+    return {
+      id: itemId,
+      collectionId: input.targetCollectionId,
+      parentId: input.targetParentId ?? null,
+      name: "Moved request",
+      method: "GET",
+      url: "https://example.com",
+      updatedAt: new Date().toISOString()
+    };
+  }
+
+  return invoke<SavedRequestSummary>("move_collection_item", { itemId, input });
 }
 
 export async function updateCollection(collectionId: string, input: CreateCollectionInput): Promise<CollectionSummary> {

@@ -137,6 +137,12 @@ export type CreateCollectionFolderInput = {
   parentId?: string | null;
 };
 
+export type MoveCollectionItemInput = {
+  targetCollectionId: string;
+  targetParentId?: string | null;
+  targetIndex?: number | null;
+};
+
 export type CollectionItemSummary = {
   id: string;
   collectionId: string;
