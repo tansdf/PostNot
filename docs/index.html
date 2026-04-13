@@ -3,17 +3,23 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>PostNot — local-first desktop API client</title>
+    <title>PostNot - local-first desktop API client</title>
     <meta
       name="description"
-      content="PostNot is a fast, local-first desktop HTTP API client built with Tauri and Rust. Collections, environments, secrets in the OS store, Postman import/export, and more."
+      content="PostNot is a local-first desktop API client built with Rust and Tauri. Send HTTP requests, manage collections and environments, store secrets in the OS credential store, and keep your API workflow on your machine."
     />
-    <meta property="og:title" content="PostNot — local-first desktop API client" />
+    <meta property="og:title" content="PostNot - local-first desktop API client" />
     <meta
       property="og:description"
-      content="A fast desktop tool for HTTP APIs without living in a browser tab. Local data, Postman-compatible import/export."
+      content="Fast desktop API work that stays on your machine. Local persistence, OS-backed secrets, collections, environments, and scripting."
     />
     <meta property="og:type" content="website" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="site.css" />
     <link rel="icon" type="image/svg+xml" href="icon.svg" />
   </head>
@@ -23,7 +29,7 @@
       <div class="site-header__inner">
         <a class="brand" href="index.html">
           <img src="icon.svg" width="36" height="36" alt="" />
-          PostNot
+          <span>PostNot</span>
         </a>
         <nav aria-label="Primary">
           <ul class="nav-links">
@@ -40,108 +46,80 @@
     </header>
 
     <main id="main">
-      <div class="hero">
-        <div class="hero__badges">
-          <a href="https://github.com/tansdf/PostNot" rel="noopener noreferrer"
-            ><img
-              src="https://img.shields.io/badge/built%20with-AI%20agents-ff9b54"
-              alt="Built with AI agents"
- /></a>
-          <a href="https://github.com/tansdf/PostNot" rel="noopener noreferrer"
-            ><img
-              src="https://img.shields.io/badge/code%20authorship-100%25%20AI%20generated-2f855a"
-              alt="Code authorship 100% AI generated"
-          /></a>
+      <section class="hero">
+        <div class="hero__copy">
+          <p class="eyebrow">Rust + Tauri desktop client</p>
+          <div class="hero__badges">
+            <a href="https://github.com/tansdf/PostNot" rel="noopener noreferrer"
+              ><img
+                src="https://img.shields.io/badge/built%20with-AI%20agents-ff9b54"
+                alt="Built with AI agents"
+            /></a>
+            <a href="https://github.com/tansdf/PostNot" rel="noopener noreferrer"
+              ><img
+                src="https://img.shields.io/badge/code%20authorship-100%25%20AI%20generated-2f855a"
+                alt="Code authorship 100 percent AI generated"
+            /></a>
+          </div>
+          <h1>Fast desktop API work that stays on your machine</h1>
+          <p class="hero__tagline">
+            PostNot is a local-first API client for focused HTTP workflows: native request execution,
+            local persistence, collections, environments, OS-backed secrets, import/export, and saved
+            request scripting.
+          </p>
+          <div class="hero__highlights" aria-label="Key product highlights">
+            <span>Rust-native sending</span>
+            <span>SQLite-backed local data</span>
+            <span>OS-backed secret storage</span>
+          </div>
+          <div class="cta-row">
+            <a
+              class="btn btn--primary"
+              href="https://github.com/tansdf/PostNot/releases/latest"
+              rel="noopener noreferrer"
+              >Download latest release</a
+            >
+            <a
+              class="btn btn--secondary"
+              href="https://github.com/tansdf/PostNot"
+              rel="noopener noreferrer"
+              >Browse source</a
+            >
+            <a class="btn btn--secondary" href="tech-design.md">Read technical design</a>
+          </div>
+          <p class="hero__note">
+            PostNot is a fully AI-generated software project. The repository code was produced
+            end-to-end by AI agents.
+          </p>
         </div>
-        <h1>PostNot</h1>
-        <p class="hero__tagline">
-          Local-first desktop API client for people who want a fast tool for HTTP APIs without living
-          in a browser tab.
-        </p>
-        <p class="hero__note">
-          PostNot is a fully AI-generated software project: the codebase was produced end-to-end by
-          AI agents, with no human-written code in the repository.
-        </p>
-        <div class="cta-row">
-          <a
-            class="btn btn--primary"
-            href="https://github.com/tansdf/PostNot/releases/latest"
-            rel="noopener noreferrer"
-            >Download latest release</a
-          >
-          <a
-            class="btn btn--secondary"
-            href="https://github.com/tansdf/PostNot"
-            rel="noopener noreferrer"
-            >Source on GitHub</a
-          >
-          <a
-            class="btn btn--secondary"
-            href="https://github.com/tansdf/PostNot#building-from-source"
-            rel="noopener noreferrer"
-            >Build from source</a
-          >
-        </div>
-      </div>
 
-      <section id="screenshots" aria-labelledby="screenshots-heading">
-        <h2 id="screenshots-heading">Screenshots</h2>
-        <p class="section-lead">
-          A quick look at the interface from a local development session (Vite preview in the browser at
-          the same routes as the desktop app).
-        </p>
-        <div class="gallery">
-          <figure class="figure-card">
+        <div class="hero__preview">
+          <div class="preview-shell">
+            <div class="preview-shell__bar">
+              <span>Request workspace</span>
+              <span>Desktop UI</span>
+            </div>
             <img
               src="images/request-workspace.webp"
               width="1200"
-              height="750"
-              alt="PostNot main window showing HTTP method, URL bar, request tabs, and response panel"
-              loading="lazy"
+              height="758"
+              alt="PostNot request workspace showing a request editor, response panel, and history"
             />
-            <figcaption>Request workspace — compose, send, and inspect responses.</figcaption>
-          </figure>
-          <figure class="figure-card">
-            <img
-              src="images/collections-sidebar.webp"
-              width="1200"
-              height="750"
-              alt="PostNot sidebar with nested folders and saved requests in a tree layout"
-              loading="lazy"
-            />
-            <figcaption>Collections — nested folders and saved requests in the sidebar.</figcaption>
-          </figure>
-          <figure class="figure-card">
-            <img
-              src="images/environments.webp"
-              width="1200"
-              height="750"
-              alt="PostNot environments editor with variable names and values"
-              loading="lazy"
-            />
-            <figcaption>
-              Environments — <span class="code-inline">{{variable}}</span> substitution and secret
-              handling.
-            </figcaption>
-          </figure>
-          <figure class="figure-card">
-            <img
-              src="images/settings-about.webp"
-              width="1200"
-              height="750"
-              alt="PostNot settings or about area showing version and preferences"
-              loading="lazy"
-            />
-            <figcaption>Settings and updates — persisted preferences and release checks.</figcaption>
-          </figure>
+          </div>
+          <div class="preview-caption">
+            Local-first by default, with the same warm-paper and deep-green UI used in the desktop app.
+          </div>
         </div>
       </section>
 
       <section id="features" aria-labelledby="features-heading">
-        <h2 id="features-heading">What it does</h2>
+        <div class="section-heading">
+          <p class="eyebrow">Core workflow</p>
+          <h2 id="features-heading">Built for dense desktop API sessions</h2>
+        </div>
         <p class="section-lead">
-          Everything runs on your machine: persistence, history, and imports stay local unless you
-          export them yourself.
+          PostNot keeps request editing, persistence, history, imports, and secrets close to the
+          machine you are working on.
         </p>
         <div class="feature-grid">
           <article class="card">
@@ -149,10 +127,10 @@
             <p>Compose and send HTTP requests from a desktop-native UI.</p>
           </article>
           <article class="card">
-            <h3>Collections &amp; folders</h3>
+            <h3>Collections and folders</h3>
             <p>
-              Save requests into collections and nested folders; browse with tree guides and folder
-              icons.
+              Save requests into collections and nested folders, then browse them with aligned tree
+              guides and shared folder glyphs.
             </p>
           </article>
           <article class="card">
@@ -164,37 +142,92 @@
           </article>
           <article class="card">
             <h3>Dynamic variables</h3>
-            <p>Built-in dynamic values like Postman-style <span class="code-inline">$guid</span> and <span class="code-inline">$timestamp</span>.</p>
+            <p>Built-in values like <span class="code-inline">$guid</span> and <span class="code-inline">$timestamp</span>.</p>
           </article>
           <article class="card">
             <h3>Secrets</h3>
-            <p>Store secret environment values in the OS credential store, not in plain SQLite.</p>
+            <p>Store secret environment values in the OS credential store instead of plain SQLite.</p>
           </article>
           <article class="card">
             <h3>History</h3>
-            <p>Inspect request history locally with sensible redaction for secrets.</p>
+            <p>Inspect request history locally with sensible redaction for secret-derived values.</p>
           </article>
           <article class="card">
-            <h3>Import / export</h3>
-            <p>Postman collections and environments, cURL import, Postman-compatible export.</p>
+            <h3>Import and export</h3>
+            <p>Import from Postman or cURL and export collections and environments when needed.</p>
           </article>
           <article class="card">
-            <h3>Multipart &amp; files</h3>
-            <p>Attach local files to multipart requests.</p>
+            <h3>Multipart and files</h3>
+            <p>Attach local files to multipart requests without leaving the app workflow.</p>
           </article>
           <article class="card">
             <h3>Scripts</h3>
-            <p>Pre-request and test scripts on saved requests (JavaScript in the UI around each send).</p>
-          </article>
-          <article class="card">
-            <h3>Polish</h3>
-            <p>Floating notifications, persisted settings, and signed in-app update checks.</p>
+            <p>Run saved pre-request and test scripts around each request send.</p>
           </article>
         </div>
       </section>
 
+      <section id="screenshots" aria-labelledby="screenshots-heading">
+        <div class="section-heading">
+          <p class="eyebrow">Interface</p>
+          <h2 id="screenshots-heading">Current product screenshots</h2>
+        </div>
+        <p class="section-lead">
+          A quick look at the current UI across the request editor, collections, environments, and
+          settings surfaces.
+        </p>
+        <div class="gallery">
+          <figure class="figure-card">
+            <img
+              src="images/request-workspace.webp"
+              width="1200"
+              height="758"
+              alt="PostNot request workspace showing method picker, URL field, request editor, and response area"
+              loading="lazy"
+            />
+            <figcaption>Request workspace - compose, send, and inspect responses.</figcaption>
+          </figure>
+          <figure class="figure-card">
+            <img
+              src="images/collections-sidebar.webp"
+              width="1200"
+              height="758"
+              alt="PostNot collections view with sidebar navigation and nested request folders"
+              loading="lazy"
+            />
+            <figcaption>Collections - nested folders and saved requests in the sidebar.</figcaption>
+          </figure>
+          <figure class="figure-card">
+            <img
+              src="images/environments.webp"
+              width="1200"
+              height="758"
+              alt="PostNot environments editor with variable names, values, and secret handling"
+              loading="lazy"
+            />
+            <figcaption>
+              Environments - <span class="code-inline">{{variable}}</span> substitution and secret
+              storage.
+            </figcaption>
+          </figure>
+          <figure class="figure-card">
+            <img
+              src="images/settings-about.webp"
+              width="1200"
+              height="758"
+              alt="PostNot settings surface with preferences and update information"
+              loading="lazy"
+            />
+            <figcaption>Settings and updates - persisted preferences and release checks.</figcaption>
+          </figure>
+        </div>
+      </section>
+
       <section id="why" aria-labelledby="why-heading">
-        <h2 id="why-heading">Why PostNot</h2>
+        <div class="section-heading">
+          <p class="eyebrow">Why PostNot</p>
+          <h2 id="why-heading">A smaller surface area, with the parts that matter</h2>
+        </div>
         <div class="two-col">
           <article class="card">
             <h3>Local-first</h3>
@@ -205,8 +238,8 @@
             <p>Rust request execution and Tauri packaging instead of a browser-only shell.</p>
           </article>
           <article class="card">
-            <h3>Practical portability</h3>
-            <p>Bring data in from Postman and export it back out when you need to.</p>
+            <h3>Portable when you need it</h3>
+            <p>Bring data in from Postman, keep working locally, and export it back out later.</p>
           </article>
           <article class="card">
             <h3>Safer environment handling</h3>
@@ -216,7 +249,10 @@
       </section>
 
       <section id="privacy" aria-labelledby="privacy-heading">
-        <h2 id="privacy-heading">Privacy &amp; storage</h2>
+        <div class="section-heading">
+          <p class="eyebrow">Storage model</p>
+          <h2 id="privacy-heading">Privacy and persistence</h2>
+        </div>
         <ul class="privacy-list">
           <li>SQLite-backed app data lives under the Tauri app data directory on your system.</li>
           <li>Secret environment variables are stored in the operating system credential store.</li>
@@ -229,17 +265,21 @@
       </section>
 
       <section id="status" aria-labelledby="status-heading">
-        <h2 id="status-heading">Current status</h2>
+        <div class="section-heading">
+          <p class="eyebrow">Project status</p>
+          <h2 id="status-heading">Pre-1.0 and actively refined</h2>
+        </div>
         <div class="status-callout">
           <p>
-            <strong>Pre-1.0.</strong> The core workflow is already usable; the product is still
-            growing in areas like richer scripting, multi-request workflows, broader polish, and
-            updater channel decisions. Follow            <a href="https://github.com/tansdf/PostNot/blob/main/CHANGELOG.md" rel="noopener noreferrer"
+            The core workflow is already real and usable. Current work is focused on richer scripting,
+            multi-request workflow decisions, additional polish, and updater channel decisions. Follow
+            <a
+              href="https://github.com/tansdf/PostNot/blob/master/CHANGELOG.md"
+              rel="noopener noreferrer"
               >CHANGELOG.md</a
             >
             and
-            <a href="https://github.com/tansdf/PostNot/releases" rel="noopener noreferrer">Releases</a
-            >
+            <a href="https://github.com/tansdf/PostNot/releases" rel="noopener noreferrer">Releases</a>
             for updates.
           </p>
         </div>
@@ -250,7 +290,7 @@
       <div class="site-footer__inner">
         <p>
           PostNot is licensed under the
-          <a href="https://github.com/tansdf/PostNot/blob/main/LICENSE" rel="noopener noreferrer"
+          <a href="https://github.com/tansdf/PostNot/blob/master/LICENSE" rel="noopener noreferrer"
             >Apache License 2.0</a
           >.
         </p>
