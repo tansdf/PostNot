@@ -531,15 +531,28 @@ select option {
 .request-script-grid {
   display: grid;
   gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .request-script-card {
   display: grid;
-  gap: 12px;
+  gap: 10px;
   padding: 16px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-soft);
   background: var(--surface-subtle);
+  min-width: 0;
+}
+
+.request-script-card-header {
+  display: grid;
+  gap: 6px;
+}
+
+.request-script-card-title {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.2;
 }
 
 .request-script-editor {
@@ -1416,13 +1429,23 @@ select option {
 }
 
 .settings-layout,
+.settings-primary-grid,
+.settings-secondary-grid,
 .settings-section-card {
   display: grid;
   gap: 14px;
 }
 
 .settings-layout {
+  align-items: start;
+}
+
+.settings-primary-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.settings-secondary-grid {
+  grid-template-columns: minmax(18rem, 1.25fr) repeat(2, minmax(16rem, 0.9fr));
   align-items: start;
 }
 
@@ -1431,6 +1454,10 @@ select option {
   border-radius: var(--radius-md);
   background: var(--surface-subtle);
   border: 1px solid var(--border-soft);
+}
+
+.settings-section-card-emphasis {
+  min-width: 0;
 }
 
 .settings-section-heading {
@@ -1874,6 +1901,70 @@ body.collection-dnd-active {
   margin-top: 16px;
   align-items: end;
   flex-wrap: wrap;
+}
+
+.environment-list {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+}
+
+.environment-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
+  border: 1px solid transparent;
+  min-width: 0;
+}
+
+.environment-card-active {
+  border-color: var(--control-selected-border);
+  box-shadow: inset 0 0 0 1px var(--control-selected-border);
+}
+
+.environment-card-select {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.environment-card-topline {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.environment-card-topline strong {
+  font-size: 1rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.environment-card-meta {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.environment-card-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  margin-top: auto;
+}
+
+.environment-card .history-status {
+  flex: 0 0 auto;
 }
 
 .environment-select-field {
@@ -2531,6 +2622,14 @@ body.collection-dnd-active {
     grid-template-columns: 1fr;
   }
 
+  .settings-secondary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .settings-section-card-emphasis {
+    grid-column: 1 / -1;
+  }
+
   .history-detail-column {
     position: static;
     order: -1;
@@ -2557,11 +2656,20 @@ body.collection-dnd-active {
     grid-template-columns: 1fr;
   }
 
-  .collections-layout {
+  .settings-primary-grid,
+  .settings-secondary-grid {
     grid-template-columns: 1fr;
   }
 
-  .settings-layout {
+  .settings-section-card-emphasis {
+    grid-column: auto;
+  }
+
+  .request-script-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .collections-layout {
     grid-template-columns: 1fr;
   }
 

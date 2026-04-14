@@ -6,6 +6,15 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-04-14
+
+### Changed
+
+- Tightened the saved-request Scripts editor layout with denser pre-request and test script headers plus side-by-side script cards on wider screens.
+- Environments now use a more compact card-based browser with responsive multi-column behavior on larger windows and clean stacking on smaller widths.
+- Settings now use a hand-shaped responsive layout with larger primary cards and a clearer secondary settings row instead of one generic grid.
+- Reduced the desktop minimum window size by about 30% to make the shell usable in smaller windowed layouts.
+
 ## [0.13.0] - 2026-04-14
 
 ### Added

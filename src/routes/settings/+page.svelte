@@ -175,195 +175,199 @@
 
     <form class="settings-form" onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
       <div class="settings-layout">
-        <section class="settings-section-card">
-          <div class="settings-section-heading">
-            <div>
-              <h2>General</h2>
-              <p class="settings-section-lede">Desktop look and feel across the entire shell.</p>
-            </div>
-          </div>
-
-          <div class="settings-field-grid">
-            <label>
-              <span class="field-label">Theme</span>
-              <select class="text-input" bind:value={settings.theme}>
-                <option value="system">System</option>
-                <option value="light">Light</option>
-                <option value="dark">Dark</option>
-              </select>
-            </label>
-
-            <label>
-              <span class="field-label">Interface zoom</span>
-              <select class="text-input" bind:value={settings.uiScale}>
-                {#each uiScaleOptions as option (option.value)}
-                  <option value={option.value}>{option.label}</option>
-                {/each}
-              </select>
-            </label>
-          </div>
-        </section>
-
-        <section class="settings-section-card">
-          <div class="settings-section-heading">
-            <div>
-              <h2>Updates</h2>
-              <p class="settings-section-lede">Check for newer signed PostNot builds published to the latest stable GitHub Release.</p>
-            </div>
-
-            <button
-              class="system-button"
-              type="button"
-              disabled={isLoading || updater.isChecking || updater.isInstalling}
-              onclick={() => updater.checkManually()}
-            >
-              {updater.checkButtonLabel}
-            </button>
-          </div>
-
-          <div class="settings-field-grid">
-            <div class="settings-status-item">
-              <span class="field-label">Current version</span>
-              <strong>v{currentVersion}</strong>
-            </div>
-
-            <div class="settings-status-item">
-              <span class="field-label">Last checked</span>
-              <strong>{checkedAtLabel || "Not checked yet"}</strong>
-            </div>
-          </div>
-
-          <div class="settings-updates-summary">
-            {#if updater.errorText && !updater.availableUpdate}
-              <div class="settings-update-feedback settings-update-feedback-error">
-                <strong>Update check failed</strong>
-                <p>{updater.errorText}</p>
+        <div class="settings-primary-grid">
+          <section class="settings-section-card">
+            <div class="settings-section-heading">
+              <div>
+                <h2>General</h2>
+                <p class="settings-section-lede">Desktop look and feel across the entire shell.</p>
               </div>
-            {:else}
-              <p>{updatesStatusText}</p>
-            {/if}
+            </div>
 
-            {#if updater.availableUpdate}
-              <div class="settings-update-meta">
-                <strong>Available: v{updater.availableUpdate.version}</strong>
-                {#if formatDateTime(updater.availableUpdate.date)}
-                  <span>Published {formatDateTime(updater.availableUpdate.date)}</span>
-                {/if}
-              </div>
+            <div class="settings-field-grid">
+              <label>
+                <span class="field-label">Theme</span>
+                <select class="text-input" bind:value={settings.theme}>
+                  <option value="system">System</option>
+                  <option value="light">Light</option>
+                  <option value="dark">Dark</option>
+                </select>
+              </label>
 
-              {#if updatesSecondaryText}
-                <div class="settings-update-feedback">
-                  <strong>Refresh issue</strong>
-                  <p>{updatesSecondaryText}</p>
-                </div>
-              {/if}
-
-              {#if updater.availableUpdate.body}
-                <div class="history-preview settings-update-notes settings-update-markdown">
-                  {#each parsedUpdateNotes as line, lineIndex (lineIndex)}
-                    <p class="settings-update-markdown-line">
-                      {#if line.length === 0}
-                        <br />
-                      {:else}
-                        {#each line as token, tokenIndex (tokenIndex)}
-                          {#if token.kind === "text"}
-                            {token.value}
-                          {:else}
-                            <strong>{token.value}</strong>
-                          {/if}
-                        {/each}
-                      {/if}
-                    </p>
+              <label>
+                <span class="field-label">Interface zoom</span>
+                <select class="text-input" bind:value={settings.uiScale}>
+                  {#each uiScaleOptions as option (option.value)}
+                    <option value={option.value}>{option.label}</option>
                   {/each}
-                </div>
-              {/if}
-            {/if}
-          </div>
+                </select>
+              </label>
+            </div>
+          </section>
 
-          {#if updater.availableUpdate}
-            <div class="settings-inline-actions">
+          <section class="settings-section-card">
+            <div class="settings-section-heading">
+              <div>
+                <h2>Updates</h2>
+                <p class="settings-section-lede">Check for newer signed PostNot builds published to the latest stable GitHub Release.</p>
+              </div>
+
               <button
-                class="send-button"
+                class="system-button"
                 type="button"
-                disabled={updater.isChecking || updater.isInstalling}
-                onclick={() => updater.installAvailableUpdate()}
+                disabled={isLoading || updater.isChecking || updater.isInstalling}
+                onclick={() => updater.checkManually()}
               >
-                {updater.isInstalling ? "Installing..." : "Install update"}
+                {updater.checkButtonLabel}
               </button>
             </div>
-          {/if}
-        </section>
 
-        <section class="settings-section-card">
-          <div class="settings-section-heading">
-            <div>
-              <h2>Requests</h2>
-              <p class="settings-section-lede">Default execution behavior for outgoing HTTP requests.</p>
+            <div class="settings-field-grid">
+              <div class="settings-status-item">
+                <span class="field-label">Current version</span>
+                <strong>v{currentVersion}</strong>
+              </div>
+
+              <div class="settings-status-item">
+                <span class="field-label">Last checked</span>
+                <strong>{checkedAtLabel || "Not checked yet"}</strong>
+              </div>
             </div>
-          </div>
 
-          <div class="settings-field-grid">
-            <label>
-              <span class="field-label">Request timeout (ms)</span>
-              <input class="text-input" type="number" min="1000" step="1000" bind:value={settings.requestTimeoutMs} />
-            </label>
-          </div>
+            <div class="settings-updates-summary">
+              {#if updater.errorText && !updater.availableUpdate}
+                <div class="settings-update-feedback settings-update-feedback-error">
+                  <strong>Update check failed</strong>
+                  <p>{updater.errorText}</p>
+                </div>
+              {:else}
+                <p>{updatesStatusText}</p>
+              {/if}
 
-          <label class="settings-toggle">
-            <input class="row-toggle settings-checkbox" type="checkbox" bind:checked={settings.followRedirects} />
-            <span>Follow redirects automatically</span>
-          </label>
+              {#if updater.availableUpdate}
+                <div class="settings-update-meta">
+                  <strong>Available: v{updater.availableUpdate.version}</strong>
+                  {#if formatDateTime(updater.availableUpdate.date)}
+                    <span>Published {formatDateTime(updater.availableUpdate.date)}</span>
+                  {/if}
+                </div>
 
-          <label class="settings-toggle">
-            <input class="row-toggle settings-checkbox" type="checkbox" bind:checked={settings.validateTls} />
-            <span>Validate TLS certificates</span>
-          </label>
-        </section>
+                {#if updatesSecondaryText}
+                  <div class="settings-update-feedback">
+                    <strong>Refresh issue</strong>
+                    <p>{updatesSecondaryText}</p>
+                  </div>
+                {/if}
 
-        <section class="settings-section-card">
-          <div class="settings-section-heading">
-            <div>
-              <h2>History</h2>
-              <p class="settings-section-lede">How much recent request activity PostNot keeps on disk.</p>
+                {#if updater.availableUpdate.body}
+                  <div class="history-preview settings-update-notes settings-update-markdown">
+                    {#each parsedUpdateNotes as line, lineIndex (lineIndex)}
+                      <p class="settings-update-markdown-line">
+                        {#if line.length === 0}
+                          <br />
+                        {:else}
+                          {#each line as token, tokenIndex (tokenIndex)}
+                            {#if token.kind === "text"}
+                              {token.value}
+                            {:else}
+                              <strong>{token.value}</strong>
+                            {/if}
+                          {/each}
+                        {/if}
+                      </p>
+                    {/each}
+                  </div>
+                {/if}
+              {/if}
             </div>
-          </div>
 
-          <div class="settings-field-grid">
-            <label>
-              <span class="field-label">History limit</span>
-              <input class="text-input" type="number" min="1" step="1" bind:value={settings.historyLimit} />
-            </label>
-          </div>
-        </section>
+            {#if updater.availableUpdate}
+              <div class="settings-inline-actions">
+                <button
+                  class="send-button"
+                  type="button"
+                  disabled={updater.isChecking || updater.isInstalling}
+                  onclick={() => updater.installAvailableUpdate()}
+                >
+                  {updater.isInstalling ? "Installing..." : "Install update"}
+                </button>
+              </div>
+            {/if}
+          </section>
+        </div>
 
-        <section class="settings-section-card">
-          <div class="settings-section-heading">
-            <div>
-              <h2>Notifications</h2>
-              <p class="settings-section-lede">Floating notification behavior for action feedback across the app.</p>
+        <div class="settings-secondary-grid">
+          <section class="settings-section-card settings-section-card-emphasis">
+            <div class="settings-section-heading">
+              <div>
+                <h2>Requests</h2>
+                <p class="settings-section-lede">Default execution behavior for outgoing HTTP requests.</p>
+              </div>
             </div>
-          </div>
 
-          <div class="settings-field-grid">
-            <label>
-              <span class="field-label">Notification timeout (seconds)</span>
-              <input
-                class="text-input"
-                type="number"
-                min="1"
-                step="1"
-                value={Math.round(settings.notificationTimeoutMs / 1000)}
-                oninput={(event) => {
-                  const seconds = Number(event.currentTarget.value);
-                  settings = {
-                    ...settings,
-                    notificationTimeoutMs: Number.isFinite(seconds) ? Math.max(1, seconds) * 1000 : 5000
-                  };
-                }}
-              />
+            <div class="settings-field-grid">
+              <label>
+                <span class="field-label">Request timeout (ms)</span>
+                <input class="text-input" type="number" min="1000" step="1000" bind:value={settings.requestTimeoutMs} />
+              </label>
+            </div>
+
+            <label class="settings-toggle">
+              <input class="row-toggle settings-checkbox" type="checkbox" bind:checked={settings.followRedirects} />
+              <span>Follow redirects automatically</span>
             </label>
-          </div>
-        </section>
+
+            <label class="settings-toggle">
+              <input class="row-toggle settings-checkbox" type="checkbox" bind:checked={settings.validateTls} />
+              <span>Validate TLS certificates</span>
+            </label>
+          </section>
+
+          <section class="settings-section-card">
+            <div class="settings-section-heading">
+              <div>
+                <h2>History</h2>
+                <p class="settings-section-lede">How much recent request activity PostNot keeps on disk.</p>
+              </div>
+            </div>
+
+            <div class="settings-field-grid">
+              <label>
+                <span class="field-label">History limit</span>
+                <input class="text-input" type="number" min="1" step="1" bind:value={settings.historyLimit} />
+              </label>
+            </div>
+          </section>
+
+          <section class="settings-section-card">
+            <div class="settings-section-heading">
+              <div>
+                <h2>Notifications</h2>
+                <p class="settings-section-lede">Floating notification behavior for action feedback across the app.</p>
+              </div>
+            </div>
+
+            <div class="settings-field-grid">
+              <label>
+                <span class="field-label">Notification timeout (seconds)</span>
+                <input
+                  class="text-input"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={Math.round(settings.notificationTimeoutMs / 1000)}
+                  oninput={(event) => {
+                    const seconds = Number(event.currentTarget.value);
+                    settings = {
+                      ...settings,
+                      notificationTimeoutMs: Number.isFinite(seconds) ? Math.max(1, seconds) * 1000 : 5000
+                    };
+                  }}
+                />
+              </label>
+            </div>
+          </section>
+        </div>
       </div>
 
       <div class="settings-actions">

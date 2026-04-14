@@ -360,19 +360,23 @@
       {#if environments.length === 0 && !isLoading}
         <div class="empty-state">Create an environment to start resolving variables like <code>{'{{base_url}}'}</code> and <code>{'{{api_token}}'}</code>.</div>
       {:else}
-        <div class="collections-list">
+        <div class="environment-list">
           {#each environments as environment (environment.id)}
-            <article class={["collection-item", selectedEnvironmentId === environment.id && "collection-item-active"]}>
-              <button class="collection-select" type="button" onclick={() => loadEnvironmentDetail(environment.id)}>
-                <strong>{environment.name}</strong>
-                <span>{environment.variableCount} variable{environment.variableCount === 1 ? "" : "s"}</span>
-                <span class="history-meta">Updated {formatUpdatedAt(environment.updatedAt)}</span>
-                {#if environment.isActive}
-                  <span class="history-status">Active</span>
-                {/if}
+            <article class={["environment-card", selectedEnvironmentId === environment.id && "environment-card-active"]}>
+              <button class="environment-card-select" type="button" onclick={() => loadEnvironmentDetail(environment.id)}>
+                <div class="environment-card-topline">
+                  <strong>{environment.name}</strong>
+                  {#if environment.isActive}
+                    <span class="history-status">Active</span>
+                  {/if}
+                </div>
+                <div class="environment-card-meta">
+                  <span>{environment.variableCount} variable{environment.variableCount === 1 ? "" : "s"}</span>
+                  <span class="history-meta">Updated {formatUpdatedAt(environment.updatedAt)}</span>
+                </div>
               </button>
 
-              <div class="saved-request-actions">
+              <div class="environment-card-actions">
                 <button
                   class="tab-button"
                   type="button"
