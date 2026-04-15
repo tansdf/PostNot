@@ -47,6 +47,7 @@ pub fn run() -> Result<(), String> {
             commands::collections::create_collection,
             commands::collections::list_collection_items,
             commands::collections::create_collection_folder,
+            commands::collections::update_collection_folder,
             commands::collections::move_collection_item,
             commands::collections::update_collection,
             commands::collections::delete_collection,

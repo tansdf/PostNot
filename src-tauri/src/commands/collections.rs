@@ -7,6 +7,7 @@ use crate::{
             CollectionItemSummary, CollectionSidebarState, CollectionSummary,
             CreateCollectionFolderInput, MoveCollectionItemInput,
             CreateCollectionInput, SavedRequestDetail, SavedRequestSummary,
+            UpdateCollectionFolderInput,
         },
         exports::ExportResult,
         requests::SendRequestPayload,
@@ -59,6 +60,15 @@ pub async fn create_collection_folder(
     input: CreateCollectionFolderInput,
 ) -> AppResult<CollectionItemSummary> {
     collections_service::create_collection_folder(state.db(), &collection_id, &input).await
+}
+
+#[tauri::command]
+pub async fn update_collection_folder(
+    state: State<'_, AppState>,
+    item_id: String,
+    input: UpdateCollectionFolderInput,
+) -> AppResult<CollectionItemSummary> {
+    collections_service::update_collection_folder(state.db(), &item_id, &input).await
 }
 
 #[tauri::command]

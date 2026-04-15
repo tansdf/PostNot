@@ -6,6 +6,13 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-04-15
+
+### Added
+
+- Collection-level and folder-level pre-request and test scripts that run before saved-request scripts, with Postman top-level and folder event import/export support.
+- Public GitHub Pages scripting documentation covering inherited execution order, current `pn` APIs, examples, Postman event portability, and current async-helper limitations.
+
 ## [0.13.1] - 2026-04-14
 
 ### Changed

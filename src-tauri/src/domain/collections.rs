@@ -8,6 +8,8 @@ pub struct CollectionSummary {
     pub id: String,
     pub name: String,
     pub description: String,
+    pub pre_request_script: String,
+    pub test_script: String,
     pub request_count: i64,
     pub updated_at: String,
 }
@@ -17,6 +19,10 @@ pub struct CollectionSummary {
 pub struct CreateCollectionInput {
     pub name: String,
     pub description: String,
+    #[serde(default)]
+    pub pre_request_script: String,
+    #[serde(default)]
+    pub test_script: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -24,6 +30,20 @@ pub struct CreateCollectionInput {
 pub struct CreateCollectionFolderInput {
     pub name: String,
     pub parent_id: Option<String>,
+    #[serde(default)]
+    pub pre_request_script: String,
+    #[serde(default)]
+    pub test_script: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateCollectionFolderInput {
+    pub name: String,
+    #[serde(default)]
+    pub pre_request_script: String,
+    #[serde(default)]
+    pub test_script: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -44,6 +64,8 @@ pub struct CollectionItemSummary {
     pub name: String,
     pub method: Option<String>,
     pub url: Option<String>,
+    pub pre_request_script: String,
+    pub test_script: String,
     pub updated_at: String,
     pub children: Vec<CollectionItemSummary>,
 }

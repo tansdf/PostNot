@@ -505,7 +505,10 @@
       suggestions.length === nextSuggestions.length &&
       suggestions.every((suggestion, index) => suggestion.id === nextSuggestions[index]?.id);
 
-    replacementStart = context.start;
+    replacementStart =
+      context.kind === "token" && context.query.startsWith(".")
+        ? context.start + 1
+        : context.start;
     replacementEnd = context.end;
     suggestions = nextSuggestions;
     activeSuggestionIndex = isSameSuggestionSet

@@ -8,6 +8,7 @@
   import { collectionDnd } from "$lib/stores/collection-dnd.svelte";
   import { collections } from "$lib/stores/collections.svelte";
   import CollectionDetailForm from "./CollectionDetailForm.svelte";
+  import FolderScriptForm from "./FolderScriptForm.svelte";
 
   let {
     collection = null,
@@ -16,6 +17,7 @@
     isCollectionItemsLoading = false,
     isSavingCollection = false,
     isCreatingFolder = false,
+    pendingSaveFolderId = "",
     pendingDeleteCollectionId = "",
     pendingDeleteCollectionItemId = "",
     errorText = "",
@@ -27,6 +29,7 @@
     onExportCollection = () => {},
     onSaveCollection = () => false,
     onDeleteCollection = () => {},
+    onSaveFolder = () => false,
     onOpenSavedRequest = () => {},
     onDeleteCollectionItem = () => {},
   }: {
@@ -36,6 +39,7 @@
     isCollectionItemsLoading?: boolean;
     isSavingCollection?: boolean;
     isCreatingFolder?: boolean;
+    pendingSaveFolderId?: string;
     pendingDeleteCollectionId?: string;
     pendingDeleteCollectionItemId?: string;
     errorText?: string;
@@ -45,8 +49,19 @@
     onCreateRootFolder?: () => Promise<void> | void;
     onCreateChildFolder?: (parentId: string) => Promise<void> | void;
     onExportCollection?: () => Promise<void> | void;
-    onSaveCollection?: (name: string, description: string) => Promise<boolean> | boolean;
+    onSaveCollection?: (
+      name: string,
+      description: string,
+      preRequestScript: string,
+      testScript: string
+    ) => Promise<boolean> | boolean;
     onDeleteCollection?: (collectionId: string) => Promise<void> | void;
+    onSaveFolder?: (
+      itemId: string,
+      name: string,
+      preRequestScript: string,
+      testScript: string
+    ) => Promise<boolean> | boolean;
     onOpenSavedRequest?: (itemId: string) => Promise<void> | void;
     onDeleteCollectionItem?: (item: CollectionItemSummary) => Promise<void> | void;
   } = $props();
@@ -249,6 +264,16 @@
                   {pendingDeleteCollectionItemId === item.id ? "Deleting..." : "Delete"}
                 </button>
               </div>
+
+              {#if item.kind === "folder"}
+                {#key item.id}
+                  <FolderScriptForm
+                    {item}
+                    isSaving={pendingSaveFolderId === item.id}
+                    {onSaveFolder}
+                  />
+                {/key}
+              {/if}
             </article>
 
             {#if item.kind === "folder" && item.children.length > 0}

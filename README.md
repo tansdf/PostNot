@@ -27,7 +27,7 @@ PostNot is built for working with HTTP APIs on your own machine, with local pers
 - Import from cURL
 - Export collections and environments back to Postman-compatible JSON
 - Attach local files to multipart requests
-- Run pre-request and test scripts on saved requests (JavaScript in the UI around each send)
+- Run inherited collection, folder, and saved-request pre-request and test scripts (JavaScript in the UI around each send)
 - Use floating notifications, persisted settings, and signed in-app update checks
 
 ## Why PostNot

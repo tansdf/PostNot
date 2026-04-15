@@ -9,7 +9,7 @@ use crate::{
         collections::{
             CollectionItemSummary, CollectionSummary, CreateCollectionFolderInput,
             CreateCollectionInput, MoveCollectionItemInput, SavedRequestDetail,
-            SavedRequestSummary,
+            SavedRequestSummary, UpdateCollectionFolderInput,
         },
         requests::SendRequestPayload,
     },
@@ -23,6 +23,8 @@ pub async fn list_collections(pool: &SqlitePool) -> AppResult<Vec<CollectionSumm
           collections.id,
           collections.name,
           collections.description,
+          collections.prerequest_script,
+          collections.test_script,
           collections.updated_at,
           COUNT(collection_items.id) AS request_count
         FROM collections
@@ -64,11 +66,17 @@ pub async fn create_collection(
     let now = now_iso();
 
     sqlx::query(
-        "INSERT INTO collections (id, name, description, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+        r#"
+        INSERT INTO collections (
+          id, name, description, prerequest_script, test_script, created_at, updated_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+        "#,
     )
     .bind(&id)
     .bind(name)
     .bind(input.description.trim())
+    .bind(&input.pre_request_script)
+    .bind(&input.test_script)
     .bind(&now)
     .bind(&now)
     .execute(pool)
@@ -100,7 +108,7 @@ pub async fn create_collection_folder(
           id, collection_id, parent_id, kind, name, sort_order, method, url,
           query_params_json, headers_json, body_json, auth_json,
           prerequest_script, test_script, created_at, updated_at
-        ) VALUES (?1, ?2, ?3, 'folder', ?4, ?5, NULL, NULL, '[]', '[]', '{}', '{}', '', '', ?6, ?7)
+        ) VALUES (?1, ?2, ?3, 'folder', ?4, ?5, NULL, NULL, '[]', '[]', '{}', '{}', ?6, ?7, ?8, ?9)
         "#,
     )
     .bind(&item_id)
@@ -108,6 +116,8 @@ pub async fn create_collection_folder(
     .bind(input.parent_id.as_deref())
     .bind(name)
     .bind(sort_order)
+    .bind(&input.pre_request_script)
+    .bind(&input.test_script)
     .bind(&now)
     .bind(&now)
     .execute(pool)
@@ -115,6 +125,51 @@ pub async fn create_collection_folder(
 
     touch_collection(pool, collection_id).await?;
     get_collection_item_summary(pool, &item_id).await
+}
+
+pub async fn update_collection_folder(
+    pool: &SqlitePool,
+    item_id: &str,
+    input: &UpdateCollectionFolderInput,
+) -> AppResult<CollectionItemSummary> {
+    let name = input.name.trim();
+    if name.is_empty() {
+        return Err(AppError::Message("Folder name is required.".to_string()));
+    }
+
+    let collection_id: Option<String> = sqlx::query_scalar(
+        "SELECT collection_id FROM collection_items WHERE id = ?1 AND kind = 'folder'",
+    )
+    .bind(item_id)
+    .fetch_optional(pool)
+    .await?;
+
+    let Some(collection_id) = collection_id else {
+        return Err(AppError::Message("Folder not found.".to_string()));
+    };
+
+    let now = now_iso();
+
+    sqlx::query(
+        r#"
+        UPDATE collection_items
+        SET name = ?2,
+            prerequest_script = ?3,
+            test_script = ?4,
+            updated_at = ?5
+        WHERE id = ?1 AND kind = 'folder'
+        "#,
+    )
+    .bind(item_id)
+    .bind(name)
+    .bind(&input.pre_request_script)
+    .bind(&input.test_script)
+    .bind(&now)
+    .execute(pool)
+    .await?;
+
+    touch_collection(pool, &collection_id).await?;
+    get_collection_item_summary(pool, item_id).await
 }
 
 pub async fn move_collection_item(
@@ -242,11 +297,21 @@ pub async fn update_collection(
     }
 
     let result = sqlx::query(
-        "UPDATE collections SET name = ?2, description = ?3, updated_at = ?4 WHERE id = ?1",
+        r#"
+        UPDATE collections
+        SET name = ?2,
+            description = ?3,
+            prerequest_script = ?4,
+            test_script = ?5,
+            updated_at = ?6
+        WHERE id = ?1
+        "#,
     )
     .bind(collection_id)
     .bind(name)
     .bind(input.description.trim())
+    .bind(&input.pre_request_script)
+    .bind(&input.test_script)
     .bind(now_iso())
     .execute(pool)
     .await?;
@@ -480,6 +545,8 @@ pub async fn get_collection(
           collections.id,
           collections.name,
           collections.description,
+          collections.prerequest_script,
+          collections.test_script,
           collections.updated_at,
           COUNT(collection_items.id) AS request_count
         FROM collections
@@ -642,7 +709,7 @@ async fn get_collection_item_summary(
 ) -> AppResult<CollectionItemSummary> {
     let row = sqlx::query(
         r#"
-        SELECT id, collection_id, parent_id, kind, name, method, url, updated_at
+        SELECT id, collection_id, parent_id, kind, name, method, url, prerequest_script, test_script, updated_at
         FROM collection_items
         WHERE id = ?1
         "#,
@@ -660,6 +727,8 @@ async fn get_collection_item_summary(
         name: row.get("name"),
         method: row.get("method"),
         url: row.get("url"),
+        pre_request_script: row.get("prerequest_script"),
+        test_script: row.get("test_script"),
         updated_at: row.get("updated_at"),
         children: Vec::new(),
     })
@@ -671,7 +740,7 @@ async fn list_collection_item_rows(
 ) -> AppResult<Vec<CollectionItemRow>> {
     let rows = sqlx::query(
         r#"
-        SELECT id, collection_id, parent_id, kind, name, method, url, updated_at, sort_order
+        SELECT id, collection_id, parent_id, kind, name, method, url, prerequest_script, test_script, updated_at, sort_order
         FROM collection_items
         WHERE collection_id = ?1
         ORDER BY sort_order ASC, updated_at DESC, name ASC
@@ -691,6 +760,8 @@ async fn list_collection_item_rows(
             name: row.get("name"),
             method: row.get("method"),
             url: row.get("url"),
+            pre_request_script: row.get("prerequest_script"),
+            test_script: row.get("test_script"),
             updated_at: row.get("updated_at"),
             sort_order: row.get("sort_order"),
         })
@@ -744,6 +815,8 @@ fn build_collection_item_branch(
                 name: row.name,
                 method: row.method,
                 url: row.url,
+                pre_request_script: row.pre_request_script,
+                test_script: row.test_script,
                 updated_at: row.updated_at,
                 children,
             }
@@ -789,6 +862,8 @@ fn map_collection_summary(row: sqlx::sqlite::SqliteRow) -> CollectionSummary {
         id: row.get("id"),
         name: row.get("name"),
         description: row.get("description"),
+        pre_request_script: row.get("prerequest_script"),
+        test_script: row.get("test_script"),
         request_count: row.get("request_count"),
         updated_at: row.get("updated_at"),
     }
@@ -849,6 +924,8 @@ struct CollectionItemRow {
     name: String,
     method: Option<String>,
     url: Option<String>,
+    pre_request_script: String,
+    test_script: String,
     updated_at: String,
     sort_order: i64,
 }

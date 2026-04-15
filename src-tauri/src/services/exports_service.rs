@@ -33,6 +33,7 @@ pub async fn export_collection(
             schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
                 .to_string(),
         },
+        event: build_events(&collection.pre_request_script, &collection.test_script),
         item: map_collection_items(&items, &requests_by_id)?,
     };
 
@@ -122,7 +123,7 @@ fn map_collection_items(
             "folder" => Ok(PostmanCollectionItemExport {
                 name: item.name.clone(),
                 request: None,
-                event: Vec::new(),
+                event: build_events(&item.pre_request_script, &item.test_script),
                 item: map_collection_items(&item.children, requests_by_id)?,
             }),
             "request" => {
@@ -428,6 +429,8 @@ fn is_false(value: &bool) -> bool {
 #[derive(Debug, Serialize)]
 struct PostmanCollectionExport {
     info: PostmanCollectionInfoExport,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    event: Vec<PostmanEventExport>,
     item: Vec<PostmanCollectionItemExport>,
 }
 

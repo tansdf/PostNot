@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PostNot scripting documentation</title>
+    <meta
+      name="description"
+      content="Documentation for PostNot pre-request and test scripts, including inheritance order, current pn APIs, examples, and current scripting limits."
+    />
+    <meta property="og:title" content="PostNot scripting documentation" />
+    <meta
+      property="og:description"
+      content="Use inherited collection, folder, and saved-request scripts to mutate requests and assert responses in PostNot."
+    />
+    <meta property="og:type" content="article" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="site.css" />
+    <link rel="icon" type="image/svg+xml" href="icon.svg" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="site-header__inner">
+        <a class="brand" href="index.html">
+          <img src="icon.svg" width="36" height="36" alt="" />
+          <span>PostNot</span>
+        </a>
+        <nav aria-label="Primary">
+          <ul class="nav-links">
+            <li><a href="index.html#features">Features</a></li>
+            <li><a href="index.html#screenshots">Screenshots</a></li>
+            <li><a href="scripting.html" aria-current="page">Scripting</a></li>
+            <li><a href="index.html#privacy">Privacy</a></li>
+            <li><a href="https://github.com/tansdf/PostNot/blob/master/docs/tech-design.md" rel="noopener noreferrer">Technical design</a></li>
+            <li><a href="https://github.com/tansdf/PostNot" rel="noopener noreferrer">GitHub</a></li>
+          </ul>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main" class="doc-page">
+      <section class="doc-hero" aria-labelledby="scripting-heading">
+        <p class="eyebrow">PostNot scripting</p>
+        <h1 id="scripting-heading">Inherited scripts for API workflows</h1>
+        <p class="section-lead">
+          PostNot scripts are JavaScript snippets that run in the desktop UI before a saved request is
+          sent and after its response returns. They can set headers, query parameters, body content,
+          authentication, and response assertions while keeping request execution in the native Rust layer.
+        </p>
+      </section>
+
+      <section aria-labelledby="where-scripts-run">
+        <div class="section-heading">
+          <p class="eyebrow">Execution model</p>
+          <h2 id="where-scripts-run">Where scripts run</h2>
+        </div>
+        <div class="doc-grid">
+          <article class="card">
+            <h3>Pre-request scripts</h3>
+            <p>
+              Run before the native request is sent. They receive a mutable request draft and active
+              environment variables through <span class="code-inline">pn</span>.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Test scripts</h3>
+            <p>
+              Run after a response comes back. They receive response helpers and can register named
+              assertions with <span class="code-inline">pn.test</span>.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Inherited scripts</h3>
+            <p>
+              Scripts can be saved on collections, folders, and individual requests, so shared behavior
+              can live near the requests it applies to.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section aria-labelledby="where-to-edit">
+        <div class="section-heading">
+          <p class="eyebrow">Authoring</p>
+          <h2 id="where-to-edit">Where to edit scripts</h2>
+        </div>
+        <div class="doc-grid">
+          <article class="card">
+            <h3>Collection scripts</h3>
+            <p>
+              Open the Collections page, choose a collection, then expand
+              <span class="code-inline">Collection scripts</span>.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Folder scripts</h3>
+            <p>
+              Open a folder row in the Collections page, then expand
+              <span class="code-inline">Folder settings</span>.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Request scripts</h3>
+            <p>
+              Open a saved request in the request workspace and use the
+              <span class="code-inline">Scripts</span> request editor tab.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section aria-labelledby="script-order">
+        <div class="section-heading">
+          <p class="eyebrow">Inheritance</p>
+          <h2 id="script-order">Script execution order</h2>
+        </div>
+        <p class="section-lead">
+          For a saved request inside nested folders, PostNot runs scripts from broadest scope to most
+          specific scope:
+        </p>
+        <ol class="doc-steps">
+          <li>Collection script</li>
+          <li>Ancestor folder scripts, from root folder to leaf folder</li>
+          <li>Saved request script</li>
+        </ol>
+        <p class="section-lead">
+          If a pre-request script throws an error, PostNot stops before calling the native sender and
+          shows the script error in the response panel. If a test script throws outside a
+          <span class="code-inline">pn.test</span> block, later test scripts are skipped.
+        </p>
+      </section>
+
+      <section aria-labelledby="pre-request-api">
+        <div class="section-heading">
+          <p class="eyebrow">Pre-request API</p>
+          <h2 id="pre-request-api">Mutate the outgoing request</h2>
+        </div>
+        <div class="api-table" role="table" aria-label="Pre-request scripting API">
+          <div role="row">
+            <strong role="cell">API</strong>
+            <strong role="cell">What it does</strong>
+          </div>
+          <div role="row">
+            <code role="cell">pn.request.name</code>
+            <span role="cell">Read or set the request display name.</span>
+          </div>
+          <div role="row">
+            <code role="cell">pn.request.method</code>
+            <span role="cell">Read or set the HTTP method.</span>
+          </div>
+          <div role="row">
+            <code role="cell">pn.request.url</code>
+            <span role="cell">Read or set the request URL.</span>
+          </div>
+          <div role="row">
+            <code role="cell">pn.request.addHeader(key, value)</code>
+            <span role="cell">Append a header row.</span>
+          </div>
+          <div role="row">
+            <code role="cell">pn.request.upsertHeader(key, value)</code>
+            <span role="cell">Create or replace a header by name.</span>
+          </div>
+          <div role="row">
+            <code role="cell">pn.request.removeHeader(key)</code>
+            <span role="cell">Remove matching headers by name.</span>
+          </div>
+          <div role="row">
+            <code role="cell">pn.request.addQueryParam(key, value)</code>
+            <span role="cell">Append a query parameter row.</span>
+          </div>
+          <div role="row">
+            <code role="cell">pn.request.upsertQueryParam(key, value)</code>
+            <span role="cell">Create or replace a query parameter by name.</span>
+          </div>
+          <div role="row">
+            <code role="cell">pn.request.removeQueryParam(key)</code>
+            <span role="cell">Remove matching query parameters by name.</span>
+          </div>
+          <div role="row">
+            <code role="cell">pn.request.setRawBody(value)</code>
+            <span role="cell">Switch to raw body mode and set body text.</span>
+          </div>
+          <div role="row">
+            <code role="cell">pn.request.setJsonBody(value)</code>
+            <span role="cell">Switch to JSON body mode and serialize objects with indentation.</span>
+          </div>
+          <div role="row">
+            <code role="cell">pn.request.clearBody()</code>
+            <span role="cell">Switch to no-body mode.</span>
+          </div>
+          <div role="row">
+            <code role="cell">pn.request.setBearerToken(token)</code>
+            <span role="cell">Switch auth to bearer token.</span>
+          </div>
+          <div role="row">
+            <code role="cell">pn.request.setBasicAuth(username, password)</code>
+            <span role="cell">Switch auth to basic auth.</span>
+          </div>
+          <div role="row">
+            <code role="cell">pn.request.setApiKey(name, value, placement)</code>
+            <span role="cell">Switch auth to API key. Placement is <span class="code-inline">header</span> or <span class="code-inline">query</span>.</span>
+          </div>
+          <div role="row">
+            <code role="cell">pn.request.clearAuth()</code>
+            <span role="cell">Clear configured request auth.</span>
+          </div>
+          <div role="row">
+            <code role="cell">pn.request.getHeader(name)</code>
+            <span role="cell">Read a request header value from the draft.</span>
+          </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="variables-api">
+        <div class="section-heading">
+          <p class="eyebrow">Variables</p>
+          <h2 id="variables-api">Read active environment variables</h2>
+        </div>
+        <p class="section-lead">
+          Scripts can read active environment values directly. Environment placeholders and built-in
+          dynamic variables such as <span class="code-inline">{{$guid}}</span> are still resolved by
+          the native sender after pre-request scripts finish, so scripts may also write placeholders
+          into headers, query parameters, URLs, body text, or auth fields.
+        </p>
+        <div class="api-table" role="table" aria-label="Variable scripting API">
+          <div role="row">
+            <strong role="cell">API</strong>
+            <strong role="cell">What it does</strong>
+          </div>
+          <div role="row">
+            <code role="cell">pn.variables.get(name)</code>
+            <span role="cell">Return one active environment variable value, or <span class="code-inline">null</span>.</span>
+          </div>
+          <div role="row">
+            <code role="cell">pn.variables.has(name)</code>
+            <span role="cell">Check whether an active variable exists.</span>
+          </div>
+          <div role="row">
+            <code role="cell">pn.variables.all()</code>
+            <span role="cell">Return active variables as a plain object.</span>
+          </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="test-api">
+        <div class="section-heading">
+          <p class="eyebrow">Test API</p>
+          <h2 id="test-api">Inspect responses and assert behavior</h2>
+        </div>
+        <div class="api-table" role="table" aria-label="Test scripting API">
+          <div role="row">
+            <strong role="cell">API</strong>
+            <strong role="cell">What it does</strong>
+          </div>
+          <div role="row">
+            <code role="cell">pn.response.code</code>
+            <span role="cell">HTTP status code, or <span class="code-inline">null</span> when unavailable.</span>
+          </div>
+          <div role="row">
+            <code role="cell">pn.response.status</code>
+            <span role="cell">HTTP status text.</span>
+          </div>
+          <div role="row">
+            <code role="cell">pn.response.text()</code>
+            <span role="cell">Return the raw response body text.</span>
+          </div>
+          <div role="row">
+            <code role="cell">pn.response.json()</code>
+            <span role="cell">Parse the response body as JSON.</span>
+          </div>
+          <div role="row">
+            <code role="cell">pn.response.header(name)</code>
+            <span role="cell">Read one response header value by name.</span>
+          </div>
+          <div role="row">
+            <code role="cell">pn.response.headers</code>
+            <span role="cell">Array of response headers with <span class="code-inline">key</span> and <span class="code-inline">value</span>.</span>
+          </div>
+          <div role="row">
+            <code role="cell">pn.test(name, fn)</code>
+            <span role="cell">Register a named assertion block. Failures are shown in the response panel.</span>
+          </div>
+          <div role="row">
+            <code role="cell">pn.expect(value)</code>
+            <span role="cell">Start an assertion chain.</span>
+          </div>
+        </div>
+
+        <h3>Available expectations</h3>
+        <p class="section-lead">
+          <span class="code-inline">toBe</span>, <span class="code-inline">toEqual</span>,
+          <span class="code-inline">toInclude</span>, <span class="code-inline">toMatch</span>,
+          <span class="code-inline">toBeTruthy</span>, <span class="code-inline">toBeFalsy</span>,
+          <span class="code-inline">toBeGreaterThan</span>, and <span class="code-inline">toBeLessThan</span>.
+        </p>
+      </section>
+
+      <section aria-labelledby="examples">
+        <div class="section-heading">
+          <p class="eyebrow">Examples</p>
+          <h2 id="examples">Common scripts</h2>
+        </div>
+        <div class="example-grid">
+          <article class="doc-example">
+            <h3>Apply a bearer token from the active environment</h3>
+            <pre><code>const token = pn.variables.get('api_token');
+
+if (!token) {
+  throw new Error('Missing api_token environment variable');
+}
+
+pn.request.setBearerToken(token);</code></pre>
+          </article>
+
+          <article class="doc-example">
+            <h3>Add shared collection headers</h3>
+            <pre><code>pn.request.upsertHeader('Accept', 'application/json');
+pn.request.upsertHeader('X-Client', 'PostNot');</code></pre>
+          </article>
+
+          <article class="doc-example">
+            <h3>Build a JSON body before send</h3>
+            <pre><code>pn.request.setJsonBody({
+  source: 'postnot',
+  requestId: pn.variables.get('request_id')
+});</code></pre>
+          </article>
+
+          <article class="doc-example">
+            <h3>Assert a JSON response</h3>
+            <pre><code>pn.test('status is ok', () => {
+  pn.expect(pn.response.code).toBe(200);
+});
+
+pn.test('response has an id', () => {
+  const body = pn.response.json();
+  pn.expect(body.id).toBeTruthy();
+});</code></pre>
+          </article>
+        </div>
+      </section>
+
+      <section aria-labelledby="limits">
+        <div class="section-heading">
+          <p class="eyebrow">Current limits</p>
+          <h2 id="limits">What scripts cannot do yet</h2>
+        </div>
+        <div class="status-callout">
+          <p>
+            Scripts are currently synchronous and cannot send their own HTTP requests. That means a
+            pre-request script can inject an existing token from an environment variable, but it cannot
+            fetch a fresh token from another endpoint before the main request. A future scripting
+            milestone is expected to add an async helper such as
+            <span class="code-inline">await pn.http.send(...)</span> or
+            <span class="code-inline">await pn.sendRequest(...)</span> for token-fetch and setup
+            workflows.
+          </p>
+        </div>
+      </section>
+
+      <section aria-labelledby="postman-events">
+        <div class="section-heading">
+          <p class="eyebrow">Portability</p>
+          <h2 id="postman-events">Postman event import and export</h2>
+        </div>
+        <p class="section-lead">
+          PostNot imports and exports collection, folder, and request scripts through Postman
+          collection <span class="code-inline">event</span> blocks. Imported scripts are kept as
+          JavaScript source, but PostNot exposes the <span class="code-inline">pn</span> API rather
+          than Postman's <span class="code-inline">pm</span> API, so complex Postman scripts may need
+          manual adaptation after import.
+        </p>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="site-footer__inner">
+        <p>
+          PostNot is licensed under the
+          <a href="https://github.com/tansdf/PostNot/blob/master/LICENSE" rel="noopener noreferrer"
+            >Apache License 2.0</a
+          >.
+        </p>
+        <div class="footer-links">
+          <a href="index.html">Home</a>
+          <a href="https://github.com/tansdf/PostNot" rel="noopener noreferrer">GitHub</a>
+          <a href="https://github.com/tansdf/PostNot/releases" rel="noopener noreferrer">Releases</a>
+          <a href="https://github.com/tansdf/PostNot/blob/master/docs/tech-design.md" rel="noopener noreferrer">Technical design</a>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

@@ -43,7 +43,12 @@
     }
   }
 
-  async function handleSaveCollection(name: string, description: string) {
+  async function handleSaveCollection(
+    name: string,
+    description: string,
+    preRequestScript: string,
+    testScript: string
+  ) {
     const collection = collections.selectedCollection;
     if (!collection) {
       return false;
@@ -54,7 +59,9 @@
     try {
       const saved = await collections.saveDetails(collection.id, {
         name: name.trim(),
-        description: description.trim()
+        description: description.trim(),
+        preRequestScript,
+        testScript
       });
 
       return Boolean(saved);
@@ -75,6 +82,26 @@
     }
 
     await collections.createFolder(collection.id, name, parentId ?? null);
+  }
+
+  async function handleSaveFolder(
+    itemId: string,
+    name: string,
+    preRequestScript: string,
+    testScript: string
+  ) {
+    const collection = collections.selectedCollection;
+    if (!collection) {
+      return false;
+    }
+
+    const saved = await collections.saveFolderDetails(collection.id, itemId, {
+      name: name.trim(),
+      preRequestScript,
+      testScript
+    });
+
+    return Boolean(saved);
   }
 
   async function handleDeleteCollection(collectionId: string) {
@@ -198,6 +225,7 @@
     isCollectionItemsLoading={collections.isCollectionItemsLoading}
     {isSavingCollection}
     isCreatingFolder={collections.isCreatingFolder}
+    pendingSaveFolderId={collections.pendingSaveFolderId}
     pendingDeleteCollectionId={collections.pendingDeleteCollectionId}
     pendingDeleteCollectionItemId={collections.pendingDeleteCollectionItemId}
     errorText={collections.errorText}
@@ -208,6 +236,7 @@
     onCreateChildFolder={(parentId: string) => handleCreateFolder(parentId)}
     onExportCollection={handleExportCollection}
     onSaveCollection={handleSaveCollection}
+    onSaveFolder={handleSaveFolder}
     onDeleteCollection={handleDeleteCollection}
     onOpenSavedRequest={handleOpenSavedRequest}
     onDeleteCollectionItem={handleDeleteCollectionItem}

@@ -21,6 +21,8 @@ use crate::{
 struct PostmanCollection {
     info: PostmanInfo,
     #[serde(default)]
+    event: Vec<PostmanEvent>,
+    #[serde(default)]
     item: Vec<PostmanItem>,
 }
 
@@ -322,12 +324,16 @@ async fn import_postman_collection(pool: &SqlitePool, source: &str) -> AppResult
         PostmanDescription::Detailed { content } => content.unwrap_or_default().trim().to_string(),
         PostmanDescription::Empty => String::new(),
     };
+    let pre_request_script = join_postman_script_events(&collection.event, "prerequest");
+    let test_script = join_postman_script_events(&collection.event, "test");
 
     let created_collection = collections_service::create_collection(
         pool,
         &CreateCollectionInput {
             name: collection_name.clone(),
             description,
+            pre_request_script,
+            test_script,
         },
     )
     .await?;
@@ -370,6 +376,8 @@ async fn import_postman_items(
                 &CreateCollectionFolderInput {
                     name: normalized_folder_name(&item.name),
                     parent_id: current_parent_id.clone(),
+                    pre_request_script: join_postman_script_events(&item.event, "prerequest"),
+                    test_script: join_postman_script_events(&item.event, "test"),
                 },
             )
             .await?;
@@ -633,6 +641,8 @@ async fn import_curl_request(
                 &CreateCollectionInput {
                     name: "Imported cURL".to_string(),
                     description: "Requests imported from cURL.".to_string(),
+                    pre_request_script: String::new(),
+                    test_script: String::new(),
                 },
             )
             .await?;

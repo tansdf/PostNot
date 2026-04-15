@@ -6,6 +6,7 @@ import {
   type CreateCollectionFolderInput,
   type CreateCollectionInput,
   type MoveCollectionItemInput,
+  type UpdateCollectionFolderInput,
   type CurlImportInput,
   createDefaultSettings,
   type AppSettings,
@@ -82,6 +83,8 @@ function createMockCollections(): CollectionSummary[] {
       id: "mock-collection-1",
       name: "Examples",
       description: "Sample saved requests",
+      preRequestScript: "",
+      testScript: "",
       requestCount: 1,
       updatedAt: new Date().toISOString()
     }
@@ -112,6 +115,8 @@ function createMockCollectionItems(): CollectionItemSummary[] {
       name: "Examples",
       method: null,
       url: null,
+      preRequestScript: "",
+      testScript: "",
       updatedAt: new Date().toISOString(),
       children: [
         {
@@ -122,6 +127,8 @@ function createMockCollectionItems(): CollectionItemSummary[] {
           name: "Sample request",
           method: "GET",
           url: "https://jsonplaceholder.typicode.com/todos/1",
+          preRequestScript: "",
+          testScript: "",
           updatedAt: new Date().toISOString(),
           children: []
         }
@@ -374,6 +381,8 @@ export async function createCollection(input: CreateCollectionInput): Promise<Co
       id: `mock-collection-${Date.now()}`,
       name: input.name,
       description: input.description,
+      preRequestScript: input.preRequestScript,
+      testScript: input.testScript,
       requestCount: 0,
       updatedAt: new Date().toISOString()
     };
@@ -403,12 +412,37 @@ export async function createCollectionFolder(
       name: input.name,
       method: null,
       url: null,
+      preRequestScript: input.preRequestScript,
+      testScript: input.testScript,
       updatedAt: new Date().toISOString(),
       children: []
     };
   }
 
   return invoke<CollectionItemSummary>("create_collection_folder", { collectionId, input });
+}
+
+export async function updateCollectionFolder(
+  itemId: string,
+  input: UpdateCollectionFolderInput
+): Promise<CollectionItemSummary> {
+  if (!hasTauriRuntime()) {
+    return {
+      id: itemId,
+      collectionId: "mock-collection-1",
+      parentId: null,
+      kind: "folder",
+      name: input.name,
+      method: null,
+      url: null,
+      preRequestScript: input.preRequestScript,
+      testScript: input.testScript,
+      updatedAt: new Date().toISOString(),
+      children: []
+    };
+  }
+
+  return invoke<CollectionItemSummary>("update_collection_folder", { itemId, input });
 }
 
 export async function moveCollectionItem(
@@ -436,6 +470,8 @@ export async function updateCollection(collectionId: string, input: CreateCollec
       id: collectionId,
       name: input.name,
       description: input.description,
+      preRequestScript: input.preRequestScript,
+      testScript: input.testScript,
       requestCount: 1,
       updatedAt: new Date().toISOString()
     };

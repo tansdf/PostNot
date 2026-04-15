@@ -23,6 +23,7 @@
     EnvironmentSummary,
     HistoryEntryDetail,
     HistoryEntrySummary,
+    CollectionItemSummary,
     RequestScriptExecution,
     ResponsePayload
   } from "$lib/api/types";
@@ -32,6 +33,7 @@
   import ResponseViewer from "$lib/components/response/ResponseViewer.svelte";
   import {
     createEmptyRequestScriptExecution,
+    type InheritedRequestScripts,
     runPreRequestScript,
     runTestScript
   } from "$lib/request-scripts";
@@ -210,9 +212,10 @@
     isSending = true;
     isCancelingRequest = false;
     scriptExecution = createEmptyRequestScriptExecution();
+    const inheritedScripts = activeCollectionScripts();
 
     try {
-      const preparedRequest = runPreRequestScript(request, activeEnvironmentDetail?.variables ?? []);
+      const preparedRequest = runPreRequestScript(request, activeEnvironmentDetail?.variables ?? [], inheritedScripts);
       if (preparedRequest.errorText) {
         scriptExecution = {
           ...createEmptyRequestScriptExecution(),
@@ -233,7 +236,7 @@
 
       const sendResult = await sendRequest(preparedRequest.request);
       response = sendResult.response;
-      scriptExecution = runTestScript(request, sendResult.response, activeEnvironmentDetail?.variables ?? []);
+      scriptExecution = runTestScript(request, sendResult.response, activeEnvironmentDetail?.variables ?? [], inheritedScripts);
 
       if (scriptExecution.testScriptErrorText) {
         notifications.warning(
@@ -290,6 +293,61 @@
     } catch {
       isCancelingRequest = false;
     }
+  }
+
+  function activeCollectionScripts(): InheritedRequestScripts | null {
+    if (!activeSavedRequestCollectionId) {
+      return null;
+    }
+
+    const collection = collections.collections.find((item) => item.id === activeSavedRequestCollectionId);
+    if (!collection) {
+      return null;
+    }
+
+    return {
+      preRequestScript: collection.preRequestScript,
+      testScript: collection.testScript,
+      folderScripts: folderScriptPath(
+        collections.collectionItemsByCollection[activeSavedRequestCollectionId] ?? [],
+        activeSavedRequestParentId
+      )
+    };
+  }
+
+  function folderScriptPath(
+    items: CollectionItemSummary[],
+    targetFolderId: string | null
+  ): InheritedRequestScripts["folderScripts"] {
+    if (!targetFolderId) {
+      return [];
+    }
+
+    const path = findFolderPath(items, targetFolderId);
+    return path.map((folder) => ({
+      name: folder.name,
+      preRequestScript: folder.preRequestScript,
+      testScript: folder.testScript
+    }));
+  }
+
+  function findFolderPath(items: CollectionItemSummary[], targetFolderId: string): CollectionItemSummary[] {
+    for (const item of items) {
+      if (item.kind !== "folder") {
+        continue;
+      }
+
+      if (item.id === targetFolderId) {
+        return [item];
+      }
+
+      const childPath = findFolderPath(item.children, targetFolderId);
+      if (childPath.length > 0) {
+        return [item, ...childPath];
+      }
+    }
+
+    return [];
   }
 
   async function loadSavedRequestFromRoute(itemId: string) {

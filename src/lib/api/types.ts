@@ -123,6 +123,8 @@ export type CollectionSummary = {
   id: string;
   name: string;
   description: string;
+  preRequestScript: string;
+  testScript: string;
   requestCount: number;
   updatedAt: string;
 };
@@ -130,11 +132,21 @@ export type CollectionSummary = {
 export type CreateCollectionInput = {
   name: string;
   description: string;
+  preRequestScript: string;
+  testScript: string;
 };
 
 export type CreateCollectionFolderInput = {
   name: string;
   parentId?: string | null;
+  preRequestScript: string;
+  testScript: string;
+};
+
+export type UpdateCollectionFolderInput = {
+  name: string;
+  preRequestScript: string;
+  testScript: string;
 };
 
 export type MoveCollectionItemInput = {
@@ -151,6 +163,8 @@ export type CollectionItemSummary = {
   name: string;
   method?: HttpMethod | null;
   url?: string | null;
+  preRequestScript: string;
+  testScript: string;
   updatedAt: string;
   children: CollectionItemSummary[];
 };

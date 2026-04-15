@@ -76,7 +76,7 @@ This section reflects the code currently implemented in the repository.
 - History panel wired to backend persistence
 - History detail inspection from persisted snapshots
 - Clear history action
-- Pre-request scripts and test scripts for saved requests (executed in the frontend as sandboxed JavaScript before send and after response)
+- Pre-request scripts and test scripts for collections, folders, and saved requests (executed in the frontend as sandboxed JavaScript before send and after response)
 
 ### Not Yet Implemented
 
@@ -94,7 +94,7 @@ Responsibilities:
 - Manage page-level UI state
 - Render global floating notifications for cross-screen action feedback
 - Coordinate shared pointer-driven collection drag-and-drop interactions across the sidebar and Collections page
-- Run saved-request pre-request and test scripts in JavaScript before and after invoking `send_request`
+- Run inherited collection, folder, and saved-request pre-request and test scripts in JavaScript before and after invoking `send_request`
 - Invoke typed Tauri commands for persistence and request execution
 - Provide a desktop-oriented workflow without browser networking
 
@@ -116,14 +116,14 @@ Responsibilities:
 ### Data Flow
 
 1. User edits a request in the UI
-2. On send, the frontend runs the pre-request script (if any) against a draft copy and either stops with a script error surface or proceeds with the mutated draft as the payload
+2. On send, the frontend runs inherited collection, folder, and saved-request pre-request scripts (if any) against a draft copy and either stops with a script error surface or proceeds with the mutated draft as the payload
 3. Frontend invokes `send_request` with that payload
 4. Rust loads persisted request settings from SQLite
 5. Rust resolves environment variables and built-in dynamic variables
 6. Rust executes the request with `reqwest`
 7. Rust returns response metadata and body to the UI
 8. Rust writes a history entry to SQLite, redacting secret-derived environment substitutions back to their original `{{variable}}` form
-9. Frontend runs the test script (if any) against the returned response for assertion output
+9. Frontend runs inherited collection, folder, and saved-request test scripts (if any) against the returned response for assertion output
 10. Frontend reloads history and renders the latest response and script results
 
 ## 5. Actual Folder Structure
@@ -385,7 +385,7 @@ Implementation notes:
 
 - `kind` distinguishes folders from saved requests
 - `parent_id` allows nested folders and request placement inside folders
-- `prerequest_script` and `test_script` are persisted per saved request; the UI runs them in the frontend (`request-scripts.ts`) before invoking Rust for send (pre-request) and after the response returns (tests), not inside the native HTTP layer
+- `prerequest_script` and `test_script` are persisted per collection, folder, and saved request; the UI runs inherited collection scripts first, then ancestor folder scripts from root to leaf, then saved-request scripts in the frontend (`request-scripts.ts`) before invoking Rust for send (pre-request) and after the response returns (tests), not inside the native HTTP layer
 
 #### `environments`
 
@@ -415,7 +415,7 @@ For each request send, Rust currently applies these persisted settings:
 
 This means the settings page already changes actual network behavior, not just UI state.
 
-For each request send, the frontend may first run the saved request's pre-request script against a draft copy (with the active environment's variables) to mutate headers, query params, URL, and related fields. Errors from that step surface in the UI without calling Rust.
+For each saved request send, the frontend may first run the collection pre-request script, then each ancestor folder pre-request script from root to leaf, and then the saved request's pre-request script against a draft copy (with the active environment's variables) to mutate headers, query params, URL, and related fields. Errors from that step surface in the UI without calling Rust.
 
 For each request send, Rust then:
 
@@ -424,7 +424,7 @@ For each request send, Rust then:
 - expands built-in dynamic variables such as `$guid`, `$timestamp`, and related runtime helpers
 - sends the resolved request payload
 
-After Rust returns a response (or error), the frontend may run the saved test script and record assertion results for display in the response panel.
+After Rust returns a response (or error), the frontend may run the collection test script, ancestor folder test scripts from root to leaf, and then the saved test script, recording assertion results for display in the response panel.
 
 ### History Persistence
 
@@ -467,6 +467,7 @@ Commands currently exposed to the frontend:
 - `create_collection`
 - `list_collection_items`
 - `create_collection_folder`
+- `update_collection_folder`
 - `move_collection_item`
 - `update_collection`
 - `delete_collection`
@@ -499,14 +500,15 @@ Commands currently exposed to the frontend:
 - `list_history`: returns recent history entries ordered by execution time descending
 - `get_history_entry`: returns a stored request snapshot and response metadata for one history entry
 - `clear_history`: deletes all stored history entries
-- `list_collections`: returns saved request collections with request counts
+- `list_collections`: returns saved request collections with request counts and collection-level scripts
 - `get_collection_sidebar_state`: loads persisted sidebar expansion state for collections and folders
 - `save_collection_sidebar_state`: persists sidebar expansion state for collections and folders
-- `create_collection`: creates a new collection for saved requests
+- `create_collection`: creates a new collection for saved requests, including empty or provided collection-level scripts
 - `list_collection_items`: returns the nested folder and request tree for one collection
 - `create_collection_folder`: creates a folder at the collection root or inside another folder
+- `update_collection_folder`: updates one folder's name and inherited scripts
 - `move_collection_item`: reorders or relocates a saved request within the collection tree, including moves across folders and collections
-- `update_collection`: updates one collection's name and description
+- `update_collection`: updates one collection's name, description, and collection-level scripts
 - `delete_collection`: removes a collection and its saved requests
 - `list_saved_requests`: lists saved requests within one collection
 - `save_request_to_collection`: stores the current request draft in a collection
@@ -533,7 +535,7 @@ Current UI sections:
 
 - request profile summary using persisted settings
 - active environment selector
-- request editor with pre-request and test script editors (`ScriptEditor.svelte`)
+- request editor and collection editor with pre-request and test script editors (`ScriptEditor.svelte`)
 - save flow with collection and folder target selection
 - cURL import modal
 - request-level save/update action
@@ -623,14 +625,20 @@ Ship a usable desktop app that can compose and execute HTTP requests locally, pe
 - history detail inspection
 - clear history action
 - signed updater checks with startup refresh and install flow
-- pre-request and test scripts on saved requests (frontend execution around the native send)
+- pre-request and test scripts on collections, folders, and saved requests (frontend execution around the native send)
 - collections sidebar and collections panel folder trees with shared `FolderGlyph` styling
+
+### Current Scripting Boundary
+
+Scripts currently run as synchronous frontend JavaScript around one request send. Pre-request scripts can read active environment variables and mutate the outgoing request draft. Test scripts can inspect the returned response and register assertions. Scripts do not currently have an async HTTP helper, so they cannot fetch a token or call another endpoint themselves before the main request runs.
+
+The next scripting milestone should add an async helper such as `await pn.http.send(...)` or `await pn.sendRequest(...)`, then update the script runner to await inherited collection, folder, and saved-request scripts in order. That would support workflows like a pre-request script fetching an auth token, storing it in the current request via `pn.request.setBearerToken(...)`, and then allowing the main request to continue.
 
 ### Milestone 1 Remaining
 
 - tighter error handling and UX polish
 - multi-request workflow decisions
-- richer scripting surface (collection-level scripts, broader `pn` API parity, and execution model hardening)
+- richer scripting surface (async helper requests for token-fetch workflows, broader `pn` API parity, execution model hardening, and richer inherited execution controls)
 
 Manual end-to-end verification via `tauri dev` has already been completed for the current milestone state.
 
@@ -642,7 +650,7 @@ Recommended implementation order from the current state:
 2. Decide whether updater discovery should stay on GitHub's stable-only `/latest` endpoint or move to a custom prerelease-aware manifest
 3. Evaluate multi-tab workflow and other request-level productivity features
 4. Improve import/export compatibility and remaining desktop polish
-5. Extend request scripting (API surface, safety, and optional collection-level behavior)
+5. Extend request scripting with async helper requests, broader API surface, safety, and inherited execution controls
 
 ## 14. Open Decisions
 
@@ -657,4 +665,4 @@ These are still unresolved:
 
 Treat the repository as being in an active Milestone 1 state, not full MVP completion.
 
-The design is now grounded in what the code actually does: persisted settings influence request execution, history is stored in SQLite with secret-derived environment values redacted, secret environment values live in the OS credential store, environments resolve variables at send time, collections support nested folders in the working UI with consistent sidebar and collections-panel tree affordances, saved requests can be reordered or moved across folders and collections through a shared drag-and-drop model, saved requests can run pre-request and test scripts in the frontend before and after native execution, import can pull requests in from Postman collections and cURL, multipart requests can attach local files, built-in dynamic variables resolve at runtime, and the desktop shell can check GitHub Releases for signed updater builds both on launch and from Settings. The next work should stay focused on updater channel decisions, multi-tab decisions, scripting depth, and remaining UX polish.
+The design is now grounded in what the code actually does: persisted settings influence request execution, history is stored in SQLite with secret-derived environment values redacted, secret environment values live in the OS credential store, environments resolve variables at send time, collections support nested folders in the working UI with consistent sidebar and collections-panel tree affordances, saved requests can be reordered or moved across folders and collections through a shared drag-and-drop model, collections, folders, and saved requests can run inherited pre-request and test scripts in the frontend before and after native execution, import can pull requests in from Postman collections and cURL, multipart requests can attach local files, built-in dynamic variables resolve at runtime, and the desktop shell can check GitHub Releases for signed updater builds both on launch and from Settings. The next work should stay focused on updater channel decisions, multi-tab decisions, scripting depth, and remaining UX polish.

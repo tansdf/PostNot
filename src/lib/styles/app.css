@@ -534,6 +534,24 @@ select option {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.folder-script-details {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.folder-script-details > summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.folder-script-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
 .request-script-card {
   display: grid;
   gap: 10px;

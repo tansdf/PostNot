@@ -9,6 +9,7 @@ import {
   moveCollectionItem,
   saveRequestToCollection,
   updateCollection as updateCollectionCommand,
+  updateCollectionFolder as updateCollectionFolderCommand,
   updateSavedRequest as updateSavedRequestCommand
 } from "$lib/api/commands";
 import type {
@@ -16,7 +17,8 @@ import type {
   CollectionSummary,
   CreateCollectionInput,
   MoveCollectionItemInput,
-  RequestDraft
+  RequestDraft,
+  UpdateCollectionFolderInput
 } from "$lib/api/types";
 import { notifications } from "$lib/stores/notifications.svelte";
 
@@ -32,6 +34,7 @@ class CollectionsStore {
   isCollectionItemsLoading = $state(false);
   isCreatingCollection = $state(false);
   isCreatingFolder = $state(false);
+  isSavingFolder = $state(false);
   isSavingRequest = $state(false);
   isMovingCollectionItem = $state(false);
   selectedCollectionId = $state("");
@@ -39,6 +42,7 @@ class CollectionsStore {
   collectionItemsByCollection = $state.raw<Record<string, CollectionItemSummary[]>>({});
   pendingDeleteCollectionId = $state("");
   pendingDeleteCollectionItemId = $state("");
+  pendingSaveFolderId = $state("");
   errorText = $state("");
 
   get selectedCollection(): CollectionSummary | null {
@@ -130,7 +134,9 @@ class CollectionsStore {
     try {
       const collection = await createCollection({
         name: "Untitled collection",
-        description: ""
+        description: "",
+        preRequestScript: "",
+        testScript: ""
       });
       await this.loadCollections(collection.id);
       notifications.success(collection.name, "Collection created");
@@ -149,7 +155,9 @@ class CollectionsStore {
     try {
       const folder = await createCollectionFolder(collectionId, {
         name: name.trim(),
-        parentId: parentId ?? null
+        parentId: parentId ?? null,
+        preRequestScript: "",
+        testScript: ""
       });
       await Promise.all([this.loadCollections(collectionId), this.loadCollectionItems(collectionId)]);
       notifications.success(folder.name, "Folder created");
@@ -171,6 +179,24 @@ class CollectionsStore {
     } catch (error) {
       this.errorText = error instanceof Error ? error.message : String(error);
       return null;
+    }
+  }
+
+  async saveFolderDetails(collectionId: string, itemId: string, input: UpdateCollectionFolderInput) {
+    this.isSavingFolder = true;
+    this.pendingSaveFolderId = itemId;
+
+    try {
+      const folder = await updateCollectionFolderCommand(itemId, input);
+      await Promise.all([this.loadCollections(collectionId), this.loadCollectionItems(collectionId)]);
+      notifications.success(folder.name, "Folder saved");
+      return folder;
+    } catch (error) {
+      this.errorText = error instanceof Error ? error.message : String(error);
+      return null;
+    } finally {
+      this.isSavingFolder = false;
+      this.pendingSaveFolderId = "";
     }
   }
 

@@ -450,6 +450,99 @@ section h2 {
   grid-template-columns: 1fr;
 }
 
+.doc-page {
+  max-width: 68rem;
+}
+
+.doc-hero {
+  padding-top: 3.2rem;
+  padding-bottom: 2rem;
+}
+
+.doc-hero h1 {
+  margin: 0 0 1rem;
+  max-width: 14ch;
+  font-size: clamp(2.4rem, 5vw, 4rem);
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+
+.doc-grid,
+.example-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.doc-steps {
+  margin: 0 0 1.5rem;
+  padding-left: 1.4rem;
+  color: var(--panel-ink-soft);
+}
+
+.doc-steps li + li {
+  margin-top: 0.35rem;
+}
+
+.api-table {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--panel) 100%, transparent);
+  box-shadow: var(--shadow-card);
+}
+
+.api-table [role="row"] {
+  display: grid;
+  grid-template-columns: minmax(12rem, 0.8fr) minmax(0, 1.2fr);
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.api-table [role="row"]:first-child {
+  background: color-mix(in srgb, var(--accent-soft) 34%, var(--panel-strong));
+}
+
+.api-table [role="row"]:last-child {
+  border-bottom: 0;
+}
+
+.api-table span {
+  color: var(--panel-ink-soft);
+}
+
+.doc-example {
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--panel) 100%, transparent);
+  box-shadow: var(--shadow-card);
+}
+
+.doc-example h3 {
+  margin: 0;
+  padding: 1rem 1.1rem;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 1rem;
+}
+
+pre {
+  margin: 0;
+  padding: 1rem 1.1rem;
+  overflow-x: auto;
+  background: color-mix(in srgb, var(--sidebar-deep) 92%, #000);
+  color: #f8f3e7;
+}
+
+pre code {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
 .privacy-list {
   margin: 0;
   padding-left: 1.2rem;
@@ -516,7 +609,9 @@ code,
   }
 
   .gallery,
-  .two-col {
+  .two-col,
+  .doc-grid,
+  .example-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -555,5 +650,10 @@ code,
 
   .preview-shell__bar {
     font-size: 0.84rem;
+  }
+
+  .api-table [role="row"] {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
   }
 }

@@ -16,6 +16,15 @@ let scriptTestCounter = 0;
 class ScriptAssertionError extends Error {}
 
 type VariableMap = Map<string, string>;
+export type InheritedRequestScripts = {
+  preRequestScript: string;
+  testScript: string;
+  folderScripts?: {
+    name: string;
+    preRequestScript: string;
+    testScript: string;
+  }[];
+};
 
 function nextScriptRowId(prefix: string) {
   scriptRowCounter += 1;
@@ -361,9 +370,19 @@ export function createEmptyRequestScriptExecution() {
 
 export function runPreRequestScript(
   request: RequestDraft,
-  environmentVariables: EnvironmentVariable[]
+  environmentVariables: EnvironmentVariable[],
+  inheritedScripts: InheritedRequestScripts | null = null
 ): { request: RequestDraft; errorText: string } {
-  if (!request.preRequestScript.trim()) {
+  const scriptSources = [
+    { label: "Collection pre-request script", script: inheritedScripts?.preRequestScript ?? "" },
+    ...(inheritedScripts?.folderScripts ?? []).map((folder) => ({
+      label: `Folder pre-request script (${folder.name})`,
+      script: folder.preRequestScript
+    })),
+    { label: "Pre-request script", script: request.preRequestScript }
+  ].filter((source) => source.script.trim());
+
+  if (scriptSources.length === 0) {
     return {
       request: cloneRequestDraft(request),
       errorText: ""
@@ -378,27 +397,40 @@ export function runPreRequestScript(
     expect: createExpectation
   };
 
-  try {
-    const execute = new Function("pn", '"use strict";\n' + request.preRequestScript);
-    execute(pn);
-    return {
-      request: preparedRequest,
-      errorText: ""
-    };
-  } catch (error) {
-    return {
-      request: preparedRequest,
-      errorText: normalizeScriptError(error)
-    };
+  for (const source of scriptSources) {
+    try {
+      const execute = new Function("pn", '"use strict";\n' + source.script);
+      execute(pn);
+    } catch (error) {
+      return {
+        request: preparedRequest,
+        errorText: `${source.label}: ${normalizeScriptError(error)}`
+      };
+    }
   }
+
+  return {
+    request: preparedRequest,
+    errorText: ""
+  };
 }
 
 export function runTestScript(
   request: RequestDraft,
   response: ResponsePayload,
-  environmentVariables: EnvironmentVariable[]
+  environmentVariables: EnvironmentVariable[],
+  inheritedScripts: InheritedRequestScripts | null = null
 ): RequestScriptExecution {
-  if (!request.testScript.trim()) {
+  const scriptSources = [
+    { label: "Collection test script", script: inheritedScripts?.testScript ?? "" },
+    ...(inheritedScripts?.folderScripts ?? []).map((folder) => ({
+      label: `Folder test script (${folder.name})`,
+      script: folder.testScript
+    })),
+    { label: "Test script", script: request.testScript }
+  ].filter((source) => source.script.trim());
+
+  if (scriptSources.length === 0) {
     return createEmptyExecution();
   }
 
@@ -430,11 +462,14 @@ export function runTestScript(
     }
   };
 
-  try {
-    const execute = new Function("pn", '"use strict";\n' + request.testScript);
-    execute(pn);
-  } catch (error) {
-    execution.testScriptErrorText = normalizeScriptError(error);
+  for (const source of scriptSources) {
+    try {
+      const execute = new Function("pn", '"use strict";\n' + source.script);
+      execute(pn);
+    } catch (error) {
+      execution.testScriptErrorText = `${source.label}: ${normalizeScriptError(error)}`;
+      break;
+    }
   }
 
   execution.tests = tests;

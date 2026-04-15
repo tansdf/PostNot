@@ -1,17 +1,30 @@
 <script lang="ts">
-  import type { CollectionSummary } from "$lib/api/types";
+  import type { CollectionSummary, EnvironmentVariable } from "$lib/api/types";
+  import ScriptEditor from "$lib/components/request/ScriptEditor.svelte";
+
+  const COLLECTION_PRE_REQUEST_PLACEHOLDER = "pn.request.upsertHeader('X-Collection', 'PostNot');";
+  const COLLECTION_TEST_PLACEHOLDER = `pn.test('collection responds', () => {
+  pn.expect(pn.response.code).toBe(200);
+});`;
 
   let {
     collection,
     isSavingCollection = false,
     pendingDeleteCollectionId = "",
+    environmentVariables = [],
     onSaveCollection = () => false,
     onDeleteCollection = () => {}
   }: {
     collection: CollectionSummary;
     isSavingCollection?: boolean;
     pendingDeleteCollectionId?: string;
-    onSaveCollection?: (name: string, description: string) => Promise<boolean> | boolean;
+    environmentVariables?: EnvironmentVariable[];
+    onSaveCollection?: (
+      name: string,
+      description: string,
+      preRequestScript: string,
+      testScript: string
+    ) => Promise<boolean> | boolean;
     onDeleteCollection?: (collectionId: string) => Promise<void> | void;
   } = $props();
 
@@ -20,6 +33,10 @@
   let draftName = $state(collection.name);
   // svelte-ignore state_referenced_locally
   let draftDescription = $state(collection.description);
+  // svelte-ignore state_referenced_locally
+  let draftPreRequestScript = $state(collection.preRequestScript);
+  // svelte-ignore state_referenced_locally
+  let draftTestScript = $state(collection.testScript);
 
   function formatUpdatedAt(value: string) {
     try {
@@ -33,7 +50,7 @@
   }
 
   async function handleSubmit() {
-    await onSaveCollection(draftName, draftDescription);
+    await onSaveCollection(draftName, draftDescription, draftPreRequestScript, draftTestScript);
   }
 </script>
 
@@ -62,6 +79,40 @@
       placeholder="Describe what this collection is for"
     ></textarea>
   </label>
+
+  <details class="folder-script-details collection-script-details">
+    <summary>Collection scripts</summary>
+
+    <div class="folder-script-form">
+      <div class="request-script-grid">
+        <section class="request-script-card">
+          <div class="request-script-card-header">
+            <h3 class="request-script-card-title">Pre-request Script</h3>
+            <p class="field-help">Runs before each saved request in this collection.</p>
+          </div>
+          <ScriptEditor
+            bind:value={draftPreRequestScript}
+            placeholder={COLLECTION_PRE_REQUEST_PLACEHOLDER}
+            scriptKind="preRequest"
+            {environmentVariables}
+          />
+        </section>
+
+        <section class="request-script-card">
+          <div class="request-script-card-header">
+            <h3 class="request-script-card-title">Test Script</h3>
+            <p class="field-help">Runs after each response from this collection.</p>
+          </div>
+          <ScriptEditor
+            bind:value={draftTestScript}
+            placeholder={COLLECTION_TEST_PLACEHOLDER}
+            scriptKind="test"
+            {environmentVariables}
+          />
+        </section>
+      </div>
+    </div>
+  </details>
 
   <div class="collections-page-actions">
     <button class="send-button" type="submit" disabled={isSavingCollection}>
