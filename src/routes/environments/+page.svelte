@@ -119,6 +119,18 @@
     }
   }
 
+  async function openEnvironmentDetail(environmentId: string) {
+    if (requestedEnvironmentId === environmentId) {
+      await loadEnvironmentDetail(environmentId);
+      return;
+    }
+
+    await goto(resolve(`/environments?environmentId=${encodeURIComponent(environmentId)}`), {
+      noScroll: true,
+      keepFocus: true
+    });
+  }
+
   async function handleCreateEnvironment() {
     isCreating = true;
 
@@ -363,7 +375,7 @@
         <div class="environment-list">
           {#each environments as environment (environment.id)}
             <article class={["environment-card", selectedEnvironmentId === environment.id && "environment-card-active"]}>
-              <button class="environment-card-select" type="button" onclick={() => loadEnvironmentDetail(environment.id)}>
+              <button class="environment-card-select" type="button" onclick={() => openEnvironmentDetail(environment.id)}>
                 <div class="environment-card-topline">
                   <strong>{environment.name}</strong>
                   {#if environment.isActive}

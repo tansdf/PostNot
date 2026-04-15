@@ -901,10 +901,6 @@
         <section class="request-script-card">
           <div class="request-script-card-header">
             <h3 class="request-script-card-title">Pre-request Script</h3>
-            <p class="field-help">
-              Runs before send. Use `pn.variables.get("name")`, `pn.request.upsertHeader(...)`,
-              `pn.request.upsertQueryParam(...)`, `pn.request.setJsonBody(...)`, or `pn.request.setBearerToken(...)`.
-            </p>
           </div>
           <ScriptEditor
             bind:value={request.preRequestScript}
@@ -917,10 +913,6 @@
         <section class="request-script-card">
           <div class="request-script-card-header">
             <h3 class="request-script-card-title">Test Script</h3>
-            <p class="field-help">
-              Runs after the response arrives. Use `pn.test(...)`, `pn.expect(...)`, `pn.response.code`,
-              `pn.response.header("content-type")`, `pn.response.text()`, or `pn.response.json()`.
-            </p>
           </div>
           <ScriptEditor
             bind:value={request.testScript}

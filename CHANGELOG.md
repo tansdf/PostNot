@@ -6,6 +6,18 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-04-15
+
+### Changed
+
+- Simplified the request Scripts tab by removing inline API hint descriptions now covered by the scripting documentation.
+- JSON response and history body viewers now soft-wrap long tokens instead of forcing horizontal scrolling.
+- Tightened History panel spacing so the clear action, detail header, and close action align cleanly.
+
+### Fixed
+
+- Environment selection on the Environments page now keeps non-active environments open for editing instead of snapping back to the active environment.
+
 ## [0.14.0] - 2026-04-15
 
 ### Added

@@ -1433,6 +1433,11 @@ select option {
   --history-detail-height: clamp(28rem, 72vh, 56rem);
 }
 
+.history-panel > .editor-header {
+  align-items: center;
+  margin-bottom: 12px;
+}
+
 .collections-import-panel {
   padding: 22px;
   margin-bottom: 18px;
@@ -2164,12 +2169,12 @@ body.collection-dnd-active {
 
 .history-detail {
   width: 100%;
-  padding: 16px;
+  padding: 12px;
   border-radius: var(--radius-md);
   background: var(--surface-subtle);
   border: 1px solid var(--border-soft);
   display: grid;
-  gap: 16px;
+  gap: 10px;
 }
 
 .history-detail-filled {
@@ -2205,13 +2210,19 @@ body.collection-dnd-active {
 }
 
 .history-detail .editor-header {
-  align-items: flex-start;
+  align-items: center;
   flex-wrap: wrap;
+}
+
+.history-detail .editor-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.2;
 }
 
 .detail-grid {
   display: grid;
-  gap: 14px;
+  gap: 12px;
   grid-template-columns: 1fr;
 }
 
@@ -2762,7 +2773,10 @@ body.collection-dnd-active {
   font-family: var(--font-mono);
   font-size: 0.88rem;
   line-height: 1.55;
-  overflow-x: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  overflow-x: hidden;
   overflow-y: auto;
   scrollbar-gutter: stable;
   tab-size: 2;
