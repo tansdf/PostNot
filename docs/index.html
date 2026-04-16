@@ -6,12 +6,12 @@
     <title>PostNot - local-first desktop API client</title>
     <meta
       name="description"
-      content="PostNot is a local-first desktop API client built with Rust and Tauri. Send HTTP requests, manage collections and environments, store secrets in the OS credential store, and keep your API workflow on your machine."
+      content="PostNot is a local-first desktop API client built with Rust and Tauri. Send HTTP requests, manage collections and environments, store secrets in the OS credential store, and script requests with helper HTTP calls on your machine."
     />
     <meta property="og:title" content="PostNot - local-first desktop API client" />
     <meta
       property="og:description"
-      content="Fast desktop API work that stays on your machine. Local persistence, OS-backed secrets, collections, environments, and scripting."
+      content="Fast desktop API work that stays on your machine. Local persistence, OS-backed secrets, collections, environments, and scriptable helper HTTP requests."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -163,7 +163,8 @@
           <article class="card">
             <h3>Scripts</h3>
             <p>
-              Run inherited collection, folder, and request scripts around each send.
+              Run inherited collection, folder, and request scripts around each send, including
+              async helper HTTP calls and active environment variable updates.
               <a href="scripting.html">Read the scripting docs</a>.
             </p>
           </article>
@@ -274,8 +275,9 @@
         </div>
         <div class="status-callout">
           <p>
-            The core workflow is already real and usable. Current work is focused on richer scripting,
-            multi-request workflow decisions, additional polish, and updater channel decisions. Follow
+            The core workflow is already real and usable, including the shipped async scripting
+            helpers in `0.15.0`. Current work is focused on broader scripting depth, multi-request
+            workflow decisions, additional polish, and updater channel decisions. Follow
             <a
               href="https://github.com/tansdf/PostNot/blob/master/CHANGELOG.md"
               rel="noopener noreferrer"

@@ -33,7 +33,7 @@ Why this stack:
 
 ## 3. Current Application State
 
-This section reflects the code currently implemented in the repository.
+This section reflects the code currently implemented in the repository, including the shipped `0.15.0` scripting update.
 
 ### Implemented
 
@@ -77,6 +77,8 @@ This section reflects the code currently implemented in the repository.
 - History detail inspection from persisted snapshots
 - Clear history action
 - Pre-request scripts and test scripts for collections, folders, and saved requests (executed in the frontend as sandboxed JavaScript before send and after response)
+- Async scripting helper requests through `await pn.http.send(...)`
+- Active-environment variable reads and writes from scripts, including persisted secret writes through the OS credential store path
 
 ### Not Yet Implemented
 
@@ -415,7 +417,7 @@ For each request send, Rust currently applies these persisted settings:
 
 This means the settings page already changes actual network behavior, not just UI state.
 
-For each saved request send, the frontend may first run the collection pre-request script, then each ancestor folder pre-request script from root to leaf, and then the saved request's pre-request script against a draft copy (with the active environment's variables) to mutate headers, query params, URL, and related fields. Errors from that step surface in the UI without calling Rust.
+For each saved request send, the frontend may first run the collection pre-request script, then each ancestor folder pre-request script from root to leaf, and then the saved request's pre-request script against a draft copy (with the active environment's variables) to mutate headers, query params, URL, and related fields. Those scripts can also await helper HTTP calls through `pn.http.send(...)` and persist active-environment variable changes before the main request continues. Errors from that step surface in the UI without calling Rust.
 
 For each request send, Rust then:
 
@@ -626,9 +628,12 @@ Ship a usable desktop app that can compose and execute HTTP requests locally, pe
 - clear history action
 - signed updater checks with startup refresh and install flow
 - pre-request and test scripts on collections, folders, and saved requests (frontend execution around the native send)
+- shipped async scripting helper requests and active-environment variable writes in `0.15.0`
 - collections sidebar and collections panel folder trees with shared `FolderGlyph` styling
 
 ### Current Scripting Boundary
+
+The async scripting milestone shipped in `0.15.0`.
 
 Scripts now run as awaited frontend JavaScript around one request send. Pre-request scripts can read and write active environment variables, mutate the outgoing request draft, and call `await pn.http.send(...)` to perform helper HTTP requests before the main request runs. Test scripts can inspect the returned response, register sync or async assertions through `pn.test(...)`, and also call helper requests when needed.
 
@@ -650,7 +655,7 @@ Recommended implementation order from the current state:
 2. Decide whether updater discovery should stay on GitHub's stable-only `/latest` endpoint or move to a custom prerelease-aware manifest
 3. Evaluate multi-tab workflow and other request-level productivity features
 4. Improve import/export compatibility and remaining desktop polish
-5. Extend request scripting with broader API surface, safety, and inherited execution controls
+5. Extend request scripting beyond the shipped `0.15.0` async-helper release with broader API surface, safety, and inherited execution controls
 
 ## 14. Open Decisions
 

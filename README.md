@@ -28,6 +28,8 @@ PostNot is built for working with HTTP APIs on your own machine, with local pers
 - Export collections and environments back to Postman-compatible JSON
 - Attach local files to multipart requests
 - Run inherited collection, folder, and saved-request pre-request and test scripts (JavaScript in the UI around each send)
+- Call helper HTTP requests from scripts with `await pn.http.send(...)`
+- Read and persist active environment variable updates from scripts, including secret writes
 - Use floating notifications, persisted settings, and signed in-app update checks
 
 ## Why PostNot
@@ -39,7 +41,7 @@ PostNot is built for working with HTTP APIs on your own machine, with local pers
 
 ## Current Status
 
-PostNot is still pre-1.0 and evolving deliberately. The core workflow is already real and usable, including nested collection organization and drag-and-drop request management, but the product is still growing in areas like richer scripting, multi-request workflow, broader polish, and updater channel decisions.
+PostNot is still pre-1.0 and evolving deliberately. The core workflow is already real and usable, including nested collection organization, drag-and-drop request management, and the shipped `0.15.0` async scripting helpers, but the product is still growing in areas like broader scripting depth, multi-request workflow, broader polish, and updater channel decisions.
 
 ## Privacy And Storage
 
