@@ -6,6 +6,19 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-04-16
+
+### Added
+
+- Shared `createStaleGuard()` helper for overlapping async route and detail loads.
+- Modal focus management: initial focus, Tab cycle inside the dialog, Escape to close, and focus restore when the modal closes (save request, cURL import, collection import, environment import).
+- Reuse of native `reqwest::Client` instances keyed by TLS, redirect, and timeout settings, with a bounded cache size.
+- `log::warn` when rolling back the OS secret store after environment update/delete errors fails, so divergence is visible in diagnostics.
+
+### Changed
+
+- Collections, environments, and saved-request deep links coordinate in-flight loads so stale responses do not overwrite the UI; clearing `savedRequestId` from the URL resets deep-link tracking so the same request can load again.
+
 ## [0.15.0] - 2026-04-16
 
 ### Added

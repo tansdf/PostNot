@@ -154,13 +154,18 @@ pub async fn update_environment(
     )
     .await
     {
-        let _ = sync_secret_snapshot(
+        if let Err(rollback_err) = sync_secret_snapshot(
             secret_store,
             environment_id.to_string(),
             previous_secret_snapshot,
             affected_secret_ids,
         )
-        .await;
+        .await
+        {
+            log::warn!(
+                "Secret store rollback failed after sync error for environment {environment_id}: {rollback_err}"
+            );
+        }
         return Err(error);
     }
 
@@ -179,24 +184,34 @@ pub async fn update_environment(
     match update_result {
         Ok(result) => {
             if result.rows_affected() == 0 {
-                let _ = sync_secret_snapshot(
+                if let Err(rollback_err) = sync_secret_snapshot(
                     secret_store.clone(),
                     environment_id.to_string(),
                     previous_secret_snapshot,
                     affected_secret_ids,
                 )
-                .await;
+                .await
+                {
+                    log::warn!(
+                        "Secret store rollback failed after missing environment row for {environment_id}: {rollback_err}"
+                    );
+                }
                 return Err(AppError::Message("Environment not found.".to_string()));
             }
         }
         Err(error) => {
-            let _ = sync_secret_snapshot(
+            if let Err(rollback_err) = sync_secret_snapshot(
                 secret_store.clone(),
                 environment_id.to_string(),
                 previous_secret_snapshot,
                 affected_secret_ids,
             )
-            .await;
+            .await
+            {
+                log::warn!(
+                    "Secret store rollback failed after SQLite error updating environment {environment_id}: {rollback_err}"
+                );
+            }
             return Err(error.into());
         }
     }
@@ -213,7 +228,12 @@ pub async fn create_environment_from_input(
     let created = create_environment(pool).await?;
 
     if let Err(error) = update_environment(pool, secret_store.clone(), &created.id, input).await {
-        let _ = delete_environment(pool, secret_store, &created.id).await;
+        if let Err(cleanup_err) = delete_environment(pool, secret_store, &created.id).await {
+            log::warn!(
+                "Failed to delete partially created environment {} after import/update error: {cleanup_err}",
+                created.id
+            );
+        }
         return Err(error);
     }
 
@@ -254,13 +274,18 @@ pub async fn delete_environment(
     )
     .await
     {
-        let _ = sync_secret_snapshot(
+        if let Err(rollback_err) = sync_secret_snapshot(
             secret_store,
             environment_id.to_string(),
             previous_secret_snapshot,
             affected_secret_ids,
         )
-        .await;
+        .await
+        {
+            log::warn!(
+                "Secret store rollback failed after delete sync error for environment {environment_id}: {rollback_err}"
+            );
+        }
         return Err(error);
     }
 
@@ -269,13 +294,18 @@ pub async fn delete_environment(
         .execute(pool)
         .await
     {
-        let _ = sync_secret_snapshot(
+        if let Err(rollback_err) = sync_secret_snapshot(
             secret_store,
             environment_id.to_string(),
             previous_secret_snapshot,
             affected_secret_ids,
         )
-        .await;
+        .await
+        {
+            log::warn!(
+                "Secret store rollback failed after SQLite delete error for environment {environment_id}: {rollback_err}"
+            );
+        }
         return Err(error.into());
     }
 

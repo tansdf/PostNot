@@ -38,6 +38,8 @@
     runPreRequestScript,
     runTestScript
   } from "$lib/request-scripts";
+  import { createStaleGuard } from "$lib/async-stale-guard";
+  import { modalFocusTrap } from "$lib/modal-focus-trap";
   import { collections } from "$lib/stores/collections.svelte";
   import { notifications } from "$lib/stores/notifications.svelte";
 
@@ -75,6 +77,7 @@
   let saveTargetParentId: string | null = $state(null);
   let lastLoadedSavedRequestId = $state("");
   let isLoadingSavedRequest = $state(false);
+  const savedRequestRoute = createStaleGuard();
 
   let requestedSavedRequestId = $derived(page.url.searchParams.get("savedRequestId") ?? "");
 
@@ -83,8 +86,13 @@
   });
 
   $effect(() => {
-    if (requestedSavedRequestId && requestedSavedRequestId !== lastLoadedSavedRequestId && !isLoadingSavedRequest) {
-      void loadSavedRequestFromRoute(requestedSavedRequestId);
+    const id = requestedSavedRequestId;
+    if (!id) {
+      lastLoadedSavedRequestId = "";
+      return;
+    }
+    if (id !== lastLoadedSavedRequestId) {
+      void loadSavedRequestFromRoute(id);
     }
   });
 
@@ -392,11 +400,20 @@
   }
 
   async function loadSavedRequestFromRoute(itemId: string) {
+    const seq = savedRequestRoute.next();
     isLoadingSavedRequest = true;
 
     try {
       const savedRequest = await getSavedRequest(itemId);
+      if (savedRequestRoute.isStale(seq)) {
+        return;
+      }
+
       await collections.ensureLoaded(savedRequest.collectionId);
+      if (savedRequestRoute.isStale(seq)) {
+        return;
+      }
+
       request = structuredClone(savedRequest.request);
       response = null;
       scriptExecution = createEmptyRequestScriptExecution();
@@ -408,9 +425,13 @@
       collections.resetError();
       await collections.selectCollection(savedRequest.collectionId);
     } catch (error) {
-      requestSaveErrorText = error instanceof Error ? error.message : String(error);
+      if (!savedRequestRoute.isStale(seq)) {
+        requestSaveErrorText = error instanceof Error ? error.message : String(error);
+      }
     } finally {
-      isLoadingSavedRequest = false;
+      if (!savedRequestRoute.isStale(seq)) {
+        isLoadingSavedRequest = false;
+      }
     }
   }
 
@@ -547,7 +568,7 @@
   }
 
   function handleSaveDialogBackdropKeydown(event: KeyboardEvent) {
-    if (event.key === "Escape" || event.key === "Enter" || event.key === " ") {
+    if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       closeSaveDialog();
     }
@@ -644,6 +665,7 @@
       role="button"
       tabindex="0"
       aria-label="Close save request dialog"
+      use:modalFocusTrap={{ onEscape: closeSaveDialog }}
       onclick={(e) => { if (e.target === e.currentTarget) closeSaveDialog(); }}
       onkeydown={handleSaveDialogBackdropKeydown}
     >
@@ -725,9 +747,10 @@
       role="button"
       tabindex="0"
       aria-label="Close cURL import dialog"
+      use:modalFocusTrap={{ onEscape: closeCurlImportDialog }}
       onclick={(e) => { if (e.target === e.currentTarget) closeCurlImportDialog(); }}
       onkeydown={(event) => {
-        if (event.key === "Escape" || event.key === "Enter" || event.key === " ") {
+        if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
           closeCurlImportDialog();
         }

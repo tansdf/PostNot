@@ -41,7 +41,7 @@ PostNot is built for working with HTTP APIs on your own machine, with local pers
 
 ## Current Status
 
-PostNot is still pre-1.0 and evolving deliberately. The core workflow is already real and usable, including nested collection organization, drag-and-drop request management, and the shipped `0.15.0` async scripting helpers, but the product is still growing in areas like broader scripting depth, multi-request workflow, broader polish, and updater channel decisions.
+PostNot is still pre-1.0 and evolving deliberately. The core workflow is already real and usable, including nested collection organization, drag-and-drop request management, and async scripting helpers (`pn.http.send`, environment writes from scripts, inherited pre-request and test scripts), but the product is still growing in areas like broader scripting depth, multi-request workflow, broader polish, and updater channel decisions.
 
 ## Privacy And Storage
 

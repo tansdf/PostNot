@@ -14,6 +14,8 @@
     setActiveEnvironment,
     updateEnvironment
   } from "$lib/api/commands";
+  import { createStaleGuard } from "$lib/async-stale-guard";
+  import { modalFocusTrap } from "$lib/modal-focus-trap";
   import { notifications } from "$lib/stores/notifications.svelte";
   let environments: EnvironmentSummary[] = $state([]);
   let selectedEnvironmentId = $state("");
@@ -37,6 +39,8 @@
 
   let requestedEnvironmentId = $derived(page.url.searchParams.get("environmentId") ?? "");
 
+  const envAsync = createStaleGuard();
+
   onMount(() => {
     void loadEnvironments(requestedEnvironmentId);
   });
@@ -52,8 +56,10 @@
       return;
     }
 
+    const seq = envAsync.next();
+
     if (environmentId && environmentId !== selectedEnvironmentId) {
-      await loadEnvironmentDetail(environmentId);
+      await loadEnvironmentDetail(environmentId, seq);
       return;
     }
 
@@ -67,10 +73,15 @@
   }
 
   async function loadEnvironments(preferredEnvironmentId = selectedEnvironmentId) {
+    const seq = envAsync.next();
     isLoading = true;
 
     try {
       environments = await listEnvironments();
+      if (envAsync.isStale(seq)) {
+        return;
+      }
+
       errorText = "";
 
       const nextEnvironmentId =
@@ -87,35 +98,53 @@
         } else {
           await goto(resolve("/environments"), navOpts);
         }
+        if (envAsync.isStale(seq)) {
+          return;
+        }
       }
 
       if (nextEnvironmentId) {
-        await loadEnvironmentDetail(nextEnvironmentId);
+        await loadEnvironmentDetail(nextEnvironmentId, seq);
       } else {
+        if (envAsync.isStale(seq)) {
+          return;
+        }
         environmentDetail = null;
         revealedSecretRowIds = [];
       }
     } catch (error) {
-      errorText = error instanceof Error ? error.message : String(error);
-      revealedSecretRowIds = [];
+      if (!envAsync.isStale(seq)) {
+        errorText = error instanceof Error ? error.message : String(error);
+        revealedSecretRowIds = [];
+      }
     } finally {
-      isLoading = false;
+      if (!envAsync.isStale(seq)) {
+        isLoading = false;
+      }
     }
   }
 
-  async function loadEnvironmentDetail(environmentId: string) {
+  async function loadEnvironmentDetail(environmentId: string, reuseSeq?: number) {
+    const seq = reuseSeq ?? envAsync.next();
     selectedEnvironmentId = environmentId;
     isDetailLoading = true;
     revealedSecretRowIds = [];
 
     try {
       environmentDetail = await getEnvironment(environmentId);
+      if (envAsync.isStale(seq)) {
+        return;
+      }
       errorText = "";
     } catch (error) {
-      errorText = error instanceof Error ? error.message : String(error);
-      environmentDetail = null;
+      if (!envAsync.isStale(seq)) {
+        errorText = error instanceof Error ? error.message : String(error);
+        environmentDetail = null;
+      }
     } finally {
-      isDetailLoading = false;
+      if (!envAsync.isStale(seq)) {
+        isDetailLoading = false;
+      }
     }
   }
 
@@ -539,9 +568,10 @@
       role="button"
       tabindex="0"
       aria-label="Close import dialog"
+      use:modalFocusTrap={{ onEscape: closeImportModal }}
       onclick={(e) => { if (e.target === e.currentTarget) closeImportModal(); }}
       onkeydown={(event) => {
-        if (event.key === "Escape" || event.key === "Enter" || event.key === " ") {
+        if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
           closeImportModal();
         }

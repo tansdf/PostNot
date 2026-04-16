@@ -33,7 +33,7 @@ Why this stack:
 
 ## 3. Current Application State
 
-This section reflects the code currently implemented in the repository, including the shipped `0.15.0` scripting update.
+This section reflects the code currently implemented in the repository, including the shipped `0.15.0` scripting update and later patch-level behavior (for example `0.15.1` route and modal polish—see [CHANGELOG.md](../CHANGELOG.md)).
 
 ### Implemented
 
@@ -79,6 +79,9 @@ This section reflects the code currently implemented in the repository, includin
 - Pre-request scripts and test scripts for collections, folders, and saved requests (executed in the frontend as sandboxed JavaScript before send and after response)
 - Async scripting helper requests through `await pn.http.send(...)`
 - Active-environment variable reads and writes from scripts, including persisted secret writes through the OS credential store path
+- URL-driven selection for the main saved request (`savedRequestId`), collections (`collectionId`), and environments (`environmentId`) uses generation guards so overlapping async loads from rapid navigation do not apply stale UI state; clearing `savedRequestId` from the URL resets deep-link tracking so the same request can load again from the query string
+- Save-request, cURL import, collection import, and environment import modals trap focus (initial focus, Tab cycle within the dialog, Escape to close, prior focus restored on close) for keyboard and assistive technology users
+- Native `reqwest::Client` instances are reused per TLS/redirect/timeout fingerprint with a bounded in-memory cache so settings changes do not rebuild a client on every send
 
 ### Not Yet Implemented
 
@@ -96,6 +99,7 @@ Responsibilities:
 - Manage page-level UI state
 - Render global floating notifications for cross-screen action feedback
 - Coordinate shared pointer-driven collection drag-and-drop interactions across the sidebar and Collections page
+- Keep URL query parameters for saved requests, collections, and environments in sync with the visible editor or browser, including canceling stale async work when the user navigates quickly
 - Run inherited collection, folder, and saved-request pre-request and test scripts in JavaScript before and after invoking `send_request`
 - Invoke typed Tauri commands for persistence and request execution
 - Provide a desktop-oriented workflow without browser networking
@@ -417,6 +421,8 @@ For each request send, Rust currently applies these persisted settings:
 
 This means the settings page already changes actual network behavior, not just UI state.
 
+Rust builds or reuses a `reqwest::Client` for the active combination of `validate_tls`, `follow_redirects`, and `request_timeout_ms` (cached up to a fixed number of distinct fingerprints) instead of constructing a new client on every request.
+
 For each saved request send, the frontend may first run the collection pre-request script, then each ancestor folder pre-request script from root to leaf, and then the saved request's pre-request script against a draft copy (with the active environment's variables) to mutate headers, query params, URL, and related fields. Those scripts can also await helper HTTP calls through `pn.http.send(...)` and persist active-environment variable changes before the main request continues. Errors from that step surface in the UI without calling Rust.
 
 For each request send, Rust then:
@@ -591,6 +597,7 @@ Current state:
 - requests are executed in Rust, not the browser
 - secret environment values are stored in the OS credential store, while SQLite keeps only non-secret environment metadata
 - history snapshots redact resolved values that came from secret environment variables
+- if an environment update or delete fails after partially changing the credential store, rollback of secrets is attempted; failure to roll back is logged with `log::warn` for diagnostics (the primary error still returns to the UI)
 
 This is the current security posture for environment variables; broader secret handling beyond environment-backed values remains future work.
 
@@ -630,6 +637,7 @@ Ship a usable desktop app that can compose and execute HTTP requests locally, pe
 - pre-request and test scripts on collections, folders, and saved requests (frontend execution around the native send)
 - shipped async scripting helper requests and active-environment variable writes in `0.15.0`
 - collections sidebar and collections panel folder trees with shared `FolderGlyph` styling
+- route/query stale-load guards, modal focus trapping, bounded `reqwest` client cache, and secret rollback warning logs as in `0.15.1`
 
 ### Current Scripting Boundary
 

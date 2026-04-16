@@ -1,5 +1,7 @@
 use std::{
+    collections::{HashMap, VecDeque},
     path::Path,
+    sync::{LazyLock, Mutex},
     time::{Duration, Instant},
 };
 
@@ -16,21 +18,67 @@ use crate::domain::{
 };
 use crate::error::{AppError, AppResult};
 
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct ClientCacheKey {
+    validate_tls: bool,
+    follow_redirects: bool,
+    timeout_ms: u64,
+}
+
+const HTTP_CLIENT_CACHE_MAX: usize = 32;
+
+static HTTP_CLIENT_CACHE: LazyLock<Mutex<(HashMap<ClientCacheKey, Client>, VecDeque<ClientCacheKey>)>> =
+    LazyLock::new(|| Mutex::new((HashMap::new(), VecDeque::new())));
+
+fn client_for_settings(settings: &AppSettings) -> AppResult<Client> {
+    let key = ClientCacheKey {
+        validate_tls: settings.validate_tls,
+        follow_redirects: settings.follow_redirects,
+        timeout_ms: settings.request_timeout_ms.max(1) as u64,
+    };
+
+    let mut guard = HTTP_CLIENT_CACHE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+    let (map, order) = &mut *guard;
+
+    if let Some(client) = map.get(&key) {
+        return Ok(client.clone());
+    }
+
+    let client = Client::builder()
+        .danger_accept_invalid_certs(!key.validate_tls)
+        .redirect(if key.follow_redirects {
+            Policy::limited(10)
+        } else {
+            Policy::none()
+        })
+        .timeout(Duration::from_millis(key.timeout_ms))
+        .build()?;
+
+    while map.len() >= HTTP_CLIENT_CACHE_MAX {
+        if let Some(oldest) = order.pop_front() {
+            map.remove(&oldest);
+        } else {
+            map.clear();
+            order.clear();
+            break;
+        }
+    }
+
+    order.push_back(key);
+    map.insert(key, client.clone());
+    Ok(client)
+}
+
 pub async fn send_request(
     payload: &SendRequestPayload,
     settings: &AppSettings,
     cancel_rx: watch::Receiver<bool>,
 ) -> AppResult<ResponsePayload> {
     let mut cancel_rx = cancel_rx;
-    let client = Client::builder()
-        .danger_accept_invalid_certs(!settings.validate_tls)
-        .redirect(if settings.follow_redirects {
-            Policy::limited(10)
-        } else {
-            Policy::none()
-        })
-        .timeout(Duration::from_millis(settings.request_timeout_ms.max(1)))
-        .build()?;
+    let client = client_for_settings(settings)?;
     let mut url = Url::parse(&payload.url)?;
 
     for query in payload
