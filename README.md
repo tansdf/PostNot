@@ -24,6 +24,7 @@ PostNot is built for working with HTTP APIs on your own machine, with local pers
 - Store secret environment values in the OS credential store
 - Inspect request history locally
 - Import from Postman collections and environments
+- Import collections or single requests from OpenAPI 3 JSON or YAML
 - Import from cURL
 - Export collections and environments back to Postman-compatible JSON
 - Attach local files to multipart requests
@@ -36,12 +37,12 @@ PostNot is built for working with HTTP APIs on your own machine, with local pers
 
 - Local-first: request data and app state live on your machine
 - Desktop-native: Rust request execution and Tauri packaging instead of a browser-only shell
-- Practical portability: bring data in from Postman and export it back out
+- Practical portability: bring data in from Postman, OpenAPI 3, or cURL and export collections and environments back out in Postman-compatible JSON
 - Safer environment handling: secrets are kept out of SQLite and redacted from stored history snapshots
 
 ## Current Status
 
-PostNot is still pre-1.0 and evolving deliberately. The core workflow is already real and usable, including nested collection organization, drag-and-drop request management, and async scripting helpers (`pn.http.send`, environment writes from scripts, inherited pre-request and test scripts), but the product is still growing in areas like broader scripting depth, multi-request workflow, broader polish, and updater channel decisions.
+PostNot is still pre-1.0 and evolving deliberately. The core workflow is already real and usable, including nested collection organization, drag-and-drop request management, OpenAPI 3 import, and async scripting helpers (`pn.http.send`, environment writes from scripts, inherited pre-request and test scripts), but the product is still growing in areas like broader scripting depth, multi-request workflow, broader polish, and updater channel decisions.
 
 ## Privacy And Storage
 

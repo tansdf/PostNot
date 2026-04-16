@@ -27,6 +27,12 @@ pub struct CurlImportInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct OpenApiDraftImportInput {
+    pub source: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ImportedRequestDraft {
     pub request: SendRequestPayload,
 }

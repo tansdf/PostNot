@@ -185,16 +185,20 @@ pub async fn move_collection_item(
     }
 
     ensure_collection_exists(pool, target_collection_id).await?;
-    validate_parent_folder(pool, target_collection_id, input.target_parent_id.as_deref()).await?;
+    validate_parent_folder(
+        pool,
+        target_collection_id,
+        input.target_parent_id.as_deref(),
+    )
+    .await?;
 
     let mut transaction = pool.begin().await?;
-    let item_row = sqlx::query(
-        "SELECT collection_id, parent_id, kind FROM collection_items WHERE id = ?1",
-    )
-    .bind(item_id)
-    .fetch_optional(&mut *transaction)
-    .await?
-    .ok_or_else(|| AppError::Message("Collection item not found.".to_string()))?;
+    let item_row =
+        sqlx::query("SELECT collection_id, parent_id, kind FROM collection_items WHERE id = ?1")
+            .bind(item_id)
+            .fetch_optional(&mut *transaction)
+            .await?
+            .ok_or_else(|| AppError::Message("Collection item not found.".to_string()))?;
 
     let source_collection_id: String = item_row.get("collection_id");
     let source_parent_id: Option<String> = item_row.get("parent_id");
@@ -587,14 +591,12 @@ async fn validate_parent_folder(
         return Ok(());
     };
 
-    let row = sqlx::query(
-        "SELECT kind FROM collection_items WHERE id = ?1 AND collection_id = ?2",
-    )
-    .bind(parent_id)
-    .bind(collection_id)
-    .fetch_optional(pool)
-    .await?
-    .ok_or_else(|| AppError::Message("Target folder not found.".to_string()))?;
+    let row = sqlx::query("SELECT kind FROM collection_items WHERE id = ?1 AND collection_id = ?2")
+        .bind(parent_id)
+        .bind(collection_id)
+        .fetch_optional(pool)
+        .await?
+        .ok_or_else(|| AppError::Message("Target folder not found.".to_string()))?;
 
     let kind: String = row.get("kind");
     if kind != "folder" {

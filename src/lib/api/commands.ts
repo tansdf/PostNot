@@ -8,6 +8,7 @@ import {
   type MoveCollectionItemInput,
   type UpdateCollectionFolderInput,
   type CurlImportInput,
+  type OpenApiRequestImportInput,
   createDefaultSettings,
   type AppSettings,
   type UpdateCheckResult,
@@ -579,7 +580,12 @@ export async function importRequests(input: ImportRequestInput): Promise<ImportR
   if (!hasTauriRuntime()) {
     return {
       collectionId: input.targetCollectionId ?? `mock-imported-${Date.now()}`,
-      collectionName: input.format === "curl" ? "Imported cURL" : "Imported Postman collection",
+      collectionName:
+        input.format === "curl"
+          ? "Imported cURL"
+          : input.format === "openapi"
+            ? "Imported OpenAPI collection"
+            : "Imported Postman collection",
       importedRequestCount: input.format === "curl" ? 1 : 3,
       createdCollection: !input.targetCollectionId
     };
@@ -641,6 +647,62 @@ export async function importCurlRequestToDraft(input: CurlImportInput): Promise<
   }
 
   return invoke<ImportedRequestDraft>("import_curl_request_to_draft", { input });
+}
+
+export async function importOpenApiRequestToDraft(
+  input: OpenApiRequestImportInput
+): Promise<ImportedRequestDraft> {
+  if (!hasTauriRuntime()) {
+    return {
+      request: {
+        name: "List items",
+        method: "GET",
+        url: "https://api.example.com/items/{{itemId}}",
+        queryParams: [
+          {
+            id: `mock-query-${Date.now()}`,
+            key: "limit",
+            value: "25",
+            enabled: true
+          }
+        ],
+        headers: [
+          {
+            id: `mock-header-${Date.now()}`,
+            key: "Accept",
+            value: "application/json",
+            enabled: true
+          }
+        ],
+        body: {
+          mode: "none",
+          raw: "",
+          form: [
+            {
+              id: `mock-form-${Date.now()}`,
+              key: "",
+              value: "",
+              enabled: true
+            }
+          ],
+          files: []
+        },
+        auth: {
+          type: "none",
+          basicUsername: "",
+          basicPassword: "",
+          bearerToken: "",
+          apiKeyName: "",
+          apiKeyValue: "",
+          apiKeyIn: "header"
+        },
+        preRequestScript: "",
+        testScript: ""
+      }
+    };
+  }
+
+  return invoke<ImportedRequestDraft>("import_openapi_request_to_draft", { input });
 }
 
 export async function listEnvironments(): Promise<EnvironmentSummary[]> {

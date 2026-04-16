@@ -5,9 +5,8 @@ use crate::{
     domain::{
         collections::{
             CollectionItemSummary, CollectionSidebarState, CollectionSummary,
-            CreateCollectionFolderInput, MoveCollectionItemInput,
-            CreateCollectionInput, SavedRequestDetail, SavedRequestSummary,
-            UpdateCollectionFolderInput,
+            CreateCollectionFolderInput, CreateCollectionInput, MoveCollectionItemInput,
+            SavedRequestDetail, SavedRequestSummary, UpdateCollectionFolderInput,
         },
         exports::ExportResult,
         requests::SendRequestPayload,
@@ -131,10 +130,7 @@ pub async fn get_saved_request(
 }
 
 #[tauri::command]
-pub async fn delete_collection_item(
-    state: State<'_, AppState>,
-    item_id: String,
-) -> AppResult<()> {
+pub async fn delete_collection_item(state: State<'_, AppState>, item_id: String) -> AppResult<()> {
     collections_service::delete_collection_item(state.db(), &item_id).await
 }
 

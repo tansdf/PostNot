@@ -2,7 +2,10 @@ use tauri::State;
 
 use crate::{
     app_state::AppState,
-    domain::imports::{CurlImportInput, ImportRequestInput, ImportResult, ImportedRequestDraft},
+    domain::imports::{
+        CurlImportInput, ImportRequestInput, ImportResult, ImportedRequestDraft,
+        OpenApiDraftImportInput,
+    },
     error::AppResult,
     services::imports_service,
 };
@@ -18,4 +21,11 @@ pub async fn import_requests(
 #[tauri::command]
 pub fn import_curl_request_to_draft(input: CurlImportInput) -> AppResult<ImportedRequestDraft> {
     imports_service::import_curl_to_draft(&input.source)
+}
+
+#[tauri::command]
+pub fn import_openapi_request_to_draft(
+    input: OpenApiDraftImportInput,
+) -> AppResult<ImportedRequestDraft> {
+    imports_service::import_openapi_to_draft(&input.source)
 }

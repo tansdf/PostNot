@@ -174,7 +174,7 @@ export type CollectionSidebarState = {
   expandedFolderIds: string[];
 };
 
-export type ImportFormat = "postman" | "curl";
+export type ImportFormat = "postman" | "curl" | "openapi";
 
 export type ImportRequestInput = {
   format: ImportFormat;
@@ -190,6 +190,10 @@ export type ImportResult = {
 };
 
 export type CurlImportInput = {
+  source: string;
+};
+
+export type OpenApiRequestImportInput = {
   source: string;
 };
 

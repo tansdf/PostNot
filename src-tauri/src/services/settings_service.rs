@@ -101,9 +101,7 @@ pub async fn save_last_update_checked_at(pool: &SqlitePool, checked_at: &str) ->
     .await
 }
 
-pub async fn get_collection_sidebar_state(
-    pool: &SqlitePool,
-) -> AppResult<CollectionSidebarState> {
+pub async fn get_collection_sidebar_state(pool: &SqlitePool) -> AppResult<CollectionSidebarState> {
     let value_json: Option<String> =
         sqlx::query_scalar("SELECT value_json FROM app_settings WHERE key = ?1")
             .bind(COLLECTION_SIDEBAR_STATE_KEY)

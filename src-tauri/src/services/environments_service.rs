@@ -934,7 +934,8 @@ fn random_mac_address() -> String {
 }
 
 fn random_password() -> String {
-    const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
+    const CHARSET: &[u8] =
+        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
 
     let mut output = String::with_capacity(15);
 
@@ -957,8 +958,8 @@ fn resolve_dynamic_variable(key: &str) -> Option<String> {
         "indigo", "violet", "pink",
     ];
     const LOCALES: &[&str] = &[
-        "en", "en_US", "en_GB", "de", "es", "fr", "it", "ja", "ko", "nl", "pl", "pt_BR",
-        "ru", "sv", "tr", "zh_CN",
+        "en", "en_US", "en_GB", "de", "es", "fr", "it", "ja", "ko", "nl", "pl", "pt_BR", "ru",
+        "sv", "tr", "zh_CN",
     ];
     const USER_AGENTS: &[&str] = &[
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
@@ -971,14 +972,11 @@ fn resolve_dynamic_variable(key: &str) -> Option<String> {
     let parsed = parse_dynamic_variable(key)?;
 
     match parsed.name {
-        "$guid" | "$randomUUID" if parsed.argument.is_none() => {
-            Some(Uuid::new_v4().to_string())
-        }
+        "$guid" | "$randomUUID" if parsed.argument.is_none() => Some(Uuid::new_v4().to_string()),
         "$timestamp" if parsed.argument.is_none() => Some(Utc::now().timestamp().to_string()),
-        "$isoTimestamp" if parsed.argument.is_none() => Some(
-            Utc::now()
-                .to_rfc3339_opts(SecondsFormat::Millis, true),
-        ),
+        "$isoTimestamp" if parsed.argument.is_none() => {
+            Some(Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true))
+        }
         "$randomAlphaNumeric" => Some(random_alphanumeric(parsed.argument.unwrap_or(1))),
         "$randomBoolean" if parsed.argument.is_none() => Some((random_byte() % 2 == 0).to_string()),
         "$randomInt" if parsed.argument.is_none() => Some((random_u32() % 1001).to_string()),
@@ -1201,8 +1199,7 @@ mod tests {
         let (guid, _) = environments_service::resolve_string("{{$guid}}", &variables);
         assert!(Uuid::parse_str(&guid).is_ok());
 
-        let (random_uuid, _) =
-            environments_service::resolve_string("{{$randomUUID}}", &variables);
+        let (random_uuid, _) = environments_service::resolve_string("{{$randomUUID}}", &variables);
         assert!(Uuid::parse_str(&random_uuid).is_ok());
 
         let (timestamp, _) = environments_service::resolve_string("{{$timestamp}}", &variables);
@@ -1224,14 +1221,14 @@ mod tests {
             environments_service::resolve_string("{{$randomHexColor}}", &variables);
         assert_eq!(random_hex_color.len(), 7);
         assert!(random_hex_color.starts_with('#'));
-        assert!(random_hex_color[1..].chars().all(|ch| ch.is_ascii_hexdigit()));
+        assert!(random_hex_color[1..]
+            .chars()
+            .all(|ch| ch.is_ascii_hexdigit()));
 
         let (random_ip, _) = environments_service::resolve_string("{{$randomIP}}", &variables);
         let ipv4_parts: Vec<&str> = random_ip.split('.').collect();
         assert_eq!(ipv4_parts.len(), 4);
-        assert!(ipv4_parts
-            .iter()
-            .all(|part| part.parse::<u8>().is_ok()));
+        assert!(ipv4_parts.iter().all(|part| part.parse::<u8>().is_ok()));
 
         let (random_ipv6, _) = environments_service::resolve_string("{{$randomIPV6}}", &variables);
         let ipv6_parts: Vec<&str> = random_ipv6.split(':').collect();
@@ -1256,9 +1253,7 @@ mod tests {
             environments_service::resolve_string("{{$randomSemver}}", &variables);
         let semver_parts: Vec<&str> = random_semver.split('.').collect();
         assert_eq!(semver_parts.len(), 3);
-        assert!(semver_parts
-            .iter()
-            .all(|part| part.parse::<u16>().is_ok()));
+        assert!(semver_parts.iter().all(|part| part.parse::<u16>().is_ok()));
     }
 
     #[test]
@@ -1361,7 +1356,10 @@ mod tests {
             history_snapshot.auth.bearer_token,
             payload.auth.bearer_token
         );
-        assert_eq!(history_snapshot.pre_request_script, payload.pre_request_script);
+        assert_eq!(
+            history_snapshot.pre_request_script,
+            payload.pre_request_script
+        );
         assert_eq!(history_snapshot.test_script, payload.test_script);
     }
 
@@ -1409,7 +1407,10 @@ mod tests {
         assert!(!resolved.secret_usage.header_ids.contains("header-1"));
         assert!(!resolved.secret_usage.body_raw);
         assert_ne!(resolved.payload.url, payload.url);
-        assert_ne!(resolved.payload.query_params[0].value, payload.query_params[0].value);
+        assert_ne!(
+            resolved.payload.query_params[0].value,
+            payload.query_params[0].value
+        );
         assert_ne!(resolved.payload.headers[0].value, payload.headers[0].value);
         assert_ne!(resolved.payload.body.raw, payload.body.raw);
 

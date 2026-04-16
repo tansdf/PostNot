@@ -22,7 +22,7 @@
     saveDisabled = false,
     environmentVariables = [],
     onNewRequest = () => {},
-    onOpenCurlImport = () => {},
+    onOpenImport = () => {},
     onSend = () => {},
     onCancel = () => {},
     onSave = () => {}
@@ -35,7 +35,7 @@
     saveDisabled?: boolean;
     environmentVariables?: EnvironmentVariable[];
     onNewRequest?: () => Promise<void> | void;
-    onOpenCurlImport?: () => Promise<void> | void;
+    onOpenImport?: () => Promise<void> | void;
     onSend?: () => Promise<void> | void;
     onCancel?: () => Promise<void> | void;
     onSave?: () => Promise<void> | void;
@@ -482,7 +482,7 @@
     <div class="request-section-title">
       <h2>Request</h2>
       <button class="system-button" type="button" onclick={onNewRequest}>New</button>
-      <button class="system-button" type="button" onclick={onOpenCurlImport}>Import</button>
+      <button class="system-button" type="button" onclick={onOpenImport}>Import</button>
     </div>
   </div>
 

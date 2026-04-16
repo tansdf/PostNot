@@ -27,8 +27,9 @@ struct ClientCacheKey {
 
 const HTTP_CLIENT_CACHE_MAX: usize = 32;
 
-static HTTP_CLIENT_CACHE: LazyLock<Mutex<(HashMap<ClientCacheKey, Client>, VecDeque<ClientCacheKey>)>> =
-    LazyLock::new(|| Mutex::new((HashMap::new(), VecDeque::new())));
+static HTTP_CLIENT_CACHE: LazyLock<
+    Mutex<(HashMap<ClientCacheKey, Client>, VecDeque<ClientCacheKey>)>,
+> = LazyLock::new(|| Mutex::new((HashMap::new(), VecDeque::new())));
 
 fn client_for_settings(settings: &AppSettings) -> AppResult<Client> {
     let key = ClientCacheKey {

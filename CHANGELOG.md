@@ -6,6 +6,16 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-04-16
+
+### Added
+
+- OpenAPI 3 JSON/YAML import for collections from the Collections page and for single-operation request drafts from the main request editor.
+
+### Changed
+
+- Split the Rust import service into format-focused modules so Postman, OpenAPI, cURL, and shared helpers are easier to maintain without changing import behavior.
+
 ## [0.15.1] - 2026-04-16
 
 ### Added

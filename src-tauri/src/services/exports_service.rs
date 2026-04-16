@@ -118,7 +118,8 @@ fn map_collection_items(
     items: &[CollectionItemSummary],
     requests_by_id: &std::collections::HashMap<String, SavedRequestDetail>,
 ) -> AppResult<Vec<PostmanCollectionItemExport>> {
-    items.iter()
+    items
+        .iter()
         .map(|item| match item.kind.as_str() {
             "folder" => Ok(PostmanCollectionItemExport {
                 name: item.name.clone(),

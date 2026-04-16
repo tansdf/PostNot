@@ -12,6 +12,7 @@
   import { collections } from "$lib/stores/collections.svelte";
 
   let isSavingCollection = $state(false);
+  let importFormat = $state<"postman" | "openapi">("postman");
   let importSource = $state("");
   let isImporting = $state(false);
   let isExporting = $state(false);
@@ -180,7 +181,10 @@
 
     const source = importSource.trim();
     if (!source) {
-      importErrorText = "Open a Postman collection JSON file or paste its JSON payload to import.";
+      importErrorText =
+        importFormat === "postman"
+          ? "Open a Postman collection JSON file or paste its JSON payload to import."
+          : "Open an OpenAPI 3 JSON or YAML file, or paste its document payload to import.";
       return;
     }
 
@@ -189,7 +193,7 @@
     try {
       collections.errorText = "";
       const result = await importRequests({
-        format: "postman",
+        format: importFormat,
         source,
         targetCollectionId: null
       });
@@ -204,7 +208,7 @@
 
       notifications.success(
         `${result.importedRequestCount} request${result.importedRequestCount === 1 ? "" : "s"} imported into ${result.collectionName}.`,
-        "Collection imported"
+        importFormat === "postman" ? "Collection imported" : "OpenAPI collection imported"
       );
       importSource = "";
     } catch (error) {
@@ -215,12 +219,15 @@
   }
 
   function openImportModal() {
+    importFormat = "postman";
     importErrorText = "";
     isImportModalOpen = true;
   }
 
   function closeImportModal() {
     isImportModalOpen = false;
+    importFormat = "postman";
+    importSource = "";
     importErrorText = "";
   }
 </script>
@@ -271,18 +278,53 @@
       <div class="panel save-dialog" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="import-collection-title">
         <div class="editor-header import-dialog-header">
           <h2 id="import-collection-title">Import</h2>
-          <span class="history-meta">Postman Collection v2.1 JSON</span>
+          <span class="history-meta">
+            {importFormat === "postman" ? "Postman Collection v2.1 JSON" : "OpenAPI 3 JSON or YAML"}
+          </span>
         </div>
 
         <div class="editor-block">
-          <p class="field-help">Import a Postman collection by opening a JSON file or pasting the collection payload directly.</p>
+          <div class="import-format-toggle" role="tablist" aria-label="Choose collection import format">
+            <button
+              class={["system-button", importFormat === "postman" && "toggle-active"]}
+              type="button"
+              role="tab"
+              aria-selected={importFormat === "postman"}
+              onclick={() => {
+                importFormat = "postman";
+                importErrorText = "";
+              }}
+            >
+              Postman
+            </button>
+            <button
+              class={["system-button", importFormat === "openapi" && "toggle-active"]}
+              type="button"
+              role="tab"
+              aria-selected={importFormat === "openapi"}
+              onclick={() => {
+                importFormat = "openapi";
+                importErrorText = "";
+              }}
+            >
+              OpenAPI 3
+            </button>
+          </div>
+
+          <p class="field-help">
+            {importFormat === "postman"
+              ? "Import a Postman collection by opening a JSON file or pasting the collection payload directly."
+              : "Import an OpenAPI 3 document by opening a JSON or YAML file or pasting the document payload directly."}
+          </p>
 
           <label>
             <span class="field-label">Paste source</span>
             <textarea
               class="text-input collections-import-source"
               bind:value={importSource}
-              placeholder={'{ "info": { "name": "My collection" }, "item": [...] }'}
+              placeholder={importFormat === "postman"
+                ? '{ "info": { "name": "My collection" }, "item": [...] }'
+                : 'openapi: 3.0.3\ninfo:\n  title: Example API\npaths:\n  /items:\n    get:\n      summary: List items'}
             ></textarea>
           </label>
 
@@ -290,7 +332,9 @@
             bind:this={importFileInput}
             class="sr-only"
             type="file"
-            accept=".json,application/json"
+            accept={importFormat === "postman"
+              ? ".json,application/json"
+              : ".json,.yaml,.yml,application/json,application/yaml,text/yaml,text/x-yaml"}
             onchange={async (event: Event & { currentTarget: HTMLInputElement }) => {
               const file = event.currentTarget.files?.[0];
               if (!file) {
@@ -308,7 +352,7 @@
 
           <div class="collections-page-actions">
             <button class="ghost-button" type="button" onclick={() => importFileInput?.click()}>
-              Open JSON file
+              {importFormat === "postman" ? "Open JSON file" : "Open file"}
             </button>
             <button
               class="send-button"

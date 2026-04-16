@@ -1636,6 +1636,18 @@ select option {
   align-items: end;
 }
 
+.import-format-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.toggle-active {
+  background: var(--surface-elevated);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .collections-import-target {
   min-height: 100%;
 }

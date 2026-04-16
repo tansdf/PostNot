@@ -33,7 +33,7 @@ Why this stack:
 
 ## 3. Current Application State
 
-This section reflects the code currently implemented in the repository, including the shipped `0.15.0` scripting update and later patch-level behavior (for example `0.15.1` route and modal polish—see [CHANGELOG.md](../CHANGELOG.md)).
+This section reflects the code currently implemented in the repository, including the shipped `0.15.0` scripting update, the `0.15.1` route/modal polish work, and the `0.16.0` OpenAPI 3 import release (see [CHANGELOG.md](../CHANGELOG.md)).
 
 ### Implemented
 
@@ -65,6 +65,7 @@ This section reflects the code currently implemented in the repository, includin
 - OS-backed secret storage for secret environment variables
 - Postman collection JSON import
 - Postman environment JSON import
+- OpenAPI 3 JSON/YAML import for collections and single-request drafts
 - Postman collection JSON export
 - Postman environment JSON export
 - cURL command import
@@ -638,6 +639,7 @@ Ship a usable desktop app that can compose and execute HTTP requests locally, pe
 - shipped async scripting helper requests and active-environment variable writes in `0.15.0`
 - collections sidebar and collections panel folder trees with shared `FolderGlyph` styling
 - route/query stale-load guards, modal focus trapping, bounded `reqwest` client cache, and secret rollback warning logs as in `0.15.1`
+- OpenAPI 3 collection import plus single-operation draft import, with the Rust importer split into format-focused modules, as in `0.16.0`
 
 ### Current Scripting Boundary
 
@@ -662,7 +664,7 @@ Recommended implementation order from the current state:
 1. Continue tightening error handling and desktop UX polish
 2. Decide whether updater discovery should stay on GitHub's stable-only `/latest` endpoint or move to a custom prerelease-aware manifest
 3. Evaluate multi-tab workflow and other request-level productivity features
-4. Improve import/export compatibility and remaining desktop polish
+4. Improve import/export compatibility beyond the current Postman/OpenAPI/cURL coverage and continue desktop polish
 5. Extend request scripting beyond the shipped `0.15.0` async-helper release with broader API surface, safety, and inherited execution controls
 
 ## 14. Open Decisions

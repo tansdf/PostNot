@@ -10,6 +10,7 @@
     getEnvironment,
     getHistoryEntry,
     importCurlRequestToDraft,
+    importOpenApiRequestToDraft,
     getSavedRequest,
     getSettings,
     listEnvironments,
@@ -69,10 +70,13 @@
   let activeSavedRequestCollectionId = $state("");
   let activeSavedRequestParentId: string | null = $state(null);
   let isSaveDialogOpen = $state(false);
-  let isCurlImportDialogOpen = $state(false);
+  let isRequestImportDialogOpen = $state(false);
+  let requestImportFormat = $state<"curl" | "openapi">("curl");
   let curlImportSource = $state("");
-  let isImportingCurl = $state(false);
-  let curlImportErrorText = $state("");
+  let openApiImportSource = $state("");
+  let isImportingRequest = $state(false);
+  let requestImportErrorText = $state("");
+  let openApiImportFileInput: HTMLInputElement | null = $state(null);
   let saveTargetCollectionId = $state("");
   let saveTargetParentId: string | null = $state(null);
   let lastLoadedSavedRequestId = $state("");
@@ -521,30 +525,39 @@
     });
   }
 
-  function openCurlImportDialog() {
+  function openRequestImportDialog() {
+    requestImportFormat = "curl";
     curlImportSource = "";
-    curlImportErrorText = "";
-    isCurlImportDialogOpen = true;
+    openApiImportSource = "";
+    requestImportErrorText = "";
+    isRequestImportDialogOpen = true;
   }
 
-  function closeCurlImportDialog() {
-    isCurlImportDialogOpen = false;
+  function closeRequestImportDialog() {
+    isRequestImportDialogOpen = false;
     curlImportSource = "";
-    curlImportErrorText = "";
+    openApiImportSource = "";
+    requestImportErrorText = "";
   }
 
-  async function handleImportCurl() {
-    curlImportErrorText = "";
-    const source = curlImportSource.trim();
+  async function handleImportRequest() {
+    requestImportErrorText = "";
+    const source = requestImportFormat === "curl" ? curlImportSource.trim() : openApiImportSource.trim();
     if (!source) {
-      curlImportErrorText = "Paste a complete cURL command to import.";
+      requestImportErrorText =
+        requestImportFormat === "curl"
+          ? "Paste a complete cURL command to import."
+          : "Open an OpenAPI 3 JSON or YAML file, or paste the document payload to import.";
       return;
     }
 
-    isImportingCurl = true;
+    isImportingRequest = true;
 
     try {
-      const imported = await importCurlRequestToDraft({ source });
+      const imported =
+        requestImportFormat === "curl"
+          ? await importCurlRequestToDraft({ source })
+          : await importOpenApiRequestToDraft({ source });
       request = structuredClone(imported.request);
       response = null;
       scriptExecution = createEmptyRequestScriptExecution();
@@ -553,17 +566,22 @@
       activeSavedRequestCollectionId = "";
       activeSavedRequestParentId = null;
       lastLoadedSavedRequestId = "";
-      closeCurlImportDialog();
+      closeRequestImportDialog();
       await goto(resolve("/"), {
         replaceState: true,
         noScroll: true,
         keepFocus: true
       });
-      notifications.success("The imported cURL command is now loaded into the request editor.", "cURL imported");
+      notifications.success(
+        requestImportFormat === "curl"
+          ? "The imported cURL command is now loaded into the request editor."
+          : "The imported OpenAPI request is now loaded into the request editor.",
+        requestImportFormat === "curl" ? "cURL imported" : "OpenAPI request imported"
+      );
     } catch (error) {
-      curlImportErrorText = error instanceof Error ? error.message : String(error);
+      requestImportErrorText = error instanceof Error ? error.message : String(error);
     } finally {
-      isImportingCurl = false;
+      isImportingRequest = false;
     }
   }
 
@@ -633,7 +651,7 @@
       saveLabel={activeSavedRequestId ? "Update" : "Save"}
       saveDisabled={isSending}
       onNewRequest={handleNewRequest}
-      onOpenCurlImport={openCurlImportDialog}
+      onOpenImport={openRequestImportDialog}
       onSend={handleSend}
       onCancel={handleCancelRequest}
       onSave={handleSaveRequest}
@@ -741,45 +759,110 @@
     </div>
   {/if}
 
-  {#if isCurlImportDialogOpen}
+  {#if isRequestImportDialogOpen}
     <div
       class="modal-backdrop"
       role="button"
       tabindex="0"
-      aria-label="Close cURL import dialog"
-      use:modalFocusTrap={{ onEscape: closeCurlImportDialog }}
-      onclick={(e) => { if (e.target === e.currentTarget) closeCurlImportDialog(); }}
+      aria-label="Close request import dialog"
+      use:modalFocusTrap={{ onEscape: closeRequestImportDialog }}
+      onclick={(e) => { if (e.target === e.currentTarget) closeRequestImportDialog(); }}
       onkeydown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          closeCurlImportDialog();
+          closeRequestImportDialog();
         }
       }}
     >
-      <div class="panel save-dialog" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="curl-import-title">
-        <div class="editor-header">
-          <h2 id="curl-import-title">Import cURL</h2>
+      <div class="panel save-dialog" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="request-import-title">
+        <div class="editor-header import-dialog-header">
+          <h2 id="request-import-title">Import Request</h2>
+          <span class="history-meta">
+            {requestImportFormat === "curl" ? "cURL command" : "OpenAPI 3 JSON or YAML"}
+          </span>
         </div>
 
         <div class="editor-block">
-          <label>
-            <span class="field-label">Paste cURL command</span>
-            <textarea
-              class="text-input collections-import-source"
-              bind:value={curlImportSource}
-              placeholder='curl --request GET https://api.example.com/items -H "Authorization: Bearer token"'
-            ></textarea>
-          </label>
+          <div class="import-format-toggle" role="tablist" aria-label="Choose request import format">
+            <button
+              class={["system-button", requestImportFormat === "curl" && "toggle-active"]}
+              type="button"
+              role="tab"
+              aria-selected={requestImportFormat === "curl"}
+              onclick={() => {
+                requestImportFormat = "curl";
+                requestImportErrorText = "";
+              }}
+            >
+              cURL
+            </button>
+            <button
+              class={["system-button", requestImportFormat === "openapi" && "toggle-active"]}
+              type="button"
+              role="tab"
+              aria-selected={requestImportFormat === "openapi"}
+              onclick={() => {
+                requestImportFormat = "openapi";
+                requestImportErrorText = "";
+              }}
+            >
+              OpenAPI 3
+            </button>
+          </div>
 
-          {#if curlImportErrorText}
-            <div class="response-error">{curlImportErrorText}</div>
+          {#if requestImportFormat === "curl"}
+            <label>
+              <span class="field-label">Paste cURL command</span>
+              <textarea
+                class="text-input collections-import-source"
+                bind:value={curlImportSource}
+                placeholder='curl --request GET https://api.example.com/items -H "Authorization: Bearer token"'
+              ></textarea>
+            </label>
+          {:else}
+            <p class="field-help">Load an OpenAPI 3 document from JSON or YAML. Single-operation files open directly in the request editor.</p>
+
+            <label>
+              <span class="field-label">Paste source</span>
+              <textarea
+                class="text-input collections-import-source"
+                bind:value={openApiImportSource}
+                placeholder={'openapi: 3.0.3\ninfo:\n  title: Example API\npaths:\n  /items:\n    get:\n      summary: List items'}
+              ></textarea>
+            </label>
+
+            <input
+              bind:this={openApiImportFileInput}
+              class="sr-only"
+              type="file"
+              accept=".json,.yaml,.yml,application/json,application/yaml,text/yaml,text/x-yaml"
+              onchange={async (event: Event & { currentTarget: HTMLInputElement }) => {
+                const file = event.currentTarget.files?.[0];
+                if (!file) {
+                  return;
+                }
+
+                openApiImportSource = await file.text();
+                requestImportErrorText = "";
+                event.currentTarget.value = "";
+              }}
+            />
+          {/if}
+
+          {#if requestImportErrorText}
+            <div class="response-error">{requestImportErrorText}</div>
           {/if}
 
           <div class="collections-page-actions">
-            <button class="send-button" type="button" onclick={handleImportCurl} disabled={isImportingCurl}>
-              {isImportingCurl ? "Importing..." : "Import request"}
+            {#if requestImportFormat === "openapi"}
+              <button class="ghost-button" type="button" onclick={() => openApiImportFileInput?.click()}>
+                Open file
+              </button>
+            {/if}
+            <button class="send-button" type="button" onclick={handleImportRequest} disabled={isImportingRequest}>
+              {isImportingRequest ? "Importing..." : "Import request"}
             </button>
-            <button class="ghost-button" type="button" onclick={closeCurlImportDialog}>
+            <button class="ghost-button" type="button" onclick={closeRequestImportDialog}>
               Cancel
             </button>
           </div>
