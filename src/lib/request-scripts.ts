@@ -1,7 +1,14 @@
+import { sendRequest } from "$lib/api/commands";
 import {
+  createEnvironmentVariable,
+  createFileRow,
   createKeyValueRow,
+  type EnvironmentDetail,
   type EnvironmentVariable,
+  type FileRow,
   type KeyValueRow,
+  type RequestAuth,
+  type RequestBody,
   type RequestDraft,
   type RequestScriptExecution,
   type ResponsePayload,
@@ -9,6 +16,12 @@ import {
 } from "$lib/api/types";
 
 const VALID_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]);
+const VALID_BODY_MODES = new Set(["none", "json", "raw", "form-urlencoded", "multipart"]);
+const VALID_AUTH_TYPES = new Set(["none", "basic", "bearer", "api-key"]);
+const VALID_API_KEY_PLACEMENTS = new Set(["header", "query"]);
+const AsyncFunction = Object.getPrototypeOf(async function () {
+  return undefined;
+}).constructor as new (argumentName: string, body: string) => (pn: unknown) => Promise<unknown>;
 
 let scriptRowCounter = 0;
 let scriptTestCounter = 0;
@@ -24,6 +37,11 @@ export type InheritedRequestScripts = {
     preRequestScript: string;
     testScript: string;
   }[];
+};
+
+export type ScriptRuntimeContext = {
+  activeEnvironment?: EnvironmentDetail | null;
+  persistActiveEnvironment?: (environment: EnvironmentDetail) => Promise<EnvironmentDetail>;
 };
 
 function nextScriptRowId(prefix: string) {
@@ -48,6 +66,14 @@ function asString(value: unknown) {
   return typeof value === "string" ? value : String(value);
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function normalizeEnabled(value: unknown, fallback = true) {
+  return typeof value === "boolean" ? value : fallback;
+}
+
 function buildVariableMap(environmentVariables: EnvironmentVariable[]) {
   const variables = new Map<string, string>();
 
@@ -63,18 +89,49 @@ function buildVariableMap(environmentVariables: EnvironmentVariable[]) {
   return variables;
 }
 
+function syncVariableMap(target: VariableMap, source: VariableMap) {
+  target.clear();
+  for (const [key, value] of source.entries()) {
+    target.set(key, value);
+  }
+}
+
+function findEnvironmentVariableIndex(variables: EnvironmentVariable[], name: string) {
+  const normalizedName = name.trim().toLowerCase();
+  return variables.findIndex((variable) => variable.key.trim().toLowerCase() === normalizedName);
+}
+
+function normalizeEnvironmentVariableName(name: string) {
+  const normalized = asString(name).trim();
+  if (!normalized) {
+    throw new Error("Environment variable name is required.");
+  }
+
+  return normalized;
+}
+
 function findRowIndex(rows: KeyValueRow[], key: string) {
   const normalizedKey = key.trim().toLowerCase();
   return rows.findIndex((row) => row.key.trim().toLowerCase() === normalizedKey);
 }
 
-function buildRow(key: string, value: string): KeyValueRow {
+function buildRow(key: string, value: string, enabled = true): KeyValueRow {
   return {
     ...createKeyValueRow(),
     id: nextScriptRowId("kv"),
     key,
     value,
-    enabled: true
+    enabled
+  };
+}
+
+function buildFileRow(name: string, path: string, enabled = true): FileRow {
+  return {
+    ...createFileRow(),
+    id: nextScriptRowId("file"),
+    name,
+    path,
+    enabled
   };
 }
 
@@ -88,6 +145,10 @@ function createEmptyExecution(): RequestScriptExecution {
 
 function cloneRequestDraft(request: RequestDraft): RequestDraft {
   return JSON.parse(JSON.stringify(request)) as RequestDraft;
+}
+
+function cloneEnvironmentDetail(environment: EnvironmentDetail): EnvironmentDetail {
+  return JSON.parse(JSON.stringify(environment)) as EnvironmentDetail;
 }
 
 function isDeepEqual(left: unknown, right: unknown): boolean {
@@ -329,16 +390,96 @@ function createRequestFacade(request: RequestDraft, variables: VariableMap) {
   };
 }
 
-function createVariableFacade(variables: VariableMap) {
+function createVariableFacade(variables: VariableMap, runtimeContext: ScriptRuntimeContext = {}) {
+  let draftEnvironment = runtimeContext.activeEnvironment
+    ? cloneEnvironmentDetail(runtimeContext.activeEnvironment)
+    : null;
+  let hasPendingWrites = false;
+
+  function assertWritableEnvironment() {
+    if (!draftEnvironment || !runtimeContext.persistActiveEnvironment) {
+      throw new Error("Active environment writes are unavailable because no active environment is selected.");
+    }
+  }
+
+  function writableEnvironment(): EnvironmentDetail {
+    assertWritableEnvironment();
+    return draftEnvironment as EnvironmentDetail;
+  }
+
+  function syncDraftVariablesToMap() {
+    if (!draftEnvironment) {
+      return;
+    }
+
+    syncVariableMap(variables, buildVariableMap(draftEnvironment.variables));
+  }
+
   return {
-    get(name: string) {
-      return variables.get(asString(name).trim()) ?? null;
+    facade: {
+      get(name: string) {
+        return variables.get(asString(name).trim()) ?? null;
+      },
+      has(name: string) {
+        return variables.has(asString(name).trim());
+      },
+      all() {
+        return Object.fromEntries(variables.entries());
+      },
+      async set(name: string, value: string, options: { secret?: boolean; enabled?: boolean } = {}) {
+        const environment = writableEnvironment();
+
+        const key = normalizeEnvironmentVariableName(name);
+        const nextValue = asString(value);
+        const nextEnabled = typeof options.enabled === "boolean" ? options.enabled : true;
+        const existingIndex = findEnvironmentVariableIndex(environment.variables, key);
+
+        if (existingIndex >= 0) {
+          const existing = environment.variables[existingIndex]!;
+          const nextVariable: EnvironmentVariable = {
+            ...existing,
+            key,
+            value: nextValue,
+            enabled: nextEnabled,
+            isSecret: typeof options.secret === "boolean" ? options.secret : existing.isSecret
+          };
+
+          environment.variables[existingIndex] = nextVariable;
+        } else {
+          const nextVariable: EnvironmentVariable = {
+            ...createEnvironmentVariable(),
+            key,
+            value: nextValue,
+            enabled: nextEnabled,
+            isSecret: options.secret ?? false
+          };
+
+          environment.variables = [...environment.variables, nextVariable];
+        }
+
+        syncDraftVariablesToMap();
+        hasPendingWrites = true;
+      },
+      async remove(name: string) {
+        const environment = writableEnvironment();
+
+        const key = normalizeEnvironmentVariableName(name);
+        environment.variables = environment.variables.filter(
+          (variable) => variable.key.trim().toLowerCase() !== key.toLowerCase()
+        );
+        syncDraftVariablesToMap();
+        hasPendingWrites = true;
+      }
     },
-    has(name: string) {
-      return variables.has(asString(name).trim());
-    },
-    all() {
-      return Object.fromEntries(variables.entries());
+    async flushPendingWrites() {
+      if (!hasPendingWrites || !draftEnvironment || !runtimeContext.persistActiveEnvironment) {
+        return;
+      }
+
+      const persisted = await runtimeContext.persistActiveEnvironment(cloneEnvironmentDetail(draftEnvironment));
+      draftEnvironment = cloneEnvironmentDetail(persisted);
+      syncVariableMap(variables, buildVariableMap(draftEnvironment.variables));
+      hasPendingWrites = false;
     }
   };
 }
@@ -347,6 +488,10 @@ function createResponseFacade(response: ResponsePayload) {
   return {
     code: response.statusCode,
     status: response.statusText,
+    durationMs: response.durationMs,
+    sizeBytes: response.sizeBytes,
+    errorText: response.errorText,
+    executedAt: response.executedAt,
     text() {
       return response.bodyText;
     },
@@ -360,7 +505,185 @@ function createResponseFacade(response: ResponsePayload) {
     headers: response.headers.map((header) => ({
       key: header.key,
       value: header.value
-    }))
+    })),
+    raw: response
+  };
+}
+
+function normalizeKeyValueRows(value: unknown): KeyValueRow[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => {
+      if (!isRecord(entry)) {
+        return [];
+      }
+
+      return [
+        buildRow(
+          asString(entry.key ?? ""),
+          asString(entry.value ?? ""),
+          normalizeEnabled(entry.enabled)
+        )
+      ];
+    });
+  }
+
+  if (!isRecord(value)) {
+    return [];
+  }
+
+  return Object.entries(value).map(([key, entryValue]) => buildRow(key, asString(entryValue)));
+}
+
+function normalizeFileRows(value: unknown): FileRow[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((entry) => {
+    if (typeof entry === "string") {
+      return [buildFileRow("file", entry)];
+    }
+
+    if (!isRecord(entry)) {
+      return [];
+    }
+
+    const path = asString(entry.path ?? "").trim();
+    if (!path) {
+      return [];
+    }
+
+    return [buildFileRow(asString(entry.name ?? "file"), path, normalizeEnabled(entry.enabled))];
+  });
+}
+
+function normalizeBody(value: unknown): RequestBody {
+  if (value == null) {
+    return {
+      mode: "none",
+      raw: "",
+      form: [],
+      files: []
+    };
+  }
+
+  if (typeof value === "string") {
+    return {
+      mode: "raw",
+      raw: value,
+      form: [],
+      files: []
+    };
+  }
+
+  if (!isRecord(value)) {
+    return {
+      mode: "raw",
+      raw: asString(value),
+      form: [],
+      files: []
+    };
+  }
+
+  if (typeof value.mode === "string" && VALID_BODY_MODES.has(value.mode)) {
+    const raw =
+      typeof value.raw === "string"
+        ? value.raw
+        : value.raw == null
+          ? ""
+          : JSON.stringify(value.raw, null, 2);
+
+    return {
+      mode: value.mode as RequestBody["mode"],
+      raw,
+      form: normalizeKeyValueRows(value.form),
+      files: normalizeFileRows(value.files)
+    };
+  }
+
+  return {
+    mode: "json",
+    raw: JSON.stringify(value, null, 2),
+    form: [],
+    files: []
+  };
+}
+
+function normalizeAuth(value: unknown): RequestAuth {
+  const fallback: RequestAuth = {
+    type: "none",
+    basicUsername: "",
+    basicPassword: "",
+    bearerToken: "",
+    apiKeyName: "",
+    apiKeyValue: "",
+    apiKeyIn: "header"
+  };
+
+  if (!isRecord(value)) {
+    return fallback;
+  }
+
+  const authType: RequestAuth["type"] =
+    typeof value.type === "string" && VALID_AUTH_TYPES.has(value.type)
+      ? (value.type as RequestAuth["type"])
+      : typeof value.bearerToken === "string"
+        ? "bearer"
+        : typeof value.basicUsername === "string" || typeof value.basicPassword === "string"
+          ? "basic"
+          : typeof value.apiKeyName === "string" || typeof value.apiKeyValue === "string"
+            ? "api-key"
+            : "none";
+
+  return {
+    type: authType,
+    basicUsername: asString(value.basicUsername ?? ""),
+    basicPassword: asString(value.basicPassword ?? ""),
+    bearerToken: asString(value.bearerToken ?? ""),
+    apiKeyName: asString(value.apiKeyName ?? ""),
+    apiKeyValue: asString(value.apiKeyValue ?? ""),
+    apiKeyIn:
+      typeof value.apiKeyIn === "string" && VALID_API_KEY_PLACEMENTS.has(value.apiKeyIn)
+        ? (value.apiKeyIn as RequestAuth["apiKeyIn"])
+        : "header"
+  };
+}
+
+function normalizeScriptRequestInput(input: unknown): RequestDraft {
+  if (!isRecord(input)) {
+    throw new Error("pn.http.send expects a request object.");
+  }
+
+  const url = asString(input.url ?? "").trim();
+  if (!url) {
+    throw new Error("pn.http.send requires a request URL.");
+  }
+
+  const method = asString(input.method ?? "GET").trim().toUpperCase();
+  if (!VALID_METHODS.has(method)) {
+    throw new Error(`Unsupported HTTP method: ${method}`);
+  }
+
+  return {
+    name: asString(input.name ?? "Script helper request"),
+    method: method as RequestDraft["method"],
+    url,
+    queryParams: normalizeKeyValueRows(input.queryParams ?? input.query),
+    headers: normalizeKeyValueRows(input.headers),
+    body: normalizeBody(input.body),
+    auth: normalizeAuth(input.auth),
+    preRequestScript: "",
+    testScript: ""
+  };
+}
+
+function createHttpFacade() {
+  return {
+    async send(input: unknown) {
+      const preparedRequest = normalizeScriptRequestInput(input);
+      const result = await sendRequest(preparedRequest, { persistHistory: false });
+      return createResponseFacade(result.response);
+    }
   };
 }
 
@@ -368,11 +691,12 @@ export function createEmptyRequestScriptExecution() {
   return createEmptyExecution();
 }
 
-export function runPreRequestScript(
+export async function runPreRequestScript(
   request: RequestDraft,
   environmentVariables: EnvironmentVariable[],
-  inheritedScripts: InheritedRequestScripts | null = null
-): { request: RequestDraft; errorText: string } {
+  inheritedScripts: InheritedRequestScripts | null = null,
+  runtimeContext: ScriptRuntimeContext = {}
+): Promise<{ request: RequestDraft; errorText: string }> {
   const scriptSources = [
     { label: "Collection pre-request script", script: inheritedScripts?.preRequestScript ?? "" },
     ...(inheritedScripts?.folderScripts ?? []).map((folder) => ({
@@ -391,16 +715,19 @@ export function runPreRequestScript(
 
   const preparedRequest = cloneRequestDraft(request);
   const variables = buildVariableMap(environmentVariables);
+  const http = createHttpFacade();
+  const variableFacade = createVariableFacade(variables, runtimeContext);
   const pn = {
-    variables: createVariableFacade(variables),
+    variables: variableFacade.facade,
     request: createRequestFacade(preparedRequest, variables),
-    expect: createExpectation
+    expect: createExpectation,
+    http
   };
 
   for (const source of scriptSources) {
     try {
-      const execute = new Function("pn", '"use strict";\n' + source.script);
-      execute(pn);
+      const execute = new AsyncFunction("pn", '"use strict";\n' + source.script);
+      await execute(pn);
     } catch (error) {
       return {
         request: preparedRequest,
@@ -409,18 +736,28 @@ export function runPreRequestScript(
     }
   }
 
+  try {
+    await variableFacade.flushPendingWrites();
+  } catch (error) {
+    return {
+      request: preparedRequest,
+      errorText: `Active environment update: ${normalizeScriptError(error)}`
+    };
+  }
+
   return {
     request: preparedRequest,
     errorText: ""
   };
 }
 
-export function runTestScript(
+export async function runTestScript(
   request: RequestDraft,
   response: ResponsePayload,
   environmentVariables: EnvironmentVariable[],
-  inheritedScripts: InheritedRequestScripts | null = null
-): RequestScriptExecution {
+  inheritedScripts: InheritedRequestScripts | null = null,
+  runtimeContext: ScriptRuntimeContext = {}
+): Promise<RequestScriptExecution> {
   const scriptSources = [
     { label: "Collection test script", script: inheritedScripts?.testScript ?? "" },
     ...(inheritedScripts?.folderScripts ?? []).map((folder) => ({
@@ -437,38 +774,57 @@ export function runTestScript(
   const execution = createEmptyExecution();
   const variables = buildVariableMap(environmentVariables);
   const tests: ScriptTestResult[] = [];
+  const http = createHttpFacade();
+  const variableFacade = createVariableFacade(variables, runtimeContext);
+  let testChain = Promise.resolve();
 
   const pn = {
-    variables: createVariableFacade(variables),
+    variables: variableFacade.facade,
     response: createResponseFacade(response),
     expect: createExpectation,
-    test(name: string, assertion: () => void) {
-      try {
-        assertion();
-        tests.push({
-          id: nextScriptTestId(),
-          name: asString(name),
-          status: "passed",
-          errorText: ""
-        });
-      } catch (error) {
-        tests.push({
-          id: nextScriptTestId(),
-          name: asString(name),
-          status: "failed",
-          errorText: normalizeScriptError(error)
-        });
-      }
+    http,
+    test(name: string, assertion: () => void | Promise<void>) {
+      const promise = testChain.then(async () => {
+        try {
+          await assertion();
+          tests.push({
+            id: nextScriptTestId(),
+            name: asString(name),
+            status: "passed",
+            errorText: ""
+          });
+        } catch (error) {
+          tests.push({
+            id: nextScriptTestId(),
+            name: asString(name),
+            status: "failed",
+            errorText: normalizeScriptError(error)
+          });
+        }
+      });
+
+      testChain = promise;
+      return promise;
     }
   };
 
   for (const source of scriptSources) {
     try {
-      const execute = new Function("pn", '"use strict";\n' + source.script);
-      execute(pn);
+      const execute = new AsyncFunction("pn", '"use strict";\n' + source.script);
+      await execute(pn);
+      await testChain;
     } catch (error) {
+      await testChain;
       execution.testScriptErrorText = `${source.label}: ${normalizeScriptError(error)}`;
       break;
+    }
+  }
+
+  if (!execution.testScriptErrorText) {
+    try {
+      await variableFacade.flushPendingWrites();
+    } catch (error) {
+      execution.testScriptErrorText = `Active environment update: ${normalizeScriptError(error)}`;
     }
   }
 

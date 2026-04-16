@@ -34,6 +34,10 @@ export function hasTauriRuntime() {
   return typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
 }
 
+export type SendRequestOptions = {
+  persistHistory?: boolean;
+};
+
 function createMockResponse(payload: RequestDraft): ResponsePayload {
   return {
     statusCode: 200,
@@ -262,7 +266,10 @@ function createMockSavedRequestDetail(id: string): SavedRequestDetail {
   };
 }
 
-export async function sendRequest(payload: RequestDraft): Promise<SendRequestResult> {
+export async function sendRequest(
+  payload: RequestDraft,
+  options: SendRequestOptions = {}
+): Promise<SendRequestResult> {
   if (!hasTauriRuntime()) {
     return {
       response: createMockResponse(payload),
@@ -270,7 +277,10 @@ export async function sendRequest(payload: RequestDraft): Promise<SendRequestRes
     };
   }
 
-  return invoke<SendRequestResult>("send_request", { payload });
+  return invoke<SendRequestResult>("send_request", {
+    payload,
+    persistHistory: options.persistHistory ?? true
+  });
 }
 
 export async function cancelActiveRequest(): Promise<boolean> {

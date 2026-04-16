@@ -48,10 +48,16 @@
       insertText: "pn.variables"
     },
     {
+      id: "pn-http",
+      label: "pn.http",
+      detail: "Helper HTTP requests inside scripts",
+      insertText: "pn.http"
+    },
+    {
       id: "pn-test",
       label: "pn.test(name, fn)",
-      detail: "Register a response test block",
-      insertText: "pn.test('name', () => {\n  __CURSOR__\n});"
+      detail: "Register a sync or async response test block",
+      insertText: "await pn.test('name', async () => {\n  __CURSOR__\n});"
     },
     {
       id: "pn-expect",
@@ -190,6 +196,26 @@
       label: "all()",
       detail: "Read all active environment variables",
       insertText: "pn.variables.all()"
+    },
+    {
+      id: "var-set",
+      label: "set(name, value, options)",
+      detail: "Create or update an active environment variable",
+      insertText: "await pn.variables.set('__CURSOR__', '')"
+    },
+    {
+      id: "var-remove",
+      label: "remove(name)",
+      detail: "Remove an active environment variable",
+      insertText: "await pn.variables.remove('__CURSOR__')"
+    }
+  ];
+  const HTTP_COMPLETIONS: ScriptCompletion[] = [
+    {
+      id: "http-send",
+      label: "send(request)",
+      detail: "Send a helper request without adding a history entry",
+      insertText: "await pn.http.send({\n  method: 'GET',\n  url: '__CURSOR__'\n})"
     }
   ];
   const EXPECTATION_COMPLETIONS: ScriptCompletion[] = [
@@ -394,6 +420,10 @@
 
     if (firstSegment === "variables") {
       return filterCompletions(VARIABLE_COMPLETIONS, secondSegment);
+    }
+
+    if (firstSegment === "http") {
+      return filterCompletions(HTTP_COMPLETIONS, secondSegment);
     }
 
     return [];

@@ -28,7 +28,9 @@ pub async fn send_request(
     app: AppHandle,
     state: State<'_, AppState>,
     payload: SendRequestPayload,
+    persist_history: Option<bool>,
 ) -> AppResult<SendRequestResult> {
+    let should_persist_history = persist_history.unwrap_or(true);
     let (request_id, cancel_rx) = state.start_request()?;
     let settings = settings_service::get_settings(state.db()).await?;
     let active_environment =
@@ -46,16 +48,20 @@ pub async fn send_request(
 
     let result = match request_result {
         Ok(response) => {
-            let history_persistence_error = match history_service::record_success(
-                state.db(),
-                &history_payload,
-                &response,
-                &app,
-            )
-            .await
-            {
-                Ok(()) => None,
-                Err(error) => Some(error.to_string()),
+            let history_persistence_error = if should_persist_history {
+                match history_service::record_success(
+                    state.db(),
+                    &history_payload,
+                    &response,
+                    &app,
+                )
+                .await
+                {
+                    Ok(()) => None,
+                    Err(error) => Some(error.to_string()),
+                }
+            } else {
+                None
             };
             Ok(SendRequestResult {
                 response,
@@ -65,14 +71,16 @@ pub async fn send_request(
         Err(error) => match error.is_cancelled() {
             true => Err(error),
             false => {
-                if let Err(history_error) = history_service::record_failure(
-                    state.db(),
-                    &history_payload,
-                    &error.to_string(),
-                )
-                .await
-                {
-                    emit_history_persistence_error(&app, history_error.to_string());
+                if should_persist_history {
+                    if let Err(history_error) = history_service::record_failure(
+                        state.db(),
+                        &history_payload,
+                        &error.to_string(),
+                    )
+                    .await
+                    {
+                        emit_history_persistence_error(&app, history_error.to_string());
+                    }
                 }
                 Err(error)
             }

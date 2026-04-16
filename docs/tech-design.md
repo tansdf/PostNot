@@ -630,15 +630,15 @@ Ship a usable desktop app that can compose and execute HTTP requests locally, pe
 
 ### Current Scripting Boundary
 
-Scripts currently run as synchronous frontend JavaScript around one request send. Pre-request scripts can read active environment variables and mutate the outgoing request draft. Test scripts can inspect the returned response and register assertions. Scripts do not currently have an async HTTP helper, so they cannot fetch a token or call another endpoint themselves before the main request runs.
+Scripts now run as awaited frontend JavaScript around one request send. Pre-request scripts can read and write active environment variables, mutate the outgoing request draft, and call `await pn.http.send(...)` to perform helper HTTP requests before the main request runs. Test scripts can inspect the returned response, register sync or async assertions through `pn.test(...)`, and also call helper requests when needed.
 
-The next scripting milestone should add an async helper such as `await pn.http.send(...)` or `await pn.sendRequest(...)`, then update the script runner to await inherited collection, folder, and saved-request scripts in order. That would support workflows like a pre-request script fetching an auth token, storing it in the current request via `pn.request.setBearerToken(...)`, and then allowing the main request to continue.
+Helper script requests reuse the native request pipeline and active environment resolution, but they do not write separate history entries. Active-environment variable writes are buffered while scripts run and then persisted through the normal environment update path before the main request continues. The current runtime still allows only one native request in flight at a time, so helper requests should be awaited sequentially instead of fired concurrently.
 
 ### Milestone 1 Remaining
 
 - tighter error handling and UX polish
 - multi-request workflow decisions
-- richer scripting surface (async helper requests for token-fetch workflows, broader `pn` API parity, execution model hardening, and richer inherited execution controls)
+- richer scripting surface (broader `pn` API parity, execution model hardening, and richer inherited execution controls)
 
 Manual end-to-end verification via `tauri dev` has already been completed for the current milestone state.
 
@@ -650,7 +650,7 @@ Recommended implementation order from the current state:
 2. Decide whether updater discovery should stay on GitHub's stable-only `/latest` endpoint or move to a custom prerelease-aware manifest
 3. Evaluate multi-tab workflow and other request-level productivity features
 4. Improve import/export compatibility and remaining desktop polish
-5. Extend request scripting with async helper requests, broader API surface, safety, and inherited execution controls
+5. Extend request scripting with broader API surface, safety, and inherited execution controls
 
 ## 14. Open Decisions
 
@@ -665,4 +665,4 @@ These are still unresolved:
 
 Treat the repository as being in an active Milestone 1 state, not full MVP completion.
 
-The design is now grounded in what the code actually does: persisted settings influence request execution, history is stored in SQLite with secret-derived environment values redacted, secret environment values live in the OS credential store, environments resolve variables at send time, collections support nested folders in the working UI with consistent sidebar and collections-panel tree affordances, saved requests can be reordered or moved across folders and collections through a shared drag-and-drop model, collections, folders, and saved requests can run inherited pre-request and test scripts in the frontend before and after native execution, import can pull requests in from Postman collections and cURL, multipart requests can attach local files, built-in dynamic variables resolve at runtime, and the desktop shell can check GitHub Releases for signed updater builds both on launch and from Settings. The next work should stay focused on updater channel decisions, multi-tab decisions, scripting depth, and remaining UX polish.
+The design is now grounded in what the code actually does: persisted settings influence request execution, history is stored in SQLite with secret-derived environment values redacted, secret environment values live in the OS credential store, environments resolve variables at send time, collections support nested folders in the working UI with consistent sidebar and collections-panel tree affordances, saved requests can be reordered or moved across folders and collections through a shared drag-and-drop model, collections, folders, and saved requests can run inherited pre-request and test scripts in the frontend before and after native execution, scripts can await helper HTTP requests through `pn.http.send(...)` without polluting history and can persist active-environment variable updates during script execution, import can pull requests in from Postman collections and cURL, multipart requests can attach local files, built-in dynamic variables resolve at runtime, and the desktop shell can check GitHub Releases for signed updater builds both on launch and from Settings. The next work should stay focused on updater channel decisions, multi-tab decisions, scripting depth, and remaining UX polish.

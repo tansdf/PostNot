@@ -6,6 +6,17 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-04-16
+
+### Added
+
+- Async scripting helper requests through `await pn.http.send(...)`, so inherited pre-request and test scripts can call the native sender for token/bootstrap workflows without polluting request history.
+- Active-environment script writes through `await pn.variables.set(...)` and `await pn.variables.remove(...)`, including persisted secret writes through the existing environment storage path.
+
+### Changed
+
+- Pre-request and test scripts now run as awaited JavaScript in inheritance order, and `pn.test(...)` accepts async assertion callbacks.
+
 ## [0.14.1] - 2026-04-15
 
 ### Changed

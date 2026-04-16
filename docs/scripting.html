@@ -214,16 +214,20 @@
             <code role="cell">pn.request.getHeader(name)</code>
             <span role="cell">Read a request header value from the draft.</span>
           </div>
+          <div role="row">
+            <code role="cell">await pn.http.send(request)</code>
+            <span role="cell">Send a helper HTTP request through the native layer without writing a history entry.</span>
+          </div>
         </div>
       </section>
 
       <section aria-labelledby="variables-api">
         <div class="section-heading">
           <p class="eyebrow">Variables</p>
-          <h2 id="variables-api">Read active environment variables</h2>
+          <h2 id="variables-api">Read and write active environment variables</h2>
         </div>
         <p class="section-lead">
-          Scripts can read active environment values directly. Environment placeholders and built-in
+          Scripts can read and update active environment values directly. Environment placeholders and built-in
           dynamic variables such as <span class="code-inline">{{$guid}}</span> are still resolved by
           the native sender after pre-request scripts finish, so scripts may also write placeholders
           into headers, query parameters, URLs, body text, or auth fields.
@@ -244,6 +248,14 @@
           <div role="row">
             <code role="cell">pn.variables.all()</code>
             <span role="cell">Return active variables as a plain object.</span>
+          </div>
+          <div role="row">
+            <code role="cell">await pn.variables.set(name, value, options)</code>
+            <span role="cell">Create or update an active environment variable and persist it before the request continues. Use <span class="code-inline">{"{ secret: true }"}</span> to store it in the OS credential store.</span>
+          </div>
+          <div role="row">
+            <code role="cell">await pn.variables.remove(name)</code>
+            <span role="cell">Delete an active environment variable and persist the change.</span>
           </div>
         </div>
       </section>
@@ -284,11 +296,15 @@
           </div>
           <div role="row">
             <code role="cell">pn.test(name, fn)</code>
-            <span role="cell">Register a named assertion block. Failures are shown in the response panel.</span>
+            <span role="cell">Register a named sync or async assertion block. Failures are shown in the response panel.</span>
           </div>
           <div role="row">
             <code role="cell">pn.expect(value)</code>
             <span role="cell">Start an assertion chain.</span>
+          </div>
+          <div role="row">
+            <code role="cell">await pn.http.send(request)</code>
+            <span role="cell">Send a helper HTTP request during test evaluation without writing a history entry.</span>
           </div>
         </div>
 
@@ -315,6 +331,22 @@ if (!token) {
   throw new Error('Missing api_token environment variable');
 }
 
+pn.request.setBearerToken(token);</code></pre>
+          </article>
+
+          <article class="doc-example">
+            <h3>Fetch a token before send</h3>
+            <pre><code>const auth = await pn.http.send({
+  method: 'POST',
+  url: '{{base_url}}/auth/token',
+  body: {
+    clientId: pn.variables.get('client_id'),
+    clientSecret: pn.variables.get('client_secret')
+  }
+});
+
+const token = auth.json().access_token;
+await pn.variables.set('api_token', token, { secret: true });
 pn.request.setBearerToken(token);</code></pre>
           </article>
 
@@ -349,17 +381,14 @@ pn.test('response has an id', () => {
       <section aria-labelledby="limits">
         <div class="section-heading">
           <p class="eyebrow">Current limits</p>
-          <h2 id="limits">What scripts cannot do yet</h2>
+          <h2 id="limits">Current async-helper limits</h2>
         </div>
         <div class="status-callout">
           <p>
-            Scripts are currently synchronous and cannot send their own HTTP requests. That means a
-            pre-request script can inject an existing token from an environment variable, but it cannot
-            fetch a fresh token from another endpoint before the main request. A future scripting
-            milestone is expected to add an async helper such as
-            <span class="code-inline">await pn.http.send(...)</span> or
-            <span class="code-inline">await pn.sendRequest(...)</span> for token-fetch and setup
-            workflows.
+            Scripts can now await helper HTTP requests, but PostNot still allows only one native
+            request in flight at a time. Await helper calls sequentially instead of firing parallel
+            <span class="code-inline">Promise.all(...)</span> request batches, and note that helper
+            requests reuse the native sender without creating separate history entries.
           </p>
         </div>
       </section>

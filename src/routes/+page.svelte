@@ -15,7 +15,8 @@
     listEnvironments,
     listHistory,
     setActiveEnvironment,
-    sendRequest
+    sendRequest,
+    updateEnvironment
   } from "$lib/api/commands";
   import type {
     AppSettings,
@@ -208,6 +209,29 @@
     }
   }
 
+  async function persistActiveEnvironmentFromScript(nextEnvironment: EnvironmentDetail): Promise<EnvironmentDetail> {
+    const updated = await updateEnvironment(nextEnvironment.id, {
+      name: nextEnvironment.name.trim(),
+      variables: nextEnvironment.variables
+    });
+
+    activeEnvironmentDetail = updated;
+    activeEnvironmentId = updated.id;
+    environments = environments.map((environment) =>
+      environment.id === updated.id
+        ? {
+            ...environment,
+            name: updated.name,
+            isActive: updated.isActive,
+            variableCount: updated.variables.length,
+            updatedAt: updated.updatedAt
+          }
+        : environment
+    );
+
+    return updated;
+  }
+
   async function handleSend() {
     isSending = true;
     isCancelingRequest = false;
@@ -215,7 +239,15 @@
     const inheritedScripts = activeCollectionScripts();
 
     try {
-      const preparedRequest = runPreRequestScript(request, activeEnvironmentDetail?.variables ?? [], inheritedScripts);
+      const preparedRequest = await runPreRequestScript(
+        request,
+        activeEnvironmentDetail?.variables ?? [],
+        inheritedScripts,
+        {
+          activeEnvironment: activeEnvironmentDetail,
+          persistActiveEnvironment: persistActiveEnvironmentFromScript
+        }
+      );
       if (preparedRequest.errorText) {
         scriptExecution = {
           ...createEmptyRequestScriptExecution(),
@@ -236,7 +268,16 @@
 
       const sendResult = await sendRequest(preparedRequest.request);
       response = sendResult.response;
-      scriptExecution = runTestScript(request, sendResult.response, activeEnvironmentDetail?.variables ?? [], inheritedScripts);
+      scriptExecution = await runTestScript(
+        request,
+        sendResult.response,
+        activeEnvironmentDetail?.variables ?? [],
+        inheritedScripts,
+        {
+          activeEnvironment: activeEnvironmentDetail,
+          persistActiveEnvironment: persistActiveEnvironmentFromScript
+        }
+      );
 
       if (scriptExecution.testScriptErrorText) {
         notifications.warning(
