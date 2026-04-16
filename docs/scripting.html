@@ -49,41 +49,71 @@
         <p class="eyebrow">PostNot scripting</p>
         <h1 id="scripting-heading">Inherited scripts for API workflows</h1>
         <p class="section-lead">
-          PostNot scripts are JavaScript snippets that run in the desktop UI before a saved request is
-          sent and after its response returns. They can set headers, query parameters, body content,
-          authentication, and response assertions while keeping request execution in the native Rust layer.
+          PostNot scripts are JavaScript snippets that run in the desktop UI before a request is sent
+          and after its response returns. Request-level scripts work on the current request draft, while
+          collection and folder scripts layer on top for saved requests in a collection tree. They can
+          set headers, query parameters, body content, authentication, and response assertions while
+          keeping request execution in the native Rust layer.
         </p>
       </section>
 
-      <section aria-labelledby="where-scripts-run">
-        <div class="section-heading">
-          <p class="eyebrow">Execution model</p>
-          <h2 id="where-scripts-run">Where scripts run</h2>
-        </div>
-        <div class="doc-grid">
-          <article class="card">
-            <h3>Pre-request scripts</h3>
-            <p>
-              Run before the native request is sent. They receive a mutable request draft and active
-              environment variables through <span class="code-inline">pn</span>.
+      <div class="doc-layout">
+        <aside class="doc-sidebar" aria-labelledby="contents-heading">
+          <div class="doc-sidebar__inner">
+            <p class="doc-sidebar__eyebrow">Reference</p>
+            <h2 id="contents-heading" class="doc-sidebar__title">On this page</h2>
+            <nav class="doc-toc" aria-label="Scripting page contents">
+              <a href="#where-scripts-run">Where scripts run</a>
+              <a href="#where-to-edit">Where to edit scripts</a>
+              <a href="#script-order">Script execution order</a>
+              <a href="#persistence-rules">What persists and what does not</a>
+              <a href="#pre-request-api">Pre-request API</a>
+              <a href="#helper-request-shape">Helper request shape</a>
+              <a href="#variables-api">Variable API</a>
+              <a href="#test-api">Test API</a>
+              <a href="#failure-behavior">Failure behavior</a>
+              <a href="#examples">Common scripts</a>
+              <a href="#limits">Current limits</a>
+              <a href="#postman-events">Postman portability</a>
+            </nav>
+          </div>
+        </aside>
+
+        <div class="doc-content">
+          <section aria-labelledby="where-scripts-run">
+            <div class="section-heading">
+              <p class="eyebrow">Execution model</p>
+              <h2 id="where-scripts-run">Where scripts run</h2>
+            </div>
+            <div class="doc-grid">
+              <article class="card">
+                <h3>Pre-request scripts</h3>
+                <p>
+                  Run before the native request is sent. They receive a mutable request draft and active
+                  environment variables through <span class="code-inline">pn</span>.
+                </p>
+              </article>
+              <article class="card">
+                <h3>Test scripts</h3>
+                <p>
+                  Run after a response comes back. They receive response helpers and can register named
+                  assertions with <span class="code-inline">pn.test</span>.
+                </p>
+              </article>
+              <article class="card">
+                <h3>Inherited scripts</h3>
+                <p>
+                  Scripts can be saved on collections, folders, and individual requests, so shared behavior
+                  can live near the requests it applies to.
+                </p>
+              </article>
+            </div>
+            <p class="section-lead">
+              Scripts run as awaited JavaScript in the frontend layer. The actual HTTP request still goes
+              through the native Rust sender, which means script helpers can prepare requests and inspect
+              responses without moving network execution into the browser runtime.
             </p>
-          </article>
-          <article class="card">
-            <h3>Test scripts</h3>
-            <p>
-              Run after a response comes back. They receive response helpers and can register named
-              assertions with <span class="code-inline">pn.test</span>.
-            </p>
-          </article>
-          <article class="card">
-            <h3>Inherited scripts</h3>
-            <p>
-              Scripts can be saved on collections, folders, and individual requests, so shared behavior
-              can live near the requests it applies to.
-            </p>
-          </article>
-        </div>
-      </section>
+          </section>
 
       <section aria-labelledby="where-to-edit">
         <div class="section-heading">
@@ -108,7 +138,7 @@
           <article class="card">
             <h3>Request scripts</h3>
             <p>
-              Open a saved request in the request workspace and use the
+              Use the
               <span class="code-inline">Scripts</span> request editor tab.
             </p>
           </article>
@@ -134,6 +164,47 @@
           shows the script error in the response panel. If a test script throws outside a
           <span class="code-inline">pn.test</span> block, later test scripts are skipped.
         </p>
+      </section>
+
+      <section aria-labelledby="persistence-rules">
+        <div class="section-heading">
+          <p class="eyebrow">Reliability</p>
+          <h2 id="persistence-rules">What persists and what does not</h2>
+        </div>
+        <div class="doc-grid">
+          <article class="card">
+            <h3>Request mutations are send-only</h3>
+            <p>
+              Pre-request scripts mutate a cloned draft for the current send. They affect the request
+              that goes to the native sender, but they do not rewrite the request editor or save back to
+              the collection unless you save changes yourself afterward.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Environment writes do persist</h3>
+            <p>
+              <span class="code-inline">await pn.variables.set(...)</span> and
+              <span class="code-inline">await pn.variables.remove(...)</span> update the active
+              environment and persist those changes before execution continues. If there is no active
+              environment selected, writes throw an error.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Inheritance only applies to saved requests</h3>
+            <p>
+              Collection and folder scripts are applied only when the current request came from a saved
+              request inside that collection tree. An unsaved request can still use its own request-level
+              pre-request and test scripts.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Helper requests stay out of history</h3>
+            <p>
+              <span class="code-inline">pn.http.send(...)</span> uses the same native sender, but it does
+              not create a history entry and does not trigger inherited scripting around that helper call.
+            </p>
+          </article>
+        </div>
       </section>
 
       <section aria-labelledby="pre-request-api">
@@ -219,6 +290,58 @@
             <span role="cell">Send a helper HTTP request through the native layer without writing a history entry.</span>
           </div>
         </div>
+        <p class="section-lead">
+          Header and query lookups are case-insensitive by key. Upsert helpers replace the first matching
+          row and force it enabled; remove helpers delete every matching row.
+        </p>
+      </section>
+
+      <section aria-labelledby="helper-request-shape">
+        <div class="section-heading">
+          <p class="eyebrow">Helper requests</p>
+          <h2 id="helper-request-shape">Helper request shape</h2>
+        </div>
+        <p class="section-lead">
+          <span class="code-inline">pn.http.send(...)</span> expects a request object with a required
+          <span class="code-inline">url</span>. If you omit
+          <span class="code-inline">method</span>, it defaults to
+          <span class="code-inline">GET</span>.
+        </p>
+        <div class="api-table" role="table" aria-label="Helper request input shape">
+          <div role="row">
+            <strong role="cell">Field</strong>
+            <strong role="cell">Accepted shape</strong>
+          </div>
+          <div role="row">
+            <code role="cell">method</code>
+            <span role="cell">One of <span class="code-inline">GET</span>, <span class="code-inline">POST</span>, <span class="code-inline">PUT</span>, <span class="code-inline">PATCH</span>, <span class="code-inline">DELETE</span>, <span class="code-inline">HEAD</span>, or <span class="code-inline">OPTIONS</span>.</span>
+          </div>
+          <div role="row">
+            <code role="cell">url</code>
+            <span role="cell">Required request URL. Environment placeholders can still be used here.</span>
+          </div>
+          <div role="row">
+            <code role="cell">queryParams / query</code>
+            <span role="cell">Either an array of rows or a plain object of key/value pairs.</span>
+          </div>
+          <div role="row">
+            <code role="cell">headers</code>
+            <span role="cell">Either an array of rows or a plain object of key/value pairs.</span>
+          </div>
+          <div role="row">
+            <code role="cell">body</code>
+            <span role="cell">A string for raw mode, a plain object for JSON mode, or an explicit object with <span class="code-inline">mode</span>, <span class="code-inline">raw</span>, <span class="code-inline">form</span>, and <span class="code-inline">files</span>.</span>
+          </div>
+          <div role="row">
+            <code role="cell">auth</code>
+            <span role="cell">An object matching the normal request auth shape: none, basic, bearer, or API key.</span>
+          </div>
+        </div>
+        <p class="section-lead">
+          The returned helper response uses the same shape as
+          <span class="code-inline">pn.response</span>: status code, text helpers, headers, timing,
+          response size, error text, and the raw response payload.
+        </p>
       </section>
 
       <section aria-labelledby="variables-api">
@@ -231,6 +354,10 @@
           dynamic variables such as <span class="code-inline">{{$guid}}</span> are still resolved by
           the native sender after pre-request scripts finish, so scripts may also write placeholders
           into headers, query parameters, URLs, body text, or auth fields.
+        </p>
+        <p class="section-lead">
+          Variable reads only include enabled environment variables with non-empty keys. If you update a
+          variable in one script, later scripts in the same send see the updated value.
         </p>
         <div class="api-table" role="table" aria-label="Variable scripting API">
           <div role="row">
@@ -279,12 +406,28 @@
             <span role="cell">HTTP status text.</span>
           </div>
           <div role="row">
+            <code role="cell">pn.response.durationMs</code>
+            <span role="cell">Elapsed request duration in milliseconds.</span>
+          </div>
+          <div role="row">
+            <code role="cell">pn.response.sizeBytes</code>
+            <span role="cell">Response body size in bytes.</span>
+          </div>
+          <div role="row">
+            <code role="cell">pn.response.errorText</code>
+            <span role="cell">Request error text, if the native sender reported one.</span>
+          </div>
+          <div role="row">
+            <code role="cell">pn.response.executedAt</code>
+            <span role="cell">ISO timestamp for when the response finished.</span>
+          </div>
+          <div role="row">
             <code role="cell">pn.response.text()</code>
             <span role="cell">Return the raw response body text.</span>
           </div>
           <div role="row">
             <code role="cell">pn.response.json()</code>
-            <span role="cell">Parse the response body as JSON.</span>
+            <span role="cell">Parse the response body as JSON. This throws if the body is not valid JSON.</span>
           </div>
           <div role="row">
             <code role="cell">pn.response.header(name)</code>
@@ -303,6 +446,10 @@
             <span role="cell">Start an assertion chain.</span>
           </div>
           <div role="row">
+            <code role="cell">pn.response.raw</code>
+            <span role="cell">Underlying raw response payload for cases where you need the full object.</span>
+          </div>
+          <div role="row">
             <code role="cell">await pn.http.send(request)</code>
             <span role="cell">Send a helper HTTP request during test evaluation without writing a history entry.</span>
           </div>
@@ -315,6 +462,49 @@
           <span class="code-inline">toBeTruthy</span>, <span class="code-inline">toBeFalsy</span>,
           <span class="code-inline">toBeGreaterThan</span>, and <span class="code-inline">toBeLessThan</span>.
         </p>
+        <p class="section-lead">
+          Tests are recorded in the order you register them. Async assertions are supported, so
+          <span class="code-inline">pn.test(...)</span> may itself await helper requests or other async work.
+        </p>
+      </section>
+
+      <section aria-labelledby="failure-behavior">
+        <div class="section-heading">
+          <p class="eyebrow">Failure modes</p>
+          <h2 id="failure-behavior">Failure behavior</h2>
+        </div>
+        <div class="doc-grid">
+          <article class="card">
+            <h3>Pre-request failures abort the send</h3>
+            <p>
+              Throwing from a pre-request script stops execution before the main request is sent. The
+              error is surfaced in the response panel as a script failure instead of a network failure.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Failed tests do not stop later tests</h3>
+            <p>
+              A failed assertion inside <span class="code-inline">pn.test(...)</span> marks that test as
+              failed and records its error text, but later registered tests still run.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Thrown test-script errors stop later scripts</h3>
+            <p>
+              Throwing outside <span class="code-inline">pn.test(...)</span>, or triggering a runtime error
+              such as invalid JSON parsing, stops the remaining inherited test scripts after queued tests
+              finish.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Environment write errors surface explicitly</h3>
+            <p>
+              If PostNot cannot persist an active-environment update, execution ends with an
+              <span class="code-inline">Active environment update</span> error so you can distinguish it
+              from request or assertion failures.
+            </p>
+          </article>
+        </div>
       </section>
 
       <section aria-labelledby="examples">
@@ -391,21 +581,31 @@ pn.test('response has an id', () => {
             requests reuse the native sender without creating separate history entries.
           </p>
         </div>
+        <div class="status-callout status-callout--spaced">
+          <p>
+            The scripting runtime is intentionally small right now. The stable contract is the
+            <span class="code-inline">pn</span> surface documented here; browser globals or Postman
+            <span class="code-inline">pm</span> helpers should not be treated as supported compatibility
+            APIs.
+          </p>
+        </div>
       </section>
 
-      <section aria-labelledby="postman-events">
-        <div class="section-heading">
-          <p class="eyebrow">Portability</p>
-          <h2 id="postman-events">Postman event import and export</h2>
+          <section aria-labelledby="postman-events">
+            <div class="section-heading">
+              <p class="eyebrow">Portability</p>
+              <h2 id="postman-events">Postman event import and export</h2>
+            </div>
+            <p class="section-lead">
+              PostNot imports and exports collection, folder, and request scripts through Postman
+              collection <span class="code-inline">event</span> blocks. Imported scripts are kept as
+              JavaScript source, but PostNot exposes the <span class="code-inline">pn</span> API rather
+              than Postman's <span class="code-inline">pm</span> API, so complex Postman scripts may need
+              manual adaptation after import.
+            </p>
+          </section>
         </div>
-        <p class="section-lead">
-          PostNot imports and exports collection, folder, and request scripts through Postman
-          collection <span class="code-inline">event</span> blocks. Imported scripts are kept as
-          JavaScript source, but PostNot exposes the <span class="code-inline">pn</span> API rather
-          than Postman's <span class="code-inline">pm</span> API, so complex Postman scripts may need
-          manual adaptation after import.
-        </p>
-      </section>
+      </div>
     </main>
 
     <footer class="site-footer">
@@ -424,5 +624,109 @@ pn.test('response has an id', () => {
         </div>
       </div>
     </footer>
+    <script>
+      (() => {
+        const tocLinks = Array.from(document.querySelectorAll(".doc-toc a[href^='#']"));
+        const sidebar = document.querySelector(".doc-sidebar");
+        const siteHeader = document.querySelector(".site-header");
+        if (tocLinks.length === 0) {
+          return;
+        }
+
+        const sections = tocLinks
+          .map((link) => {
+            const id = link.getAttribute("href")?.slice(1) ?? "";
+            const section = id ? document.getElementById(id) : null;
+            return section ? { link, section } : null;
+          })
+          .filter(Boolean);
+
+        if (sections.length === 0) {
+          return;
+        }
+
+        let activeId = "";
+
+        function preferredScrollOffset() {
+          const sidebarTop = sidebar?.getBoundingClientRect().top ?? 0;
+          if (window.matchMedia("(min-width: 860px)").matches && sidebarTop > 0) {
+            return sidebarTop;
+          }
+
+          const headerBottom = siteHeader?.getBoundingClientRect().bottom ?? 0;
+          return headerBottom + 16;
+        }
+
+        function scrollSectionIntoView(id, shouldUpdateHash = true) {
+          const target = document.getElementById(id);
+          if (!target) {
+            return;
+          }
+
+          const top = window.scrollY + target.getBoundingClientRect().top - preferredScrollOffset();
+          window.scrollTo({
+            top: Math.max(0, top),
+            behavior: "smooth"
+          });
+
+          if (shouldUpdateHash) {
+            history.pushState(null, "", `#${id}`);
+          }
+        }
+
+        function setActive(id) {
+          if (!id || id === activeId) {
+            return;
+          }
+
+          activeId = id;
+          for (const entry of sections) {
+            entry.link.setAttribute(
+              "aria-current",
+              entry.section.id === id ? "location" : "false"
+            );
+          }
+        }
+
+        const observer = new IntersectionObserver(
+          (entries) => {
+            const visible = entries
+              .filter((entry) => entry.isIntersecting)
+              .sort((left, right) => left.boundingClientRect.top - right.boundingClientRect.top);
+
+            if (visible.length > 0) {
+              setActive(visible[0].target.id);
+            }
+          },
+          {
+            rootMargin: "-18% 0px -62% 0px",
+            threshold: [0, 0.1, 0.25, 0.5, 1]
+          }
+        );
+
+        for (const entry of sections) {
+          observer.observe(entry.section);
+        }
+
+        const initialId = window.location.hash.slice(1) || sections[0].section.id;
+        setActive(initialId);
+
+        for (const entry of sections) {
+          entry.link.addEventListener("click", (event) => {
+            event.preventDefault();
+            setActive(entry.section.id);
+            scrollSectionIntoView(entry.section.id);
+          });
+        }
+
+        window.addEventListener("hashchange", () => {
+          const id = window.location.hash.slice(1);
+          if (id) {
+            setActive(id);
+            scrollSectionIntoView(id, false);
+          }
+        });
+      })();
+    </script>
   </body>
 </html>

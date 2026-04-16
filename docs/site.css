@@ -451,7 +451,7 @@ section h2 {
 }
 
 .doc-page {
-  max-width: 68rem;
+  max-width: var(--max-width);
 }
 
 .doc-hero {
@@ -471,6 +471,79 @@ section h2 {
 .example-grid {
   display: grid;
   gap: 1rem;
+}
+
+.doc-layout {
+  display: grid;
+  gap: 2rem;
+}
+
+.doc-content {
+  min-width: 0;
+}
+
+.doc-content section {
+  scroll-margin-top: 6.8rem;
+}
+
+.doc-sidebar {
+  min-width: 0;
+  align-self: start;
+}
+
+.doc-sidebar__inner {
+  padding: 1rem;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--panel) 100%, transparent);
+  box-shadow: var(--shadow-card);
+}
+
+.doc-sidebar__eyebrow {
+  margin: 0 0 0.55rem;
+  color: var(--panel-ink-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.doc-sidebar__title {
+  margin: 0 0 0.95rem;
+  font-size: 1rem;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.doc-toc {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.doc-toc a {
+  display: block;
+  padding: 0.5rem 0.2rem 0.5rem 0.85rem;
+  border-left: 2px solid transparent;
+  color: var(--panel-ink-soft);
+  text-decoration: none;
+  font-size: 0.95rem;
+  font-weight: 500;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.doc-toc a:hover {
+  transform: translateX(2px);
+  border-left-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  color: var(--accent-strong);
+}
+
+.doc-toc a[aria-current="location"] {
+  border-left-color: var(--accent);
+  color: var(--panel-ink);
+  font-weight: 700;
 }
 
 .doc-steps {
@@ -558,6 +631,10 @@ pre code {
   padding: 1.3rem 1.4rem;
 }
 
+.status-callout--spaced {
+  margin-top: 1rem;
+}
+
 .status-callout p {
   margin: 0;
   color: var(--panel-ink-soft);
@@ -620,6 +697,24 @@ code,
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
+  }
+}
+
+@media (min-width: 860px) {
+  .doc-layout {
+    grid-template-columns: minmax(13.5rem, 16rem) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .doc-sidebar {
+    position: sticky;
+    top: 6.4rem;
+    max-height: calc(100vh - 7.1rem);
+  }
+
+  .doc-sidebar__inner {
+    max-height: inherit;
+    overflow: auto;
   }
 }
 
