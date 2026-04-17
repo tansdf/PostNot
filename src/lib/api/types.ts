@@ -270,6 +270,26 @@ export type RequestScriptExecution = {
   tests: ScriptTestResult[];
 };
 
+export type RequestWorkspaceTabSource = "blank" | "saved" | "imported";
+
+export type RequestWorkspaceTab = {
+  id: string;
+  source: RequestWorkspaceTabSource;
+  savedRequestId: string | null;
+  collectionId: string | null;
+  parentId: string | null;
+  request: RequestDraft;
+  baselineRequest: RequestDraft | null;
+  response: ResponsePayload | null;
+  scriptExecution: RequestScriptExecution;
+  errorText: string;
+};
+
+export type RequestWorkspaceState = {
+  tabs: RequestWorkspaceTab[];
+  activeTabId: string;
+};
+
 function createId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();
@@ -343,5 +363,38 @@ export function createDefaultSettings(): AppSettings {
     historyLimit: 200,
     notificationTimeoutMs: 5_000,
     lastUpdateCheckedAt: null
+  };
+}
+
+function deepCloneSerializable<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+export function cloneRequestDraft(request: RequestDraft): RequestDraft {
+  return deepCloneSerializable(request);
+}
+
+export function cloneResponsePayload(response: ResponsePayload): ResponsePayload {
+  return deepCloneSerializable(response);
+}
+
+export function cloneRequestScriptExecution(execution: RequestScriptExecution): RequestScriptExecution {
+  return deepCloneSerializable(execution);
+}
+
+export function cloneRequestWorkspaceTab(tab: RequestWorkspaceTab): RequestWorkspaceTab {
+  return {
+    ...tab,
+    request: cloneRequestDraft(tab.request),
+    baselineRequest: tab.baselineRequest ? cloneRequestDraft(tab.baselineRequest) : null,
+    response: tab.response ? cloneResponsePayload(tab.response) : null,
+    scriptExecution: cloneRequestScriptExecution(tab.scriptExecution)
+  };
+}
+
+export function cloneRequestWorkspaceState(state: RequestWorkspaceState): RequestWorkspaceState {
+  return {
+    tabs: state.tabs.map(cloneRequestWorkspaceTab),
+    activeTabId: state.activeTabId
   };
 }

@@ -24,6 +24,7 @@ import {
   type ImportRequestInput,
   type ImportResult,
   type ImportedRequestDraft,
+  type RequestWorkspaceState,
   type RequestDraft,
   type ResponsePayload,
   type SendRequestResult,
@@ -357,6 +358,22 @@ export async function clearHistory(): Promise<void> {
   }
 
   await invoke("clear_history");
+}
+
+export async function getRequestWorkspaceState(): Promise<RequestWorkspaceState | null> {
+  if (!hasTauriRuntime()) {
+    return null;
+  }
+
+  return invoke<RequestWorkspaceState | null>("get_request_workspace_state");
+}
+
+export async function saveRequestWorkspaceState(state: RequestWorkspaceState): Promise<void> {
+  if (!hasTauriRuntime()) {
+    return;
+  }
+
+  await invoke("save_request_workspace_state", { state });
 }
 
 export async function listCollections(): Promise<CollectionSummary[]> {

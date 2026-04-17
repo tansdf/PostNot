@@ -12,6 +12,7 @@
   } from "$lib/api/types";
   import ScriptEditor from "$lib/components/request/ScriptEditor.svelte";
   import VariableField from "$lib/components/request/VariableField.svelte";
+  import type { Attachment } from "svelte/attachments";
 
   let {
     request = $bindable(),
@@ -20,12 +21,15 @@
     isSaving = false,
     saveLabel = "Save",
     saveDisabled = false,
+    sendDisabled = false,
     environmentVariables = [],
-    onNewRequest = () => {},
-    onOpenImport = () => {},
-    onSend = () => {},
-    onCancel = () => {},
-    onSave = () => {}
+    handleNewRequest = () => {},
+    handleOpenImport = () => {},
+    handleSendRequest = () => {},
+    handleCancelRequest = () => {},
+    handleSaveRequest = () => {},
+    showSaveMenu = false,
+    handleSaveAsRequest = () => {}
   }: {
     request: RequestDraft;
     isSending?: boolean;
@@ -33,15 +37,50 @@
     isSaving?: boolean;
     saveLabel?: string;
     saveDisabled?: boolean;
+    sendDisabled?: boolean;
     environmentVariables?: EnvironmentVariable[];
-    onNewRequest?: () => Promise<void> | void;
-    onOpenImport?: () => Promise<void> | void;
-    onSend?: () => Promise<void> | void;
-    onCancel?: () => Promise<void> | void;
-    onSave?: () => Promise<void> | void;
+    handleNewRequest?: () => Promise<void> | void;
+    handleOpenImport?: () => Promise<void> | void;
+    handleSendRequest?: () => Promise<void> | void;
+    handleCancelRequest?: () => Promise<void> | void;
+    handleSaveRequest?: () => Promise<void> | void;
+    showSaveMenu?: boolean;
+    handleSaveAsRequest?: () => Promise<void> | void;
   } = $props();
 
   let activePanel: "query" | "headers" | "body" | "auth" | "scripts" = $state("query");
+  let isSaveMenuOpen = $state(false);
+  let saveSplitRootNode: HTMLDivElement | null = null;
+
+  const attachSaveSplitRoot: Attachment<HTMLDivElement> = (node) => {
+    saveSplitRootNode = node;
+    return () => {
+      if (saveSplitRootNode === node) {
+        saveSplitRootNode = null;
+      }
+    };
+  };
+
+  function closeSaveMenuOnDocumentClick(event: MouseEvent) {
+    if (!isSaveMenuOpen) {
+      return;
+    }
+    const root = saveSplitRootNode;
+    if (!root || root.contains(event.target as Node)) {
+      return;
+    }
+    isSaveMenuOpen = false;
+  }
+
+  function closeSaveMenuOnWindowKeydown(event: KeyboardEvent) {
+    if (!isSaveMenuOpen) {
+      return;
+    }
+    if (event.key === "Escape") {
+      isSaveMenuOpen = false;
+    }
+  }
+
   let jsonValidationError = $state("");
   let multipartErrorText = $state("");
   let isPickingMultipartFiles = $state(false);
@@ -475,14 +514,58 @@
       }
     };
   }
+
+  function updateName(name: string) {
+    request = {
+      ...request,
+      name
+    };
+  }
+
+  function updateMethod(method: RequestDraft["method"]) {
+    request = {
+      ...request,
+      method
+    };
+  }
+
+  function updateApiKeyName(value: string) {
+    request = {
+      ...request,
+      auth: {
+        ...request.auth,
+        apiKeyName: value
+      }
+    };
+  }
+
+  function updateApiKeyPlacement(value: RequestDraft["auth"]["apiKeyIn"]) {
+    request = {
+      ...request,
+      auth: {
+        ...request.auth,
+        apiKeyIn: value
+      }
+    };
+  }
+
+  function updateScriptField(field: "preRequestScript" | "testScript", value: string) {
+    request = {
+      ...request,
+      [field]: value
+    };
+  }
 </script>
+
+<svelte:window onkeydown={closeSaveMenuOnWindowKeydown} />
+<svelte:document onclickcapture={closeSaveMenuOnDocumentClick} />
 
 <section class="panel request-panel">
   <div class="request-section-header">
     <div class="request-section-title">
       <h2>Request</h2>
-      <button class="system-button" type="button" onclick={onNewRequest}>New</button>
-      <button class="system-button" type="button" onclick={onOpenImport}>Import</button>
+      <button class="system-button" type="button" onclick={handleNewRequest}>New</button>
+      <button class="system-button" type="button" onclick={handleOpenImport}>Import</button>
     </div>
   </div>
 
@@ -491,16 +574,71 @@
       <input
         id="request-name"
         class="text-input"
-        bind:value={request.name}
+        value={request.name}
         placeholder="Untitled request"
+        oninput={(event) => updateName(event.currentTarget.value)}
       />
     </div>
 
-    <button class="ghost-button request-save-control" type="button" onclick={onSave} disabled={saveDisabled || isSaving}>
-      {isSaving ? "Saving..." : saveLabel}
-    </button>
+    <div
+      class={[
+        "request-save-split",
+        !showSaveMenu && "request-save-split-solo",
+        (saveDisabled || isSaving) && "request-save-split-disabled"
+      ]}
+      {@attach attachSaveSplitRoot}
+    >
+      <button
+        class="request-save-split-main"
+        type="button"
+        onclick={() => {
+          isSaveMenuOpen = false;
+          void handleSaveRequest();
+        }}
+        disabled={saveDisabled || isSaving}
+      >
+        {isSaving ? "Saving..." : saveLabel}
+      </button>
+      {#if showSaveMenu}
+        <button
+          class="request-save-split-chevron"
+          type="button"
+          aria-expanded={isSaveMenuOpen}
+          aria-haspopup="true"
+          aria-label="More save actions"
+          disabled={saveDisabled || isSaving}
+          onclick={(event) => {
+            event.stopPropagation();
+            isSaveMenuOpen = !isSaveMenuOpen;
+          }}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        </button>
+        {#if isSaveMenuOpen}
+          <div class="request-save-menu" role="menu">
+            <button
+              class="request-save-menu-item"
+              type="button"
+              role="menuitem"
+              onclick={() => {
+                isSaveMenuOpen = false;
+                void handleSaveAsRequest();
+              }}
+            >
+              Save copy
+            </button>
+          </div>
+        {/if}
+      {/if}
+    </div>
 
-    <select class={`method-select method-${request.method.toLowerCase()}`} bind:value={request.method}>
+    <select
+      class={`method-select method-${request.method.toLowerCase()}`}
+      value={request.method}
+      onchange={(event) => updateMethod(event.currentTarget.value as RequestDraft["method"])}
+    >
       <option value="GET">GET</option>
       <option value="POST">POST</option>
       <option value="PUT">PUT</option>
@@ -525,8 +663,8 @@
     <button
       class={["send-button request-send-control", isSending && "cancel-button"]}
       type="button"
-      onclick={() => (isSending ? onCancel() : onSend())}
-      disabled={isCanceling}
+      onclick={() => (isSending ? handleCancelRequest() : handleSendRequest())}
+      disabled={isCanceling || sendDisabled}
     >
       {#if isSending}
         {isCanceling ? "Canceling..." : "Cancel"}
@@ -863,7 +1001,11 @@
         <div class="auth-grid">
           <label>
             <span class="field-label">Key</span>
-            <input class="text-input" bind:value={request.auth.apiKeyName} />
+            <input
+              class="text-input"
+              value={request.auth.apiKeyName}
+              oninput={(event) => updateApiKeyName(event.currentTarget.value)}
+            />
           </label>
           <label>
             <span class="field-label">Value</span>
@@ -881,7 +1023,11 @@
           </label>
           <label>
             <span class="field-label">Send in</span>
-            <select class="text-input" bind:value={request.auth.apiKeyIn}>
+            <select
+              class="text-input"
+              value={request.auth.apiKeyIn}
+              onchange={(event) => updateApiKeyPlacement(event.currentTarget.value as RequestDraft["auth"]["apiKeyIn"])}
+            >
               <option value="header">Header</option>
               <option value="query">Query parameter</option>
             </select>
@@ -903,10 +1049,11 @@
             <h3 class="request-script-card-title">Pre-request Script</h3>
           </div>
           <ScriptEditor
-            bind:value={request.preRequestScript}
+            value={request.preRequestScript}
             {environmentVariables}
             scriptKind="preRequest"
             placeholder={PRE_REQUEST_SCRIPT_PLACEHOLDER}
+            onValueInput={(nextValue) => updateScriptField("preRequestScript", nextValue)}
           />
         </section>
 
@@ -915,10 +1062,11 @@
             <h3 class="request-script-card-title">Test Script</h3>
           </div>
           <ScriptEditor
-            bind:value={request.testScript}
+            value={request.testScript}
             {environmentVariables}
             scriptKind="test"
             placeholder={TEST_SCRIPT_PLACEHOLDER}
+            onValueInput={(nextValue) => updateScriptField("testScript", nextValue)}
           />
         </section>
       </div>

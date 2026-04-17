@@ -6,3 +6,4 @@ pub mod imports;
 pub mod requests;
 pub mod settings;
 pub mod updates;
+pub mod workspace;

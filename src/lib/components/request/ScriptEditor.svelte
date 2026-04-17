@@ -249,13 +249,15 @@
     placeholder = "",
     environmentVariables = [],
     disabled = false,
-    scriptKind = "preRequest"
+    scriptKind = "preRequest",
+    onValueInput = () => {}
   }: {
     value: string;
     placeholder?: string;
     environmentVariables?: EnvironmentVariable[];
     disabled?: boolean;
     scriptKind?: ScriptEditorKind;
+    onValueInput?: (value: string) => void;
   } = $props();
 
   let textareaElement: HTMLTextAreaElement | null = $state(null);
@@ -570,6 +572,7 @@
       replacementStart + (markerIndex >= 0 ? markerIndex : insertedText.length);
 
     value = nextValue;
+    onValueInput(nextValue);
     closeSuggestions();
     await tick();
     textareaElement?.focus();
@@ -579,6 +582,7 @@
   function handleInput(event: Event) {
     const target = event.currentTarget as HTMLTextAreaElement;
     value = target.value;
+    onValueInput(target.value);
     updateAutocompleteState();
   }
 

@@ -1,7 +1,9 @@
 use sqlx::{Row, SqlitePool};
 
 use crate::{
-    domain::{collections::CollectionSidebarState, settings::AppSettings},
+    domain::{
+        collections::CollectionSidebarState, settings::AppSettings, workspace::RequestWorkspaceState,
+    },
     error::AppResult,
 };
 
@@ -14,6 +16,7 @@ const HISTORY_LIMIT_KEY: &str = "history_limit";
 const NOTIFICATION_TIMEOUT_MS_KEY: &str = "notification_timeout_ms";
 const LAST_UPDATE_CHECKED_AT_KEY: &str = "last_update_checked_at";
 const COLLECTION_SIDEBAR_STATE_KEY: &str = "collection_sidebar_state";
+const REQUEST_WORKSPACE_STATE_KEY: &str = "request_workspace_state";
 const DEFAULT_UI_SCALE: f64 = 1.0;
 const MIN_UI_SCALE: f64 = 0.6;
 const MAX_UI_SCALE: f64 = 1.5;
@@ -124,6 +127,33 @@ pub async fn save_collection_sidebar_state(
     upsert_setting(
         pool,
         COLLECTION_SIDEBAR_STATE_KEY,
+        &serde_json::to_string(state)?,
+    )
+    .await
+}
+
+pub async fn get_request_workspace_state(
+    pool: &SqlitePool,
+) -> AppResult<Option<RequestWorkspaceState>> {
+    let value_json: Option<String> =
+        sqlx::query_scalar("SELECT value_json FROM app_settings WHERE key = ?1")
+            .bind(REQUEST_WORKSPACE_STATE_KEY)
+            .fetch_optional(pool)
+            .await?;
+
+    match value_json {
+        Some(value_json) => Ok(Some(serde_json::from_str(&value_json)?)),
+        None => Ok(None),
+    }
+}
+
+pub async fn save_request_workspace_state(
+    pool: &SqlitePool,
+    state: &RequestWorkspaceState,
+) -> AppResult<()> {
+    upsert_setting(
+        pool,
+        REQUEST_WORKSPACE_STATE_KEY,
         &serde_json::to_string(state)?,
     )
     .await

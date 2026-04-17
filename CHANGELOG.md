@@ -6,6 +6,17 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-04-17
+
+### Added
+
+- Restored multitab request workspace on the Requests page, including tab-local drafts, responses, and script output that persist between launches.
+
+### Changed
+
+- Opening saved requests from the sidebar or Collections page now activates an existing tab for that request or opens it in a new tab instead of replacing the current editor.
+- The Requests page now keeps one native send in flight globally while disabling send in other tabs until the active request completes or is canceled.
+
 ## [0.16.0] - 2026-04-16
 
 ### Added

@@ -1,7 +1,9 @@
 use tauri::State;
 
 use crate::{
-    app_state::AppState, domain::settings::AppSettings, error::AppResult,
+    app_state::AppState,
+    domain::{settings::AppSettings, workspace::RequestWorkspaceState},
+    error::AppResult,
     services::settings_service,
 };
 
@@ -17,4 +19,19 @@ pub async fn update_settings(
 ) -> AppResult<AppSettings> {
     settings_service::save_settings(state.db(), &settings).await?;
     settings_service::get_settings(state.db()).await
+}
+
+#[tauri::command]
+pub async fn get_request_workspace_state(
+    app_state: State<'_, AppState>,
+) -> AppResult<Option<RequestWorkspaceState>> {
+    settings_service::get_request_workspace_state(app_state.db()).await
+}
+
+#[tauri::command]
+pub async fn save_request_workspace_state(
+    app_state: State<'_, AppState>,
+    state: RequestWorkspaceState,
+) -> AppResult<()> {
+    settings_service::save_request_workspace_state(app_state.db(), &state).await
 }

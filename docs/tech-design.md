@@ -33,14 +33,14 @@ Why this stack:
 
 ## 3. Current Application State
 
-This section reflects the code currently implemented in the repository, including the shipped `0.15.0` scripting update, the `0.15.1` route/modal polish work, and the `0.16.0` OpenAPI 3 import release (see [CHANGELOG.md](../CHANGELOG.md)).
+This section reflects the code currently implemented in the repository, including the shipped `0.15.0` scripting update, the `0.15.1` route/modal polish work, the `0.16.0` OpenAPI 3 import release, and the `0.17.0` multitab request workspace release (see [CHANGELOG.md](../CHANGELOG.md)).
 
 ### Implemented
 
 - Tauri application shell with SvelteKit frontend
 - SQLite initialization on app startup
 - SQL migrations applied automatically at launch
-- Single request editor
+- Multi-tab request workspace with restored local tabs between launches
 - Supported request methods: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`
 - Request editing for:
   - URL
@@ -80,13 +80,10 @@ This section reflects the code currently implemented in the repository, includin
 - Pre-request scripts and test scripts for collections, folders, and saved requests (executed in the frontend as sandboxed JavaScript before send and after response)
 - Async scripting helper requests through `await pn.http.send(...)`
 - Active-environment variable reads and writes from scripts, including persisted secret writes through the OS credential store path
+- Request tabs persist through the existing `app_settings` store, keeping draft state, active tab selection, and per-tab responses/script output across restarts
 - URL-driven selection for the main saved request (`savedRequestId`), collections (`collectionId`), and environments (`environmentId`) uses generation guards so overlapping async loads from rapid navigation do not apply stale UI state; clearing `savedRequestId` from the URL resets deep-link tracking so the same request can load again from the query string
 - Save-request, cURL import, collection import, and environment import modals trap focus (initial focus, Tab cycle within the dialog, Escape to close, prior focus restored on close) for keyboard and assistive technology users
 - Native `reqwest::Client` instances are reused per TLS/redirect/timeout fingerprint with a bounded in-memory cache so settings changes do not rebuild a client on every send
-
-### Not Yet Implemented
-
-- Multi-tab workflow
 
 ## 4. High-Level Architecture
 
@@ -98,6 +95,7 @@ Responsibilities:
 
 - Render request editor (including script editors), response viewer, settings page, and history panel
 - Manage page-level UI state
+- Persist and restore request-tab workspace state, including active tab selection and per-tab draft/response/script data
 - Render global floating notifications for cross-screen action feedback
 - Coordinate shared pointer-driven collection drag-and-drop interactions across the sidebar and Collections page
 - Keep URL query parameters for saved requests, collections, and environments in sync with the visible editor or browser, including canceling stale async work when the user navigates quickly
@@ -115,6 +113,7 @@ Responsibilities:
 - Execute HTTP requests
 - Load and persist settings
 - Persist request history
+- Persist request workspace state through `app_settings`
 - Load environment metadata from SQLite while storing secret environment values in the OS credential store
 - Coordinate signed release checks and install handoff for the Settings updater flow
 - Resolve app data paths
@@ -123,15 +122,16 @@ Responsibilities:
 ### Data Flow
 
 1. User edits a request in the UI
-2. On send, the frontend runs inherited collection, folder, and saved-request pre-request scripts (if any) against a draft copy and either stops with a script error surface or proceeds with the mutated draft as the payload
-3. Frontend invokes `send_request` with that payload
-4. Rust loads persisted request settings from SQLite
-5. Rust resolves environment variables and built-in dynamic variables
-6. Rust executes the request with `reqwest`
-7. Rust returns response metadata and body to the UI
-8. Rust writes a history entry to SQLite, redacting secret-derived environment substitutions back to their original `{{variable}}` form
-9. Frontend runs inherited collection, folder, and saved-request test scripts (if any) against the returned response for assertion output
-10. Frontend reloads history and renders the latest response and script results
+2. The frontend keeps that draft inside the active request tab and persists workspace changes locally through the settings-backed workspace store
+3. On send, the frontend runs inherited collection, folder, and saved-request pre-request scripts (if any) against a draft copy and either stops with a script error surface or proceeds with the mutated draft as the payload
+4. Frontend invokes `send_request` with that payload
+5. Rust loads persisted request settings from SQLite
+6. Rust resolves environment variables and built-in dynamic variables
+7. Rust executes the request with `reqwest`
+8. Rust returns response metadata and body to the UI
+9. Rust writes a history entry to SQLite, redacting secret-derived environment substitutions back to their original `{{variable}}` form
+10. Frontend runs inherited collection, folder, and saved-request test scripts (if any) against the returned response for assertion output
+11. Frontend reloads history, updates the originating tab, and persists the refreshed workspace state
 
 ## 5. Actual Folder Structure
 
@@ -164,6 +164,7 @@ PostNot/
           SidebarCollections.svelte
         request/
           RequestEditor.svelte
+          RequestTabs.svelte
           ScriptEditor.svelte
           VariableField.svelte
         response/
@@ -175,6 +176,7 @@ PostNot/
       stores/
         collections.svelte.ts
         notifications.svelte.ts
+        request-workspace.svelte.ts
         updater.svelte.ts
       theme.ts
       styles/
@@ -213,6 +215,7 @@ PostNot/
         requests.rs
         settings.rs
         history.rs
+        workspace.rs
         updates.rs
       db/
         mod.rs
@@ -640,6 +643,7 @@ Ship a usable desktop app that can compose and execute HTTP requests locally, pe
 - collections sidebar and collections panel folder trees with shared `FolderGlyph` styling
 - route/query stale-load guards, modal focus trapping, bounded `reqwest` client cache, and secret rollback warning logs as in `0.15.1`
 - OpenAPI 3 collection import plus single-operation draft import, with the Rust importer split into format-focused modules, as in `0.16.0`
+- restored multitab request workspaces with tab-local draft/response/script state persisted through `app_settings`
 
 ### Current Scripting Boundary
 
@@ -708,11 +712,10 @@ This means the project does not need to hold all remaining `v1` features for one
 
 One reasonable path from the current state is:
 
-1. `0.17.0`: multi-tab workflow
-2. `0.18.0`: restore request from history
-3. `0.19.0`: simple collections search
-4. `0.20.0`: hardening, optimization, and UX/error-handling improvements
-5. `1.0.0`: release-signoff build after the `v1` scope is complete and verified
+1. `0.18.0`: restore request from history
+2. `0.19.0`: simple collections search
+3. `0.20.0`: hardening, optimization, and UX/error-handling improvements
+4. `1.0.0`: release-signoff build after the `v1` scope is complete and verified
 
 The exact version numbers are less important than the policy: `1.0.0` is allowed to be a smaller visible release than earlier `0.x` milestones if it represents a meaningful jump in confidence and support commitment.
 
@@ -721,7 +724,6 @@ The exact version numbers are less important than the policy: `1.0.0` is allowed
 These decisions remain relevant as the app approaches `1.0.0`:
 
 - whether large response bodies should spill to files instead of SQLite preview-only storage
-- whether tabs should persist in SQLite or only in frontend state for the first shipped multi-tab iteration
 - exact import/export format for PostNot bundles
 - how far secret redaction should extend beyond environment-backed variables
 - whether updater discovery should remain stable-only on GitHub's `/latest` endpoint or later grow an opt-in prerelease channel
@@ -732,4 +734,4 @@ Treat the repository as being on the path from active Milestone 1 delivery to a 
 
 The current design is already grounded in a real desktop workflow: persisted settings influence request execution, history is stored in SQLite with secret-derived environment values redacted, secret environment values live in the OS credential store, environments resolve variables at send time, collections support nested folders in the working UI with consistent sidebar and collections-panel tree affordances, saved requests can be reordered or moved across folders and collections through a shared drag-and-drop model, collections, folders, and saved requests can run inherited pre-request and test scripts in the frontend before and after native execution, scripts can await helper HTTP requests through `pn.http.send(...)` without polluting history and can persist active-environment variable updates during script execution, import can pull requests in from Postman collections, OpenAPI 3 documents, and cURL, multipart requests can attach local files, built-in dynamic variables resolve at runtime, and the desktop shell can check GitHub Releases for signed updater builds both on launch and from Settings.
 
-The remaining `v1` work should stay focused on the features and release-quality steps that close the last day-to-day gaps: multi-tab workflow, history restore, simple collections search, and strong hardening of correctness, UX, and performance.
+The remaining `v1` work should stay focused on the features and release-quality steps that close the last day-to-day gaps: history restore, simple collections search, and strong hardening of correctness, UX, and performance.

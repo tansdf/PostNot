@@ -36,6 +36,8 @@ pub fn run() -> Result<(), String> {
             commands::requests::pick_multipart_files,
             commands::settings::get_settings,
             commands::settings::update_settings,
+            commands::settings::get_request_workspace_state,
+            commands::settings::save_request_workspace_state,
             commands::updates::check_for_updates,
             commands::updates::install_update,
             commands::history::list_history,
