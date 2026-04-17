@@ -602,7 +602,7 @@ Current state:
 
 This is the current security posture for environment variables; broader secret handling beyond environment-backed values remains future work.
 
-## 12. Milestone Status
+## 12. Release Progress
 
 ### Milestone 1 Goal
 
@@ -649,35 +649,87 @@ Scripts now run as awaited frontend JavaScript around one request send. Pre-requ
 
 Helper script requests reuse the native request pipeline and active environment resolution, but they do not write separate history entries. Active-environment variable writes are buffered while scripts run and then persisted through the normal environment update path before the main request continues. The current runtime still allows only one native request in flight at a time, so helper requests should be awaited sequentially instead of fired concurrently.
 
-### Milestone 1 Remaining
-
-- tighter error handling and UX polish
-- multi-request workflow decisions
-- richer scripting surface (broader `pn` API parity, execution model hardening, and richer inherited execution controls)
-
 Manual end-to-end verification via `tauri dev` has already been completed for the current milestone state.
 
-## 13. Next Recommended Steps
+### Current Position
 
-Recommended implementation order from the current state:
+The project is no longer at the "prove the app works at all" stage. The implemented surface already covers the primary local API-client workflow: request composition and execution, persisted settings, history, collections, nested folders, environments, secret storage, import/export, multipart, and scripting helpers.
 
-1. Continue tightening error handling and desktop UX polish
-2. Decide whether updater discovery should stay on GitHub's stable-only `/latest` endpoint or move to a custom prerelease-aware manifest
-3. Evaluate multi-tab workflow and other request-level productivity features
-4. Improve import/export compatibility beyond the current Postman/OpenAPI/cURL coverage and continue desktop polish
-5. Extend request scripting beyond the shipped `0.15.0` async-helper release with broader API surface, safety, and inherited execution controls
+The remaining work is primarily about closing the last daily-driver gaps, tightening reliability, and deciding which behaviors are part of the supported `1.x` contract.
 
-## 14. Open Decisions
+## 13. v1.0.0 Criteria
 
-These are still unresolved:
+`v1.0.0` should mark product confidence, not just a large feature batch. It does not need to be the single biggest release in terms of visible surface area. It should be the release where PostNot can be described as a stable, trustworthy local desktop API client for the intended solo-user workflow.
+
+### Must Be True For v1.0.0
+
+- the current core workflow remains stable: native request sending, auth modes, body modes, environments, secrets, history, collections, import/export, scripting, and updater flows
+- multi-tab workflow is implemented with behavior intentional enough to stand behind as part of the product, even if future releases expand it
+- history entries can be restored back into the request editor, not only inspected
+- collections support simple search so larger workspaces remain usable
+- error handling and desktop UX are hardened enough that the app feels dependable in normal daily use
+- the codebase receives a focused hardening and optimization pass rather than only feature additions
+
+### Release Gates For v1.0.0
+
+Use concrete acceptance gates instead of a vague "more polish" bar:
+
+- no known data-loss bugs in saved requests, collections, environments, or history
+- no known request-corruption bugs caused by scripting, environment resolution, drag-and-drop moves, or restore flows
+- startup, request send, navigation, and collection interactions feel consistently responsive on normal desktop hardware
+- `npm run check` passes cleanly
+- `cargo check --manifest-path src-tauri/Cargo.toml` passes cleanly
+- main workflows are re-verified through `npm run tauri dev`
+- Windows behavior that matters for release confidence receives a smoke test in a native Windows environment, not only WSLg
+
+### Explicitly Not Required For v1.0.0
+
+The following can remain post-`1.0` work unless they become necessary for the primary workflow:
+
+- full Postman scripting parity
+- a very broad `pn` runtime API
+- every possible import/export format beyond the current Postman/OpenAPI/cURL coverage
+- collaboration or cloud-sync features
+- advanced bundle/export formats for PostNot-specific interchange
+
+## 14. Versioning Strategy Toward v1.0.0
+
+The project should continue shipping meaningful pre-`1.0` minor releases while the `v1` feature set is being completed. `1.0.0` should be used as the maturity and support marker once the intended workflow is complete and hardened.
+
+This means the project does not need to hold all remaining `v1` features for one giant release. Shipping them incrementally is preferred because it keeps changes smaller, validation easier, and regressions easier to isolate.
+
+### Recommended Approach
+
+1. Ship major `v1` features as normal `0.x` minor releases when they are ready.
+2. Once the agreed `v1` scope is feature-complete, declare a short stabilization phase.
+3. Use `1.0.0` for the release that combines the completed scope with the final hardening, verification, and release-signoff pass.
+
+### Example Sequence
+
+One reasonable path from the current state is:
+
+1. `0.17.0`: multi-tab workflow
+2. `0.18.0`: restore request from history
+3. `0.19.0`: simple collections search
+4. `0.20.0`: hardening, optimization, and UX/error-handling improvements
+5. `1.0.0`: release-signoff build after the `v1` scope is complete and verified
+
+The exact version numbers are less important than the policy: `1.0.0` is allowed to be a smaller visible release than earlier `0.x` milestones if it represents a meaningful jump in confidence and support commitment.
+
+## 15. Open Decisions
+
+These decisions remain relevant as the app approaches `1.0.0`:
 
 - whether large response bodies should spill to files instead of SQLite preview-only storage
-- whether tabs should persist in SQLite or only in frontend state at first
+- whether tabs should persist in SQLite or only in frontend state for the first shipped multi-tab iteration
 - exact import/export format for PostNot bundles
 - how far secret redaction should extend beyond environment-backed variables
+- whether updater discovery should remain stable-only on GitHub's `/latest` endpoint or later grow an opt-in prerelease channel
 
-## 15. Recommendation
+## 16. Recommendation
 
-Treat the repository as being in an active Milestone 1 state, not full MVP completion.
+Treat the repository as being on the path from active Milestone 1 delivery to a deliberate `v1.0.0`, not as a project that still needs a broad product rethink.
 
-The design is now grounded in what the code actually does: persisted settings influence request execution, history is stored in SQLite with secret-derived environment values redacted, secret environment values live in the OS credential store, environments resolve variables at send time, collections support nested folders in the working UI with consistent sidebar and collections-panel tree affordances, saved requests can be reordered or moved across folders and collections through a shared drag-and-drop model, collections, folders, and saved requests can run inherited pre-request and test scripts in the frontend before and after native execution, scripts can await helper HTTP requests through `pn.http.send(...)` without polluting history and can persist active-environment variable updates during script execution, import can pull requests in from Postman collections and cURL, multipart requests can attach local files, built-in dynamic variables resolve at runtime, and the desktop shell can check GitHub Releases for signed updater builds both on launch and from Settings. The next work should stay focused on updater channel decisions, multi-tab decisions, scripting depth, and remaining UX polish.
+The current design is already grounded in a real desktop workflow: persisted settings influence request execution, history is stored in SQLite with secret-derived environment values redacted, secret environment values live in the OS credential store, environments resolve variables at send time, collections support nested folders in the working UI with consistent sidebar and collections-panel tree affordances, saved requests can be reordered or moved across folders and collections through a shared drag-and-drop model, collections, folders, and saved requests can run inherited pre-request and test scripts in the frontend before and after native execution, scripts can await helper HTTP requests through `pn.http.send(...)` without polluting history and can persist active-environment variable updates during script execution, import can pull requests in from Postman collections, OpenAPI 3 documents, and cURL, multipart requests can attach local files, built-in dynamic variables resolve at runtime, and the desktop shell can check GitHub Releases for signed updater builds both on launch and from Settings.
+
+The remaining `v1` work should stay focused on the features and release-quality steps that close the last day-to-day gaps: multi-tab workflow, history restore, simple collections search, and strong hardening of correctness, UX, and performance.
