@@ -2,7 +2,8 @@ use sqlx::{Row, SqlitePool};
 
 use crate::{
     domain::{
-        collections::CollectionSidebarState, settings::AppSettings, workspace::RequestWorkspaceState,
+        collections::CollectionSidebarState, settings::AppSettings,
+        workspace::RequestWorkspaceState,
     },
     error::AppResult,
 };

@@ -875,15 +875,12 @@ fn openapi_schema_example_value(
         return Ok(enum_value);
     }
 
-    for composed_schema in &schema.all_of {
-        return resolve_openapi_schema(document, composed_schema)
-            .and_then(|schema| openapi_schema_example_value(document, &schema));
-    }
-    for composed_schema in &schema.one_of {
-        return resolve_openapi_schema(document, composed_schema)
-            .and_then(|schema| openapi_schema_example_value(document, &schema));
-    }
-    for composed_schema in &schema.any_of {
+    if let Some(composed_schema) = schema
+        .all_of
+        .first()
+        .or_else(|| schema.one_of.first())
+        .or_else(|| schema.any_of.first())
+    {
         return resolve_openapi_schema(document, composed_schema)
             .and_then(|schema| openapi_schema_example_value(document, &schema));
     }
@@ -929,9 +926,9 @@ fn openapi_schema_example_value(
     }
 }
 
-fn select_openapi_media_type<'a>(
-    content: &'a HashMap<String, OpenApiMediaType>,
-) -> Option<(&'a str, &'a OpenApiMediaType)> {
+fn select_openapi_media_type(
+    content: &HashMap<String, OpenApiMediaType>,
+) -> Option<(&str, &OpenApiMediaType)> {
     let mut entries: Vec<_> = content.iter().collect();
     entries.sort_by(|(left, _), (right, _)| left.cmp(right));
 

@@ -7,6 +7,30 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script>
+      (function () {
+        try {
+          var root = document.documentElement;
+          var theme = localStorage.getItem("postnot.theme") || "system";
+          var resolved = theme;
+          if (theme !== "dark" && theme !== "light") {
+            resolved = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light";
+          }
+          root.dataset.themePreference = theme;
+          root.dataset.theme = resolved;
+
+          var rawScale = parseFloat(localStorage.getItem("postnot.uiScale") || "1");
+          if (!isFinite(rawScale)) rawScale = 1;
+          if (rawScale < 0.6) rawScale = 0.6;
+          if (rawScale > 1.5) rawScale = 1.5;
+          root.style.setProperty("--ui-scale", String(rawScale));
+        } catch (_) {
+          // Ignore: fall back to CSS defaults.
+        }
+      })();
+    </script>
     %sveltekit.head%
   </head>
   <body data-sveltekit-preload-data="hover">

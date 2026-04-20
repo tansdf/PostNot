@@ -3,6 +3,9 @@ const DEFAULT_UI_SCALE = 1;
 const MIN_UI_SCALE = 0.6;
 const MAX_UI_SCALE = 1.5;
 
+const THEME_STORAGE_KEY = "postnot.theme";
+const UI_SCALE_STORAGE_KEY = "postnot.uiScale";
+
 function resolveTheme(theme: string) {
   if (theme === "dark" || theme === "light") {
     return theme;
@@ -15,6 +18,14 @@ function resolveTheme(theme: string) {
   return "light";
 }
 
+function writeStorage(key: string, value: string) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Ignore storage failures (private mode, disabled storage, etc.).
+  }
+}
+
 export function applyTheme(theme: string) {
   if (typeof document === "undefined") {
     return;
@@ -23,6 +34,10 @@ export function applyTheme(theme: string) {
   const root = document.documentElement;
   root.dataset.themePreference = theme;
   root.dataset.theme = resolveTheme(theme);
+
+  if (typeof window !== "undefined") {
+    writeStorage(THEME_STORAGE_KEY, theme);
+  }
 }
 
 export function normalizeUiScale(value: number) {
@@ -38,7 +53,12 @@ export function applyUiScale(uiScale: number) {
     return;
   }
 
-  document.documentElement.style.setProperty("--ui-scale", String(normalizeUiScale(uiScale)));
+  const normalized = normalizeUiScale(uiScale);
+  document.documentElement.style.setProperty("--ui-scale", String(normalized));
+
+  if (typeof window !== "undefined") {
+    writeStorage(UI_SCALE_STORAGE_KEY, String(normalized));
+  }
 }
 
 export function watchSystemTheme(onChange: () => void) {

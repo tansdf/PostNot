@@ -50,6 +50,7 @@
 
   let request = $state(createRequestDraft());
   let settings: AppSettings = $state(createDefaultSettings());
+  let settingsHydrated = $state(false);
   let history: HistoryEntrySummary[] = $state([]);
   let isHistoryLoading = $state(true);
   let isHistoryDetailLoading = $state(false);
@@ -244,6 +245,8 @@ paths:
       settingsErrorText = "";
     } catch (error) {
       settingsErrorText = error instanceof Error ? error.message : String(error);
+    } finally {
+      settingsHydrated = true;
     }
   }
 
@@ -959,6 +962,7 @@ paths:
     tabs={requestWorkspace.tabs}
     activeTabId={requestWorkspace.activeTabId}
     inFlightTabId={requestWorkspace.inFlightTabId}
+    isHydrated={requestWorkspace.initialized}
     scrollRequest={requestTabsScrollRequest}
     onIsDirty={(tab) => requestWorkspace.isDirty(tab)}
     onActivate={handleActivateTab}
@@ -966,35 +970,38 @@ paths:
     onCreate={handleNewRequest}
   />
 
-  <RequestEditor
-    bind:request
-    environmentVariables={activeEnvironmentDetail?.variables ?? []}
-    isSending={activeTabIsSending}
-    isCanceling={requestWorkspace.isCanceling}
-    isSaving={collections.isSavingRequest}
-    saveLabel={activeTab?.savedRequestId ? "Update" : "Save"}
-    saveDisabled={!requestWorkspace.initialized || activeTabIsSending}
-    sendDisabled={!requestWorkspace.initialized || activeTabSendLocked}
-    handleNewRequest={handleNewRequest}
-    handleOpenImport={openRequestImportDialog}
-    handleSendRequest={handleSend}
-    handleCancelRequest={handleCancelRequest}
-    handleSaveRequest={handleSaveRequest}
-    showSaveMenu={requestWorkspace.initialized && collections.collections.length > 0}
-    handleSaveAsRequest={handleSaveAsNewRequest}
-  />
+  {#if requestWorkspace.initialized}
+    <RequestEditor
+      bind:request
+      environmentVariables={activeEnvironmentDetail?.variables ?? []}
+      isSending={activeTabIsSending}
+      isCanceling={requestWorkspace.isCanceling}
+      isSaving={collections.isSavingRequest}
+      saveLabel={activeTab?.savedRequestId ? "Update" : "Save"}
+      saveDisabled={activeTabIsSending}
+      sendDisabled={activeTabSendLocked}
+      handleNewRequest={handleNewRequest}
+      handleOpenImport={openRequestImportDialog}
+      handleSendRequest={handleSend}
+      handleCancelRequest={handleCancelRequest}
+      handleSaveRequest={handleSaveRequest}
+      showSaveMenu={collections.collections.length > 0}
+      handleSaveAsRequest={handleSaveAsNewRequest}
+    />
 
-  {#if activeTabErrorText}
-    <div class="response-error">{activeTabErrorText}</div>
+    {#if activeTabErrorText}
+      <div class="response-error">{activeTabErrorText}</div>
+    {/if}
+
+    <ResponseViewer response={activeTabResponse} scriptExecution={activeTabScriptExecution} />
   {/if}
-
-  <ResponseViewer response={activeTabResponse} scriptExecution={activeTabScriptExecution} />
 
   <HistoryPanel
     items={history}
     isLoading={isHistoryLoading}
     errorText={historyErrorText}
     isCollapsed={settings.isHistoryCollapsed}
+    isHydrated={settingsHydrated}
     selectedId={selectedHistoryId}
     detail={selectedHistoryDetail}
     detailErrorText={historyDetailErrorText}

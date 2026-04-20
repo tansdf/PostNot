@@ -15,16 +15,21 @@ mod openapi;
 mod postman;
 mod shared;
 
-pub async fn import_requests(
-    pool: &SqlitePool,
-    input: &ImportRequestInput,
-) -> AppResult<ImportResult> {
-    let source = input.source.trim();
-    if source.is_empty() {
+fn require_non_empty_source(source: &str) -> AppResult<&str> {
+    let trimmed = source.trim();
+    if trimmed.is_empty() {
         return Err(AppError::Message(
             "Import source cannot be empty.".to_string(),
         ));
     }
+    Ok(trimmed)
+}
+
+pub async fn import_requests(
+    pool: &SqlitePool,
+    input: &ImportRequestInput,
+) -> AppResult<ImportResult> {
+    let source = require_non_empty_source(&input.source)?;
 
     match input.format.as_str() {
         "postman" => postman::import_postman_collection(pool, source).await,
@@ -37,12 +42,7 @@ pub async fn import_requests(
 }
 
 pub fn import_curl_to_draft(source: &str) -> AppResult<ImportedRequestDraft> {
-    let source = source.trim();
-    if source.is_empty() {
-        return Err(AppError::Message(
-            "Import source cannot be empty.".to_string(),
-        ));
-    }
+    let source = require_non_empty_source(source)?;
 
     Ok(ImportedRequestDraft {
         request: curl::parse_curl_command(source)?,
@@ -50,12 +50,7 @@ pub fn import_curl_to_draft(source: &str) -> AppResult<ImportedRequestDraft> {
 }
 
 pub fn import_openapi_to_draft(source: &str) -> AppResult<ImportedRequestDraft> {
-    let source = source.trim();
-    if source.is_empty() {
-        return Err(AppError::Message(
-            "Import source cannot be empty.".to_string(),
-        ));
-    }
+    let source = require_non_empty_source(source)?;
 
     openapi::import_openapi_to_draft(source)
 }
@@ -65,12 +60,7 @@ pub async fn import_postman_environment(
     secret_store: Arc<dyn SecretStore>,
     input: &ImportEnvironmentInput,
 ) -> AppResult<ImportEnvironmentResult> {
-    let source = input.source.trim();
-    if source.is_empty() {
-        return Err(AppError::Message(
-            "Import source cannot be empty.".to_string(),
-        ));
-    }
+    let source = require_non_empty_source(&input.source)?;
 
     let normalized_input = ImportEnvironmentInput {
         source: source.to_string(),

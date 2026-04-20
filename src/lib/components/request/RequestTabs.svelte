@@ -8,6 +8,7 @@
     tabs = [],
     activeTabId = "",
     inFlightTabId = "",
+    isHydrated = true,
     scrollRequest = { n: 0, tabId: "" },
     onIsDirty = () => false,
     onActivate = () => {},
@@ -17,6 +18,8 @@
     tabs?: RequestWorkspaceTab[];
     activeTabId?: string;
     inFlightTabId?: string;
+    /** False while the persisted workspace is still loading; suppresses tab chips and the new-tab button to avoid a visible pop-in. */
+    isHydrated?: boolean;
     /** Bumped with a concrete tab id when that tab should scroll into view (e.g. opened from collections). */
     scrollRequest?: { n: number; tabId: string };
     onIsDirty?: (tab: RequestWorkspaceTab) => boolean;
@@ -93,44 +96,46 @@
 
 <section class="panel request-tabs-panel" aria-label="Request tabs">
   <div class="request-tabs-strip" role="tablist" aria-label="Open requests" {@attach attachTabsStrip}>
-    {#each tabs as tab (tab.id)}
-      <div
-        class={["request-tab-chip", activeTabId === tab.id && "request-tab-chip-active"]}
-        data-request-tab-id={tab.id}
-      >
-        <button
-          class="request-tab-chip-button"
-          type="button"
-          role="tab"
-          aria-selected={activeTabId === tab.id}
-          onclick={() => onActivate(tab.id)}
+    {#if isHydrated}
+      {#each tabs as tab (tab.id)}
+        <div
+          class={["request-tab-chip", activeTabId === tab.id && "request-tab-chip-active"]}
+          data-request-tab-id={tab.id}
         >
-          <span class={["request-tab-chip-method", tabMethodClass(tab)]} aria-hidden="true">{tabMethodLetter(tab)}</span>
-          <span class="request-tab-chip-label">{tabLabel(tab)}</span>
-          {#if onIsDirty(tab)}
-            <span class="request-tab-chip-dirty" aria-label="Unsaved changes" title="Unsaved changes"></span>
-          {/if}
-          {#if inFlightTabId === tab.id}
-            <span class="request-tab-chip-status">Sending</span>
-          {/if}
-        </button>
+          <button
+            class="request-tab-chip-button"
+            type="button"
+            role="tab"
+            aria-selected={activeTabId === tab.id}
+            onclick={() => onActivate(tab.id)}
+          >
+            <span class={["request-tab-chip-method", tabMethodClass(tab)]} aria-hidden="true">{tabMethodLetter(tab)}</span>
+            <span class="request-tab-chip-label">{tabLabel(tab)}</span>
+            {#if onIsDirty(tab)}
+              <span class="request-tab-chip-dirty" aria-label="Unsaved changes" title="Unsaved changes"></span>
+            {/if}
+            {#if inFlightTabId === tab.id}
+              <span class="request-tab-chip-status">Sending</span>
+            {/if}
+          </button>
 
-        <button
-          class="request-tab-chip-close"
-          type="button"
-          aria-label={`Close ${tabLabel(tab)}`}
-          onclick={(event) => {
-            event.stopPropagation();
-            void onClose(tab.id);
-          }}
-        >
-          x
-        </button>
-      </div>
-    {/each}
+          <button
+            class="request-tab-chip-close"
+            type="button"
+            aria-label={`Close ${tabLabel(tab)}`}
+            onclick={(event) => {
+              event.stopPropagation();
+              void onClose(tab.id);
+            }}
+          >
+            x
+          </button>
+        </div>
+      {/each}
 
-    <button class="request-tab-create" type="button" onclick={onCreate} aria-label="Open a new request tab" title="New tab">
-      +
-    </button>
+      <button class="request-tab-create" type="button" onclick={onCreate} aria-label="Open a new request tab" title="New tab">
+        +
+      </button>
+    {/if}
   </div>
 </section>

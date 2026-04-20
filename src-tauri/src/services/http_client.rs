@@ -27,22 +27,33 @@ struct ClientCacheKey {
 
 const HTTP_CLIENT_CACHE_MAX: usize = 32;
 
-static HTTP_CLIENT_CACHE: LazyLock<
-    Mutex<(HashMap<ClientCacheKey, Client>, VecDeque<ClientCacheKey>)>,
-> = LazyLock::new(|| Mutex::new((HashMap::new(), VecDeque::new())));
+struct ClientCache {
+    clients: HashMap<ClientCacheKey, Client>,
+    insertion_order: VecDeque<ClientCacheKey>,
+}
+
+static HTTP_CLIENT_CACHE: LazyLock<Mutex<ClientCache>> = LazyLock::new(|| {
+    Mutex::new(ClientCache {
+        clients: HashMap::new(),
+        insertion_order: VecDeque::new(),
+    })
+});
 
 fn client_for_settings(settings: &AppSettings) -> AppResult<Client> {
     let key = ClientCacheKey {
         validate_tls: settings.validate_tls,
         follow_redirects: settings.follow_redirects,
-        timeout_ms: settings.request_timeout_ms.max(1) as u64,
+        timeout_ms: settings.request_timeout_ms.max(1),
     };
 
     let mut guard = HTTP_CLIENT_CACHE
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
 
-    let (map, order) = &mut *guard;
+    let ClientCache {
+        clients: map,
+        insertion_order: order,
+    } = &mut *guard;
 
     if let Some(client) = map.get(&key) {
         return Ok(client.clone());

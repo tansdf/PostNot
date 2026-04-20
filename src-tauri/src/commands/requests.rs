@@ -98,8 +98,7 @@ pub async fn pick_multipart_files() -> AppResult<Vec<String>> {
             .set_title("Select files for multipart upload")
             .pick_files()
     })
-    .await
-    .map_err(|error| crate::error::AppError::Message(error.to_string()))?;
+    .await?;
 
     Ok(files
         .unwrap_or_default()

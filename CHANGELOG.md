@@ -6,6 +6,15 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.17.3] - 2026-04-20
+
+### Fixed
+
+- History panel no longer briefly renders in the default expanded state on the Requests page before the persisted collapse setting is applied, eliminating the visible flash on launch.
+- Sidebar collections no longer flash from fully collapsed to their persisted expanded state on launch; the expand/collapse chevrons and expanded folder trees are only rendered once the saved sidebar state has loaded.
+- Request tabs strip no longer shows an empty "+" control and then pops in the restored tabs on launch; the strip now waits for the persisted workspace to load before rendering chips, and the request editor and response viewer are suppressed until the active tab is available, avoiding a flash of the default blank request.
+- Theme and UI scale are now applied synchronously from a cached value at page load via an inline bootstrap script, preventing the brief flash of the wrong theme or zoom level on launch when the persisted preference differs from the system default.
+
 ## [0.17.2] - 2026-04-20
 
 ### Added

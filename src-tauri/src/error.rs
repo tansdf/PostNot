@@ -62,6 +62,18 @@ impl From<serde_json::Error> for AppError {
     }
 }
 
+impl From<tokio::task::JoinError> for AppError {
+    fn from(value: tokio::task::JoinError) -> Self {
+        Self::Message(value.to_string())
+    }
+}
+
+impl From<tauri::Error> for AppError {
+    fn from(value: tauri::Error) -> Self {
+        Self::Message(value.to_string())
+    }
+}
+
 impl AppError {
     pub fn is_cancelled(&self) -> bool {
         matches!(self, Self::Cancelled)

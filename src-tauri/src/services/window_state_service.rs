@@ -8,10 +8,7 @@ use tauri::{
     AppHandle, Manager, PhysicalPosition, PhysicalSize, Position, Size, WebviewWindow, WindowEvent,
 };
 
-use crate::{
-    error::{AppError, AppResult},
-    storage::paths,
-};
+use crate::{error::AppResult, storage::paths};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 struct WindowState {
@@ -59,21 +56,15 @@ fn restore_window(window: &WebviewWindow) -> AppResult<Option<WindowState>> {
     };
 
     if state.width > 0 && state.height > 0 {
-        window
-            .set_size(Size::Physical(PhysicalSize::new(state.width, state.height)))
-            .map_err(|error| AppError::Message(error.to_string()))?;
+        window.set_size(Size::Physical(PhysicalSize::new(state.width, state.height)))?;
     }
 
     if is_visible_on_any_monitor(window, &state)? {
-        window
-            .set_position(Position::Physical(PhysicalPosition::new(state.x, state.y)))
-            .map_err(|error| AppError::Message(error.to_string()))?;
+        window.set_position(Position::Physical(PhysicalPosition::new(state.x, state.y)))?;
     }
 
     if state.maximized {
-        window
-            .maximize()
-            .map_err(|error| AppError::Message(error.to_string()))?;
+        window.maximize()?;
     }
 
     Ok(Some(state))
@@ -109,17 +100,11 @@ fn merged_window_state(
         .map(|guard| (*guard).clone())
         .unwrap_or_default();
 
-    state.maximized = window
-        .is_maximized()
-        .map_err(|error| AppError::Message(error.to_string()))?;
+    state.maximized = window.is_maximized()?;
 
     if !state.maximized {
-        let position = window
-            .outer_position()
-            .map_err(|error| AppError::Message(error.to_string()))?;
-        let size = window
-            .inner_size()
-            .map_err(|error| AppError::Message(error.to_string()))?;
+        let position = window.outer_position()?;
+        let size = window.inner_size()?;
 
         state.x = position.x;
         state.y = position.y;
@@ -131,15 +116,9 @@ fn merged_window_state(
 }
 
 fn snapshot_window_state(window: &WebviewWindow) -> AppResult<WindowState> {
-    let position = window
-        .outer_position()
-        .map_err(|error| AppError::Message(error.to_string()))?;
-    let size = window
-        .inner_size()
-        .map_err(|error| AppError::Message(error.to_string()))?;
-    let maximized = window
-        .is_maximized()
-        .map_err(|error| AppError::Message(error.to_string()))?;
+    let position = window.outer_position()?;
+    let size = window.inner_size()?;
+    let maximized = window.is_maximized()?;
 
     Ok(WindowState {
         x: position.x,
@@ -175,9 +154,7 @@ fn save_window_state(app: &AppHandle, state: &WindowState) -> AppResult<()> {
 }
 
 fn is_visible_on_any_monitor(window: &WebviewWindow, state: &WindowState) -> AppResult<bool> {
-    let monitors = window
-        .available_monitors()
-        .map_err(|error| AppError::Message(error.to_string()))?;
+    let monitors = window.available_monitors()?;
 
     if monitors.is_empty() {
         return Ok(true);

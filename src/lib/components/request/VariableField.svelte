@@ -76,7 +76,7 @@
   let mirrorBeforeText = $state(" ");
   let historyEntries = $state<FieldHistoryEntry[]>([]);
   let historyIndex = $state(-1);
-  let isApplyingHistory = $state(false);
+  let isApplyingHistory = false;
 
   const variablePattern = /{{\s*(\$[A-Za-z0-9_.-]+(?:\[\d+\])?|[A-Za-z0-9_.-]+)\s*}}/g;
   const dynamicVariableOptions: VariableOption[] = [
@@ -110,28 +110,18 @@
   let hasHighlightOverlay = $derived(highlightTokens.length > 0);
 
   $effect(() => {
+    const nextValue = value;
+
     if (isApplyingHistory) {
       isApplyingHistory = false;
       return;
     }
 
-    if (historyIndex === -1) {
-      resetHistory(value);
+    if (historyEntries[historyIndex]?.value === nextValue) {
       return;
     }
 
-    if (historyEntries[historyIndex]?.value === value) {
-      return;
-    }
-
-    const isFocused =
-      typeof document !== "undefined" && fieldElement !== null && document.activeElement === fieldElement;
-
-    if (isFocused) {
-      pushHistoryEntry(value);
-    } else {
-      resetHistory(value);
-    }
+    resetHistory(nextValue);
   });
 
   $effect(() => {

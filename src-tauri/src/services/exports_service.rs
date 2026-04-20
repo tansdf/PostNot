@@ -110,8 +110,7 @@ async fn save_json_file(
             file_path: path.to_string_lossy().to_string(),
         }))
     })
-    .await
-    .map_err(|error| AppError::Message(error.to_string()))?
+    .await?
 }
 
 fn map_collection_items(

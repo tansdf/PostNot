@@ -258,24 +258,26 @@
                 <span class="sidebar-collection-meta">Updated {formatUpdatedAt(collection.updatedAt)}</span>
               </button>
 
-              <button
-                class="sidebar-toggle-button"
-                type="button"
-                onclick={() => toggleCollection(collection.id)}
-                aria-expanded={expandedCollectionIds.has(collection.id)}
-                aria-label={expandedCollectionIds.has(collection.id) ? "Collapse collection" : "Expand collection"}
-                title={expandedCollectionIds.has(collection.id) ? "Collapse" : "Expand"}
-              >
-                <span
-                  class={["sidebar-toggle-icon", expandedCollectionIds.has(collection.id) && "sidebar-toggle-icon-expanded"]}
-                  aria-hidden="true"
+              {#if hasLoadedSidebarState}
+                <button
+                  class="sidebar-toggle-button"
+                  type="button"
+                  onclick={() => toggleCollection(collection.id)}
+                  aria-expanded={expandedCollectionIds.has(collection.id)}
+                  aria-label={expandedCollectionIds.has(collection.id) ? "Collapse collection" : "Expand collection"}
+                  title={expandedCollectionIds.has(collection.id) ? "Collapse" : "Expand"}
                 >
-                  &gt;
-                </span>
-              </button>
+                  <span
+                    class={["sidebar-toggle-icon", expandedCollectionIds.has(collection.id) && "sidebar-toggle-icon-expanded"]}
+                    aria-hidden="true"
+                  >
+                    &gt;
+                  </span>
+                </button>
+              {/if}
             </div>
 
-            {#if expandedCollectionIds.has(collection.id)}
+            {#if hasLoadedSidebarState && expandedCollectionIds.has(collection.id)}
               <div class="sidebar-request-stack">
                 {#if collections.isCollectionItemsLoading && !(collections.collectionItemsByCollection[collection.id]?.length)}
                   <span class="sidebar-collection-meta">Loading items...</span>
