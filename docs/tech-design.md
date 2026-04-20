@@ -33,7 +33,7 @@ Why this stack:
 
 ## 3. Current Application State
 
-This section reflects the code currently implemented in the repository, including the shipped `0.15.0` scripting update, the `0.15.1` route/modal polish work, the `0.16.0` OpenAPI 3 import release, and the `0.17.0` multitab request workspace release (see [CHANGELOG.md](../CHANGELOG.md)).
+This section reflects the code currently implemented in the repository, including the shipped `0.15.0` scripting update, the `0.15.1` route/modal polish work, the `0.16.0` OpenAPI 3 import release, the `0.17.0` multitab request workspace release, and the `0.17.1` history-restore patch (see [CHANGELOG.md](../CHANGELOG.md)).
 
 ### Implemented
 
@@ -58,6 +58,7 @@ This section reflects the code currently implemented in the repository, includin
 - Persisted application settings in SQLite
 - Persisted request history in SQLite
 - Cancel in-flight request
+- Restoring stored history requests into new request tabs
 - Collections and saved requests
 - Collection folders with nested request organization
 - Drag-and-drop saved-request moves across collection trees, including reorder, folder moves, and cross-collection placement
@@ -76,6 +77,7 @@ This section reflects the code currently implemented in the repository, includin
 - Signed in-app update checks, startup refresh, and install handoff
 - History panel wired to backend persistence
 - History detail inspection from persisted snapshots
+- Restore action that opens a stored history request snapshot as a new standalone tab
 - Clear history action
 - Pre-request scripts and test scripts for collections, folders, and saved requests (executed in the frontend as sandboxed JavaScript before send and after response)
 - Async scripting helper requests through `await pn.http.send(...)`

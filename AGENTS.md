@@ -47,6 +47,7 @@ Implemented now:
 - native HTTP execution in Rust
 - persisted settings
 - persisted history with detail inspection
+- restoring stored requests from history into new request tabs
 - request cancellation
 - collections and saved requests with nested folders and drag-and-drop request moves across the sidebar and Collections page
 - environments with variable resolution

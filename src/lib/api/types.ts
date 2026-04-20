@@ -270,7 +270,7 @@ export type RequestScriptExecution = {
   tests: ScriptTestResult[];
 };
 
-export type RequestWorkspaceTabSource = "blank" | "saved" | "imported";
+export type RequestWorkspaceTabSource = "blank" | "saved" | "imported" | "history";
 
 export type RequestWorkspaceTab = {
   id: string;

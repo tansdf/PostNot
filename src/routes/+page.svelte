@@ -53,6 +53,7 @@
   let isHistoryLoading = $state(true);
   let isHistoryDetailLoading = $state(false);
   let isClearingHistory = $state(false);
+  let restoringHistoryId = $state("");
   let historyErrorText = $state("");
   let historyDetailErrorText = $state("");
   let settingsErrorText = $state("");
@@ -353,6 +354,30 @@ paths:
       historyErrorText = error instanceof Error ? error.message : String(error);
     } finally {
       isClearingHistory = false;
+    }
+  }
+
+  async function handleRestoreHistoryEntry(id: string) {
+    if (!requestWorkspace.initialized || restoringHistoryId) {
+      return;
+    }
+
+    restoringHistoryId = id;
+
+    try {
+      const detail =
+        selectedHistoryDetail?.id === id ? selectedHistoryDetail : await getHistoryEntry(id);
+      const openedTab = requestWorkspace.openHistoryRequest(detail.requestSnapshot);
+      bumpRequestTabsScrollIntoView(openedTab.id);
+      await syncRouteToActiveTab();
+
+      const restoredLabel = detail.requestSnapshot.name.trim() || detail.url;
+      notifications.success(`${restoredLabel} is now open in a new request tab.`, "Request restored");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      notifications.error(message, "Restore failed");
+    } finally {
+      restoringHistoryId = "";
     }
   }
 
@@ -924,7 +949,9 @@ paths:
     detailErrorText={historyDetailErrorText}
     isDetailLoading={isHistoryDetailLoading}
     isClearing={isClearingHistory}
+    restoringId={restoringHistoryId}
     onInspect={inspectHistoryEntry}
+    onRestore={handleRestoreHistoryEntry}
     onClear={handleClearHistory}
     onCloseDetail={closeHistoryDetail}
   />

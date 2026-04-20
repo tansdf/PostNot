@@ -20,6 +20,7 @@ import {
 import { createEmptyRequestScriptExecution } from "$lib/request-scripts";
 
 const REQUEST_PERSIST_DEBOUNCE_MS = 300;
+const VALID_TAB_SOURCES = new Set(["blank", "saved", "imported", "history"]);
 
 function createId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -94,9 +95,11 @@ function normalizeScriptExecution(
 }
 
 function normalizeWorkspaceTab(tab: RequestWorkspaceTab): RequestWorkspaceTab {
+  const source = VALID_TAB_SOURCES.has(tab.source) ? tab.source : "blank";
+
   return {
     id: tab.id || createId(),
-    source: tab.source ?? "blank",
+    source,
     savedRequestId: tab.savedRequestId ?? null,
     collectionId: tab.collectionId ?? null,
     parentId: tab.parentId ?? null,
@@ -140,7 +143,7 @@ class RequestWorkspaceStore {
       return false;
     }
 
-    if (tab.source === "imported") {
+    if (tab.source === "imported" || tab.source === "history") {
       return true;
     }
 
@@ -188,6 +191,14 @@ class RequestWorkspaceStore {
 
   openImportedTab(request: RequestDraft) {
     const nextTab = createWorkspaceTab("imported", request);
+    this.insertAfterActive(nextTab);
+    this.activeTabId = nextTab.id;
+    void this.persistNow();
+    return nextTab;
+  }
+
+  openHistoryRequest(request: RequestDraft) {
+    const nextTab = createWorkspaceTab("history", request);
     this.insertAfterActive(nextTab);
     this.activeTabId = nextTab.id;
     void this.persistNow();

@@ -6,6 +6,16 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.17.1] - 2026-04-20
+
+### Added
+
+- Restore actions in the History panel and detail view that open a stored request snapshot in a new standalone request tab.
+
+### Fixed
+
+- History Detail no longer introduces an unwanted horizontal scrollbar after adding restore actions.
+
 ## [0.17.0] - 2026-04-17
 
 ### Added

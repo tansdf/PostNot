@@ -24,6 +24,7 @@ PostNot is built for working with HTTP APIs on your own machine, with local pers
 - Use built-in dynamic variables like Postman-style `$guid` and `$timestamp`
 - Store secret environment values in the OS credential store
 - Inspect request history locally
+- Restore a past request from history into a new request tab
 - Import from Postman collections and environments
 - Import collections or single requests from OpenAPI 3 JSON or YAML
 - Import from cURL

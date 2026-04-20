@@ -2332,7 +2332,8 @@ body.collection-dnd-active {
 }
 
 .history-toolbar,
-.history-row-actions {
+.history-row-actions,
+.history-detail-actions {
   display: flex;
   gap: 12px;
   align-items: center;
@@ -2340,6 +2341,19 @@ body.collection-dnd-active {
 
 .history-toolbar {
   flex-wrap: wrap;
+}
+
+.history-detail-actions {
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+.history-detail-actions .ghost-button,
+.history-detail-actions .system-button {
+  max-width: 100%;
 }
 
 .history-item {
@@ -2432,10 +2446,13 @@ body.collection-dnd-active {
 
 .history-detail {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   padding: 12px;
   border-radius: var(--radius-md);
   background: var(--surface-subtle);
   border: 1px solid var(--border-soft);
+  box-sizing: border-box;
   display: grid;
   gap: 10px;
 }
@@ -2475,25 +2492,30 @@ body.collection-dnd-active {
 .history-detail .editor-header {
   align-items: center;
   flex-wrap: wrap;
+  min-width: 0;
 }
 
 .history-detail .editor-header h3 {
   margin: 0;
   font-size: 1rem;
   line-height: 1.2;
+  min-width: 0;
 }
 
 .detail-grid {
   display: grid;
   gap: 12px;
   grid-template-columns: 1fr;
+  min-width: 0;
 }
 
 .detail-card {
+  min-width: 0;
   padding: 18px;
   border-radius: var(--radius-md);
   background: var(--surface);
   border: none;
+  box-sizing: border-box;
   display: grid;
   gap: 14px;
 }
@@ -2590,7 +2612,8 @@ body.collection-dnd-active {
   display: grid;
   gap: 18px;
   align-items: start;
-  grid-template-columns: minmax(18rem, 0.9fr) minmax(20rem, 1.1fr);
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  min-width: 0;
 }
 
 .detail-response-column {

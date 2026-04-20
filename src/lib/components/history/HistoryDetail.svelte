@@ -6,11 +6,15 @@
     detail = null,
     isLoading = false,
     errorText = "",
+    isRestoring = false,
+    onRestore = () => {},
     onClose = () => {}
   }: {
     detail?: HistoryEntryDetail | null;
     isLoading?: boolean;
     errorText?: string;
+    isRestoring?: boolean;
+    onRestore?: (id: string) => Promise<void> | void;
     onClose?: () => void;
   } = $props();
 
@@ -44,9 +48,16 @@
   <section class="history-detail history-detail-filled">
     <div class="editor-header">
       <h3>History Detail</h3>
-      <button class="ghost-button" type="button" onclick={() => onClose()} disabled={!detail && !errorText}>
-        Close
-      </button>
+      <div class="history-detail-actions">
+        {#if detail}
+          <button class="system-button" type="button" onclick={() => onRestore(detail.id)} disabled={isRestoring}>
+            {isRestoring ? "Restoring..." : "Restore"}
+          </button>
+        {/if}
+        <button class="ghost-button" type="button" onclick={() => onClose()} disabled={!detail && !errorText}>
+          Close
+        </button>
+      </div>
     </div>
 
     {#if isLoading}

@@ -11,7 +11,9 @@
     detailErrorText = "",
     isDetailLoading = false,
     isClearing = false,
+    restoringId = "",
     onInspect = () => {},
+    onRestore = () => {},
     onClear = () => {},
     onCloseDetail = () => {},
   }: {
@@ -23,7 +25,9 @@
     detailErrorText?: string;
     isDetailLoading?: boolean;
     isClearing?: boolean;
+    restoringId?: string;
     onInspect?: (id: string) => Promise<void> | void;
+    onRestore?: (id: string) => Promise<void> | void;
     onClear?: () => Promise<void> | void;
     onCloseDetail?: () => void;
   } = $props();
@@ -100,6 +104,14 @@
                 >
                   {selectedId === item.id ? "Inspecting" : "Inspect"}
                 </button>
+                <button
+                  class="ghost-button"
+                  type="button"
+                  onclick={() => onRestore(item.id)}
+                  disabled={restoringId === item.id}
+                >
+                  {restoringId === item.id ? "Restoring..." : "Restore"}
+                </button>
               </div>
 
               {#if item.errorText}
@@ -117,6 +129,8 @@
           {detail}
           errorText={detailErrorText}
           isLoading={isDetailLoading}
+          isRestoring={detail?.id === restoringId}
+          onRestore={onRestore}
           onClose={onCloseDetail}
         />
       </div>
