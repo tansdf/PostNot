@@ -1,0 +1,99 @@
+name: Feature request
+description: Propose a new capability or a meaningful product improvement.
+title: "[Feature]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please describe the user problem and the desired outcome clearly. Agent-friendly issues work best when the request includes acceptance criteria and boundaries.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched for an existing request first.
+          required: true
+        - label: This request is consistent with PostNot being local-first and desktop-native.
+          required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What user pain or gap does this address?
+      placeholder: Right now users cannot ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: What should the product be able to do?
+      placeholder: Users should be able to ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Example workflow
+      description: Walk through how someone would use the proposed feature.
+      placeholder: |
+        1. User opens ...
+        2. User chooses ...
+        3. PostNot ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Bullet list of what must be true for this issue to be done.
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: Non-goals or boundaries
+      description: Call out what should stay out of scope.
+      placeholder: This request does not need to ...
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Likely area
+      options:
+        - Requests page
+        - Collections
+        - Environments
+        - History
+        - Import or export
+        - Scripting
+        - Settings or updater
+        - Build or packaging
+        - Docs or website
+        - Rust backend
+        - Cross-cutting
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: Comparable tools, screenshots, specs, or linked issues.
+
+  - type: textarea
+    id: hints
+    attributes:
+      label: Optional implementation hints
+      description: Relevant files, architecture constraints, or rollout notes for the resolver.

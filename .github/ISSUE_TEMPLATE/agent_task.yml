@@ -1,0 +1,71 @@
+name: Agent-ready task
+description: Define a bounded implementation, cleanup, or docs task for an agent to execute.
+title: "[Task]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this when you already know the outcome and want to hand an agent a concrete task with clear success criteria.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I checked for an existing issue or pull request first.
+          required: true
+        - label: I can describe the expected outcome and how to verify it.
+          required: true
+
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: What should change when this task is complete?
+      placeholder: Add, fix, refactor, or document ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Keep this specific and testable.
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints and non-goals
+      description: What must stay unchanged? What should the agent avoid?
+      placeholder: Do not change ..., stay within ..., no schema changes, etc.
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Relevant repo context
+      description: Files, routes, services, or docs that should be read first.
+      placeholder: src/routes/+page.svelte, src-tauri/src/services/http_client.rs, docs/tech-design.md
+
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation plan
+      description: Commands or manual checks required before closing the issue.
+      placeholder: |
+        - `npm run check`
+        - `source "$HOME/.cargo/env" && cargo check --manifest-path src-tauri/Cargo.toml`
+        - Manual check: ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: Links to issues, screenshots, PRs, commits, or external specs.

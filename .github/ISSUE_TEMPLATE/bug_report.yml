@@ -1,0 +1,110 @@
+name: Bug report
+description: Report broken or regressed behavior in PostNot.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting this. A concrete, reproducible report makes it much easier for an agent or maintainer to resolve the issue without guesswork.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and the project docs first.
+          required: true
+        - label: I can reproduce this on a current build or current `master`.
+          required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      description: Pick the closest match.
+      options:
+        - Requests page
+        - Collections
+        - Environments
+        - History
+        - Import or export
+        - Scripting
+        - Settings or updater
+        - Build or packaging
+        - Docs or website
+        - Rust backend
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One short paragraph describing the bug.
+      placeholder: When I ..., PostNot ... instead of ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: current_behavior
+    attributes:
+      label: Current behavior
+      placeholder: Describe what happens now.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_behavior
+    attributes:
+      label: Expected behavior
+      placeholder: Describe what should happen instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Make this specific enough that an agent can replay it.
+      placeholder: |
+        1. Open ...
+        2. Click ...
+        3. Enter ...
+        4. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Platform, app version, install source, and any other relevant setup.
+      placeholder: Windows 11 / PostNot 0.17.3 / local dev build / repros with default settings
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Logs, screenshots, or recordings
+      description: Paste stack traces, console output, or links to media if available.
+      render: shell
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Done looks like
+      description: What should a fix prove before this issue is closed?
+      placeholder: |
+        - The bug no longer reproduces with the steps above.
+        - Existing behavior X is unchanged.
+        - Validation run: ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: hints
+    attributes:
+      label: Optional implementation hints
+      description: Relevant files, regression window, suspected cause, or constraints for the resolver.

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security report
+    url: https://github.com/tansdf/PostNot/security/policy
+    about: Use the private reporting path in the security policy instead of opening a public vulnerability issue.
+  - name: Contribution guide
+    url: https://github.com/tansdf/PostNot/blob/master/CONTRIBUTING.md
+    about: Review the AI-only contribution rules, validation commands, and pull request expectations.
