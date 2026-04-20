@@ -77,6 +77,8 @@ export type AppSettings = {
   followRedirects: boolean;
   validateTls: boolean;
   historyLimit: number;
+  isHistoryCollapsed: boolean;
+  environmentAutosave: boolean;
   notificationTimeoutMs: number;
   lastUpdateCheckedAt: string | null;
 };
@@ -361,6 +363,8 @@ export function createDefaultSettings(): AppSettings {
     followRedirects: true,
     validateTls: true,
     historyLimit: 200,
+    isHistoryCollapsed: false,
+    environmentAutosave: true,
     notificationTimeoutMs: 5_000,
     lastUpdateCheckedAt: null
   };

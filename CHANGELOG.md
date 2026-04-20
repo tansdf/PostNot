@@ -6,6 +6,23 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.17.2] - 2026-04-20
+
+### Added
+
+- Collapsible History panel on the Requests page, with the expanded/collapsed state persisted in app settings between launches.
+- `Ctrl+S` / `Cmd+S` save shortcuts on the Requests and Environments pages, reusing the existing request save flow and manual environment save action.
+
+### Changed
+
+- Environment editing now autosaves by default after changes, with a persisted Settings toggle to disable autosave and keep manual saves only.
+
+### Fixed
+
+- Unsaved environment confirmation now also covers browser back/forward and other same-page environment switches when autosave is disabled.
+- Clicking the currently selected environment no longer reloads it from storage without confirming that unsaved edits should be discarded.
+- Environment detail loading no longer gets stuck after switching environments because no-op route sync passes no longer invalidate the active detail fetch.
+
 ## [0.17.1] - 2026-04-20
 
 ### Added

@@ -33,7 +33,7 @@ Why this stack:
 
 ## 3. Current Application State
 
-This section reflects the code currently implemented in the repository, including the shipped `0.15.0` scripting update, the `0.15.1` route/modal polish work, the `0.16.0` OpenAPI 3 import release, the `0.17.0` multitab request workspace release, and the `0.17.1` history-restore patch (see [CHANGELOG.md](../CHANGELOG.md)).
+This section reflects the code currently implemented in the repository, including the shipped `0.15.0` scripting update, the `0.15.1` route/modal polish work, the `0.16.0` OpenAPI 3 import release, the `0.17.0` multitab request workspace release, the `0.17.1` history-restore patch, and the `0.17.2` requests/environments workflow follow-up (see [CHANGELOG.md](../CHANGELOG.md)).
 
 ### Implemented
 
@@ -56,7 +56,7 @@ This section reflects the code currently implemented in the repository, includin
   - headers
   - body text / JSON pretty rendering
 - Persisted application settings in SQLite
-- Persisted request history in SQLite
+- Persisted request history in SQLite, including a collapsible Requests-page history panel state stored in app settings
 - Cancel in-flight request
 - Restoring stored history requests into new request tabs
 - Collections and saved requests
@@ -74,6 +74,7 @@ This section reflects the code currently implemented in the repository, includin
 - Built-in dynamic variables at request runtime
 - App-level floating notification system for action feedback
 - Settings page wired to backend persistence
+- Environment autosave preference stored in persisted settings and enabled by default
 - Signed in-app update checks, startup refresh, and install handoff
 - History panel wired to backend persistence
 - History detail inspection from persisted snapshots
@@ -85,6 +86,7 @@ This section reflects the code currently implemented in the repository, includin
 - Request tabs persist through the existing `app_settings` store, keeping draft state, active tab selection, and per-tab responses/script output across restarts
 - URL-driven selection for the main saved request (`savedRequestId`), collections (`collectionId`), and environments (`environmentId`) uses generation guards so overlapping async loads from rapid navigation do not apply stale UI state; clearing `savedRequestId` from the URL resets deep-link tracking so the same request can load again from the query string
 - Save-request, cURL import, collection import, and environment import modals trap focus (initial focus, Tab cycle within the dialog, Escape to close, prior focus restored on close) for keyboard and assistive technology users
+- `Ctrl+S` / `Cmd+S` shortcuts save the active request on the Requests page and the selected environment on the Environments page
 - Native `reqwest::Client` instances are reused per TLS/redirect/timeout fingerprint with a bounded in-memory cache so settings changes do not rebuild a client on every send
 
 ## 4. High-Level Architecture

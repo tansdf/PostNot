@@ -24,6 +24,7 @@ PostNot is built for working with HTTP APIs on your own machine, with local pers
 - Use built-in dynamic variables like Postman-style `$guid` and `$timestamp`
 - Store secret environment values in the OS credential store
 - Inspect request history locally
+- Collapse the Requests page history panel when you want less noise, with that preference restored on the next launch
 - Restore a past request from history into a new request tab
 - Import from Postman collections and environments
 - Import collections or single requests from OpenAPI 3 JSON or YAML
@@ -34,6 +35,7 @@ PostNot is built for working with HTTP APIs on your own machine, with local pers
 - Call helper HTTP requests from scripts with `await pn.http.send(...)`
 - Read and persist active environment variable updates from scripts, including secret writes
 - Use floating notifications, persisted settings, and signed in-app update checks
+- Autosave environment edits by default, with keyboard saves via `Ctrl+S` / `Cmd+S` on requests and environments
 
 ## Why PostNot
 

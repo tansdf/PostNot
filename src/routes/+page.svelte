@@ -17,6 +17,7 @@
     listHistory,
     setActiveEnvironment,
     sendRequest,
+    updateSettings,
     updateEnvironment
   } from "$lib/api/commands";
   import type {
@@ -73,6 +74,7 @@
   let curlImportSource = $state("");
   let openApiImportSource = $state("");
   let isImportingRequest = $state(false);
+  let isHistoryCollapseSaving = $state(false);
   let requestImportErrorText = $state("");
   let openApiImportFileInput: HTMLInputElement | null = $state(null);
   let saveTargetCollectionId = $state("");
@@ -242,6 +244,34 @@ paths:
       settingsErrorText = "";
     } catch (error) {
       settingsErrorText = error instanceof Error ? error.message : String(error);
+    }
+  }
+
+  function isPrimarySaveShortcut(event: KeyboardEvent) {
+    return (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "s";
+  }
+
+  async function handleHistoryCollapsedChange(isCollapsed: boolean) {
+    if (isHistoryCollapseSaving || settings.isHistoryCollapsed === isCollapsed) {
+      return;
+    }
+
+    const previousSettings = settings;
+    settings = {
+      ...settings,
+      isHistoryCollapsed: isCollapsed
+    };
+    isHistoryCollapseSaving = true;
+
+    try {
+      settings = await updateSettings(settings);
+      settingsErrorText = "";
+    } catch (error) {
+      settings = previousSettings;
+      settingsErrorText = error instanceof Error ? error.message : String(error);
+      notifications.error(settingsErrorText, "History preference not saved");
+    } finally {
+      isHistoryCollapseSaving = false;
     }
   }
 
@@ -854,6 +884,26 @@ paths:
       closeSaveDialog();
     }
   }
+
+  function handleWindowKeydown(event: KeyboardEvent) {
+    if (!isPrimarySaveShortcut(event)) {
+      return;
+    }
+
+    if (isRequestImportDialogOpen) {
+      event.preventDefault();
+      return;
+    }
+
+    event.preventDefault();
+
+    if (isSaveDialogOpen) {
+      void confirmSaveRequest();
+      return;
+    }
+
+    void handleSaveRequest();
+  }
 </script>
 
 <svelte:head>
@@ -944,18 +994,22 @@ paths:
     items={history}
     isLoading={isHistoryLoading}
     errorText={historyErrorText}
+    isCollapsed={settings.isHistoryCollapsed}
     selectedId={selectedHistoryId}
     detail={selectedHistoryDetail}
     detailErrorText={historyDetailErrorText}
     isDetailLoading={isHistoryDetailLoading}
     isClearing={isClearingHistory}
     restoringId={restoringHistoryId}
+    onToggleCollapse={handleHistoryCollapsedChange}
     onInspect={inspectHistoryEntry}
     onRestore={handleRestoreHistoryEntry}
     onClear={handleClearHistory}
     onCloseDetail={closeHistoryDetail}
   />
 </div>
+
+<svelte:window onkeydown={handleWindowKeydown} />
 
 {#if isSaveDialogOpen}
   <div

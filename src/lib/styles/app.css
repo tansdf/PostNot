@@ -1689,6 +1689,10 @@ select option {
   margin-bottom: 12px;
 }
 
+.history-panel > .editor-header:only-child {
+  margin-bottom: 0;
+}
+
 .collections-import-panel {
   padding: 22px;
   margin-bottom: 18px;
@@ -2339,8 +2343,16 @@ body.collection-dnd-active {
   align-items: center;
 }
 
-.history-toolbar {
-  flex-wrap: wrap;
+.history-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.history-panel > .editor-header h2,
+.history-heading h2 {
+  margin: 0;
 }
 
 .history-detail-actions {

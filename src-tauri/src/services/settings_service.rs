@@ -13,6 +13,8 @@ const REQUEST_TIMEOUT_MS_KEY: &str = "request_timeout_ms";
 const FOLLOW_REDIRECTS_KEY: &str = "follow_redirects";
 const VALIDATE_TLS_KEY: &str = "validate_tls";
 const HISTORY_LIMIT_KEY: &str = "history_limit";
+const IS_HISTORY_COLLAPSED_KEY: &str = "is_history_collapsed";
+const ENVIRONMENT_AUTOSAVE_KEY: &str = "environment_autosave";
 const NOTIFICATION_TIMEOUT_MS_KEY: &str = "notification_timeout_ms";
 const LAST_UPDATE_CHECKED_AT_KEY: &str = "last_update_checked_at";
 const COLLECTION_SIDEBAR_STATE_KEY: &str = "collection_sidebar_state";
@@ -31,6 +33,8 @@ pub fn default_settings() -> AppSettings {
         follow_redirects: true,
         validate_tls: true,
         history_limit: 200,
+        is_history_collapsed: false,
+        environment_autosave: true,
         notification_timeout_ms: 5_000,
         last_update_checked_at: None,
     }
@@ -70,6 +74,12 @@ pub async fn get_settings(pool: &SqlitePool) -> AppResult<AppSettings> {
             FOLLOW_REDIRECTS_KEY => settings.follow_redirects = serde_json::from_str(&value_json)?,
             VALIDATE_TLS_KEY => settings.validate_tls = serde_json::from_str(&value_json)?,
             HISTORY_LIMIT_KEY => settings.history_limit = serde_json::from_str(&value_json)?,
+            IS_HISTORY_COLLAPSED_KEY => {
+                settings.is_history_collapsed = serde_json::from_str(&value_json)?
+            }
+            ENVIRONMENT_AUTOSAVE_KEY => {
+                settings.environment_autosave = serde_json::from_str(&value_json)?
+            }
             NOTIFICATION_TIMEOUT_MS_KEY => {
                 settings.notification_timeout_ms =
                     normalize_notification_timeout_ms(serde_json::from_str(&value_json)?)
@@ -182,6 +192,14 @@ fn serialize_settings(settings: &AppSettings) -> AppResult<Vec<(&'static str, St
         (
             HISTORY_LIMIT_KEY,
             serde_json::to_string(&settings.history_limit)?,
+        ),
+        (
+            IS_HISTORY_COLLAPSED_KEY,
+            serde_json::to_string(&settings.is_history_collapsed)?,
+        ),
+        (
+            ENVIRONMENT_AUTOSAVE_KEY,
+            serde_json::to_string(&settings.environment_autosave)?,
         ),
         (
             NOTIFICATION_TIMEOUT_MS_KEY,

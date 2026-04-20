@@ -6,12 +6,14 @@
     items = [],
     isLoading = false,
     errorText = "",
+    isCollapsed = false,
     selectedId = "",
     detail = null,
     detailErrorText = "",
     isDetailLoading = false,
     isClearing = false,
     restoringId = "",
+    onToggleCollapse = () => {},
     onInspect = () => {},
     onRestore = () => {},
     onClear = () => {},
@@ -20,12 +22,14 @@
     items?: HistoryEntrySummary[];
     isLoading?: boolean;
     errorText?: string;
+    isCollapsed?: boolean;
     selectedId?: string;
     detail?: HistoryEntryDetail | null;
     detailErrorText?: string;
     isDetailLoading?: boolean;
     isClearing?: boolean;
     restoringId?: string;
+    onToggleCollapse?: (isCollapsed: boolean) => Promise<void> | void;
     onInspect?: (id: string) => Promise<void> | void;
     onRestore?: (id: string) => Promise<void> | void;
     onClear?: () => Promise<void> | void;
@@ -53,7 +57,18 @@
 
 <section class="panel history-panel">
   <div class="editor-header">
-    <h2>History</h2>
+    <div class="history-heading">
+      <h2>History</h2>
+      <button
+        class="system-button"
+        type="button"
+        aria-expanded={!isCollapsed}
+        onclick={() => onToggleCollapse(!isCollapsed)}
+      >
+        {isCollapsed ? "Expand" : "Collapse"}
+      </button>
+    </div>
+
     <div class="history-toolbar">
       {#if isLoading}
         <span class="history-meta">Refreshing...</span>
@@ -67,11 +82,11 @@
     </div>
   </div>
 
-  {#if errorText}
+  {#if !isCollapsed && errorText}
     <div class="response-error">{errorText}</div>
-  {:else if items.length === 0 && !isLoading}
+  {:else if !isCollapsed && items.length === 0 && !isLoading}
     <div class="empty-state">Request history will appear here after the first send.</div>
-  {:else}
+  {:else if !isCollapsed}
     <div class={["history-content", hasActiveDetail && "history-content-detail-open"]}>
       <div class="history-list-column">
         <div class="history-list">

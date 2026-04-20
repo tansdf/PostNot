@@ -1,14 +1,22 @@
 <script lang="ts">
-  import { goto } from "$app/navigation";
+  import { beforeNavigate, goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { page } from "$app/state";
-  import { onMount } from "svelte";
-  import { createEnvironmentVariable, type EnvironmentDetail, type EnvironmentSummary } from "$lib/api/types";
+  import { onDestroy, onMount } from "svelte";
+  import {
+    createDefaultSettings,
+    createEnvironmentVariable,
+    type AppSettings,
+    type EnvironmentDetail,
+    type EnvironmentInput,
+    type EnvironmentSummary
+  } from "$lib/api/types";
   import {
     createEnvironment,
     deleteEnvironment,
     exportEnvironment,
     getEnvironment,
+    getSettings,
     importPostmanEnvironment,
     listEnvironments,
     setActiveEnvironment,
@@ -17,7 +25,11 @@
   import { createStaleGuard } from "$lib/async-stale-guard";
   import { modalFocusTrap } from "$lib/modal-focus-trap";
   import { notifications } from "$lib/stores/notifications.svelte";
+
+  const ENVIRONMENT_AUTOSAVE_DELAY_MS = 400;
+
   let environments: EnvironmentSummary[] = $state([]);
+  let settings: AppSettings = $state(createDefaultSettings());
   let selectedEnvironmentId = $state("");
   let environmentDetail: EnvironmentDetail | null = $state(null);
   let isLoading = $state(true);
@@ -34,15 +46,73 @@
   let importSetActive = $state(false);
   let isImportModalOpen = $state(false);
   let importFileInput: HTMLInputElement | null = $state(null);
+  let lastSavedEnvironmentFingerprint = $state("");
+  let lastFailedAutosaveFingerprint = $state("");
+  let environmentEditVersion = $state(0);
   type EnvironmentVariable = NonNullable<EnvironmentDetail["variables"]>[number];
   let revealedSecretRowIds = $state<string[]>([]);
+  let environmentAutosaveTimer: ReturnType<typeof setTimeout> | null = null;
+  let suppressUnsavedEnvironmentNavigationPrompt = false;
 
   let requestedEnvironmentId = $derived(page.url.searchParams.get("environmentId") ?? "");
+  let isEnvironmentDirty = $derived(
+    Boolean(environmentDetail && environmentFingerprint(environmentDetail) !== lastSavedEnvironmentFingerprint)
+  );
+  let environmentSaveStatus = $derived.by(() => {
+    if (!environmentDetail) {
+      return "";
+    }
+
+    if (isDetailLoading) {
+      return "Loading...";
+    }
+
+    if (isSaving) {
+      return settings.environmentAutosave ? "Autosaving..." : "Saving...";
+    }
+
+    if (settings.environmentAutosave) {
+      return isEnvironmentDirty ? "Unsaved changes" : "Autosave on";
+    }
+
+    return isEnvironmentDirty ? "Unsaved changes" : "Saved";
+  });
 
   const envAsync = createStaleGuard();
 
+  beforeNavigate((navigation) => {
+    if (!shouldConfirmDiscardUnsavedEnvironment() || suppressUnsavedEnvironmentNavigationPrompt) {
+      return;
+    }
+
+    const nextPath = navigation.to?.url.pathname ?? null;
+    const nextEnvironmentId = navigation.to?.url.searchParams.get("environmentId") ?? "";
+    const currentPath = page.url.pathname;
+    const currentEnvironmentId = requestedEnvironmentId;
+
+    if (nextPath === currentPath) {
+      if (nextEnvironmentId === currentEnvironmentId) {
+        return;
+      }
+
+      if (!window.confirm("Switch environments and discard unsaved changes?")) {
+        navigation.cancel();
+      }
+
+      return;
+    }
+
+    if (!window.confirm("Leave this page and discard unsaved environment changes?")) {
+      navigation.cancel();
+    }
+  });
+
   onMount(() => {
-    void loadEnvironments(requestedEnvironmentId);
+    void Promise.all([loadSettings(), loadEnvironments(requestedEnvironmentId)]);
+  });
+
+  onDestroy(() => {
+    clearEnvironmentAutosaveTimer();
   });
 
   $effect(() => {
@@ -51,14 +121,49 @@
     }
   });
 
+  $effect(() => {
+    const detail = environmentDetail;
+    const fingerprint = detail ? environmentFingerprint(detail) : "";
+
+    clearEnvironmentAutosaveTimer();
+
+    if (
+      !detail ||
+      !settings.environmentAutosave ||
+      isDetailLoading ||
+      isSaving ||
+      !fingerprint ||
+      fingerprint === lastSavedEnvironmentFingerprint ||
+      fingerprint === lastFailedAutosaveFingerprint ||
+      isImportModalOpen
+    ) {
+      return;
+    }
+
+    const scheduledEditVersion = environmentEditVersion;
+    environmentAutosaveTimer = setTimeout(() => {
+      environmentAutosaveTimer = null;
+      void persistEnvironmentDetail({
+        expectedEditVersion: scheduledEditVersion
+      });
+    }, ENVIRONMENT_AUTOSAVE_DELAY_MS);
+  });
+
+  async function loadSettings() {
+    try {
+      settings = await getSettings();
+    } catch (error) {
+      errorText = error instanceof Error ? error.message : String(error);
+    }
+  }
+
   async function syncEnvironmentFromRoute(environmentId: string) {
     if (isLoading) {
       return;
     }
 
-    const seq = envAsync.next();
-
     if (environmentId && environmentId !== selectedEnvironmentId) {
+      const seq = envAsync.next();
       await loadEnvironmentDetail(environmentId, seq);
       return;
     }
@@ -110,6 +215,8 @@
           return;
         }
         environmentDetail = null;
+        lastSavedEnvironmentFingerprint = "";
+        lastFailedAutosaveFingerprint = "";
         revealedSecretRowIds = [];
       }
     } catch (error) {
@@ -131,15 +238,20 @@
     revealedSecretRowIds = [];
 
     try {
-      environmentDetail = await getEnvironment(environmentId);
+      const loadedEnvironment = await getEnvironment(environmentId);
       if (envAsync.isStale(seq)) {
         return;
       }
+      environmentDetail = loadedEnvironment;
+      lastSavedEnvironmentFingerprint = environmentFingerprint(loadedEnvironment);
+      lastFailedAutosaveFingerprint = "";
       errorText = "";
     } catch (error) {
       if (!envAsync.isStale(seq)) {
         errorText = error instanceof Error ? error.message : String(error);
         environmentDetail = null;
+        lastSavedEnvironmentFingerprint = "";
+        lastFailedAutosaveFingerprint = "";
       }
     } finally {
       if (!envAsync.isStale(seq)) {
@@ -150,26 +262,42 @@
 
   async function openEnvironmentDetail(environmentId: string) {
     if (requestedEnvironmentId === environmentId) {
+      if (!confirmDiscardUnsavedEnvironment("Reload this environment and discard unsaved changes?")) {
+        return;
+      }
+
       await loadEnvironmentDetail(environmentId);
       return;
     }
 
-    await goto(resolve(`/environments?environmentId=${encodeURIComponent(environmentId)}`), {
-      noScroll: true,
-      keepFocus: true
-    });
+    if (!confirmDiscardUnsavedEnvironment("Switch environments and discard unsaved changes?")) {
+      return;
+    }
+
+    await withSuppressedUnsavedEnvironmentNavigationPrompt(() =>
+      goto(resolve(`/environments?environmentId=${encodeURIComponent(environmentId)}`), {
+        noScroll: true,
+        keepFocus: true
+      })
+    );
   }
 
   async function handleCreateEnvironment() {
+    if (!confirmDiscardUnsavedEnvironment("Create a new environment and discard unsaved changes?")) {
+      return;
+    }
+
     isCreating = true;
 
     try {
       const created = await createEnvironment();
-      await loadEnvironments(created.id);
-      await goto(resolve(`/environments?environmentId=${encodeURIComponent(created.id)}`), {
-        replaceState: true,
-        noScroll: true,
-        keepFocus: true
+      await withSuppressedUnsavedEnvironmentNavigationPrompt(async () => {
+        await loadEnvironments(created.id);
+        await goto(resolve(`/environments?environmentId=${encodeURIComponent(created.id)}`), {
+          replaceState: true,
+          noScroll: true,
+          keepFocus: true
+        });
       });
       notifications.success(created.name, "Environment created");
     } catch (error) {
@@ -180,28 +308,15 @@
   }
 
   async function handleSave() {
-    if (!environmentDetail) {
-      return;
-    }
-
-    isSaving = true;
-
-    try {
-      environmentDetail = await updateEnvironment(environmentDetail.id, {
-        name: environmentDetail.name.trim(),
-        variables: environmentDetail.variables
-      });
-      await loadEnvironments(environmentDetail.id);
-      notifications.success(environmentDetail.name, "Environment saved");
-    } catch (error) {
-      errorText = error instanceof Error ? error.message : String(error);
-    } finally {
-      isSaving = false;
-    }
+    await persistEnvironmentDetail({ showNotification: true });
   }
 
   async function handleDelete(environmentId: string) {
     if (!window.confirm("Delete this environment?")) {
+      return;
+    }
+
+    if (!confirmDiscardUnsavedEnvironment("Discard unsaved changes before continuing?")) {
       return;
     }
 
@@ -211,7 +326,11 @@
     try {
       await deleteEnvironment(environmentId);
       environmentDetail = null;
-      await loadEnvironments(selectedEnvironmentId === environmentId ? "" : selectedEnvironmentId);
+      lastSavedEnvironmentFingerprint = "";
+      lastFailedAutosaveFingerprint = "";
+      await withSuppressedUnsavedEnvironmentNavigationPrompt(() =>
+        loadEnvironments(selectedEnvironmentId === environmentId ? "" : selectedEnvironmentId)
+      );
       notifications.success(environmentName, "Environment deleted");
     } catch (error) {
       errorText = error instanceof Error ? error.message : String(error);
@@ -221,11 +340,17 @@
   }
 
   async function handleActivate(environmentId: string | null) {
+    if (!confirmDiscardUnsavedEnvironment("Change environments and discard unsaved changes?")) {
+      return;
+    }
+
     pendingActivateId = environmentId ?? "__none__";
 
     try {
       await setActiveEnvironment(environmentId);
-      await loadEnvironments(environmentId ?? selectedEnvironmentId);
+      await withSuppressedUnsavedEnvironmentNavigationPrompt(() =>
+        loadEnvironments(environmentId ?? selectedEnvironmentId)
+      );
       if (environmentId) {
         const environmentName = environments.find((environment) => environment.id === environmentId)?.name ?? "Environment";
         notifications.success(environmentName, "Environment activated");
@@ -244,10 +369,10 @@
       return;
     }
 
-    environmentDetail = {
+    setEnvironmentDetail({
       ...environmentDetail,
       variables: environmentDetail.variables.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row))
-    };
+    });
   }
 
   function addVariable() {
@@ -255,10 +380,10 @@
       return;
     }
 
-    environmentDetail = {
+    setEnvironmentDetail({
       ...environmentDetail,
       variables: [...environmentDetail.variables, createEnvironmentVariable()]
-    };
+    });
   }
 
   function removeVariable(id: string) {
@@ -266,13 +391,13 @@
       return;
     }
 
-    environmentDetail = {
+    setEnvironmentDetail({
       ...environmentDetail,
       variables:
         environmentDetail.variables.length === 1
           ? [createEnvironmentVariable()]
           : environmentDetail.variables.filter((row) => row.id !== id)
-    };
+    });
 
     revealedSecretRowIds = revealedSecretRowIds.filter((rowId) => rowId !== id);
   }
@@ -316,6 +441,10 @@
       return;
     }
 
+    if (!confirmDiscardUnsavedEnvironment("Import an environment and discard unsaved changes?")) {
+      return;
+    }
+
     isImporting = true;
 
     try {
@@ -325,11 +454,13 @@
       });
 
       importSource = "";
-      await loadEnvironments(result.environmentId);
-      await goto(resolve(`/environments?environmentId=${encodeURIComponent(result.environmentId)}`), {
-        replaceState: true,
-        noScroll: true,
-        keepFocus: true
+      await withSuppressedUnsavedEnvironmentNavigationPrompt(async () => {
+        await loadEnvironments(result.environmentId);
+        await goto(resolve(`/environments?environmentId=${encodeURIComponent(result.environmentId)}`), {
+          replaceState: true,
+          noScroll: true,
+          keepFocus: true
+        });
       });
       notifications.success(
         `${result.importedVariableCount} variable${result.importedVariableCount === 1 ? "" : "s"} imported into ${result.environmentName}.${result.activated ? " Environment is now active." : ""}`,
@@ -370,6 +501,156 @@
   function closeImportModal() {
     isImportModalOpen = false;
     importErrorText = "";
+  }
+
+  function clearEnvironmentAutosaveTimer() {
+    if (environmentAutosaveTimer !== null) {
+      clearTimeout(environmentAutosaveTimer);
+      environmentAutosaveTimer = null;
+    }
+  }
+
+  function buildEnvironmentInput(detail: EnvironmentDetail): EnvironmentInput {
+    return {
+      name: detail.name.trim(),
+      variables: detail.variables
+    };
+  }
+
+  function environmentFingerprint(detail: EnvironmentDetail) {
+    return JSON.stringify(buildEnvironmentInput(detail));
+  }
+
+  function shouldConfirmDiscardUnsavedEnvironment() {
+    return !settings.environmentAutosave && isEnvironmentDirty && Boolean(environmentDetail) && !isSaving;
+  }
+
+  function confirmDiscardUnsavedEnvironment(message: string) {
+    return !shouldConfirmDiscardUnsavedEnvironment() || window.confirm(message);
+  }
+
+  async function withSuppressedUnsavedEnvironmentNavigationPrompt<T>(callback: () => Promise<T>) {
+    suppressUnsavedEnvironmentNavigationPrompt = true;
+
+    try {
+      return await callback();
+    } finally {
+      suppressUnsavedEnvironmentNavigationPrompt = false;
+    }
+  }
+
+  function setEnvironmentDetail(nextDetail: EnvironmentDetail) {
+    environmentDetail = nextDetail;
+    environmentEditVersion += 1;
+    lastFailedAutosaveFingerprint = "";
+    errorText = "";
+  }
+
+  function setEnvironmentName(name: string) {
+    if (!environmentDetail) {
+      return;
+    }
+
+    setEnvironmentDetail({
+      ...environmentDetail,
+      name
+    });
+  }
+
+  function syncEnvironmentSummary(updated: EnvironmentDetail) {
+    environments = environments.map((environment) =>
+      environment.id === updated.id
+        ? {
+            ...environment,
+            name: updated.name,
+            isActive: updated.isActive,
+            variableCount: updated.variables.length,
+            updatedAt: updated.updatedAt
+          }
+        : environment
+    );
+  }
+
+  async function persistEnvironmentDetail(
+    options: {
+      showNotification?: boolean;
+      expectedEditVersion?: number;
+    } = {}
+  ) {
+    if (!environmentDetail) {
+      return false;
+    }
+
+    const { showNotification = false, expectedEditVersion = environmentEditVersion } = options;
+    const detailToSave = environmentDetail;
+    const fingerprint = environmentFingerprint(detailToSave);
+
+    if (fingerprint === lastSavedEnvironmentFingerprint) {
+      if (showNotification) {
+        notifications.info(`${detailToSave.name || "Environment"} is already up to date.`, "Already saved");
+      }
+      return true;
+    }
+
+    isSaving = true;
+    clearEnvironmentAutosaveTimer();
+
+    try {
+      const updated = await updateEnvironment(detailToSave.id, buildEnvironmentInput(detailToSave));
+      lastSavedEnvironmentFingerprint = fingerprint;
+      lastFailedAutosaveFingerprint = "";
+      syncEnvironmentSummary(updated);
+
+      if (environmentDetail?.id === updated.id && expectedEditVersion === environmentEditVersion) {
+        environmentDetail = updated;
+      }
+
+      errorText = "";
+
+      if (showNotification) {
+        notifications.success(updated.name, "Environment saved");
+      }
+
+      return true;
+    } catch (error) {
+      errorText = error instanceof Error ? error.message : String(error);
+      lastFailedAutosaveFingerprint = fingerprint;
+
+      if (!showNotification) {
+        notifications.error(errorText, "Environment autosave failed");
+      }
+
+      return false;
+    } finally {
+      isSaving = false;
+    }
+  }
+
+  function isPrimarySaveShortcut(event: KeyboardEvent) {
+    return (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "s";
+  }
+
+  function handleWindowKeydown(event: KeyboardEvent) {
+    if (!isPrimarySaveShortcut(event)) {
+      return;
+    }
+
+    if (isImportModalOpen || !environmentDetail) {
+      event.preventDefault();
+      return;
+    }
+
+    event.preventDefault();
+    void handleSave();
+  }
+
+  function handleBeforeUnload(event: BeforeUnloadEvent) {
+    if (!shouldConfirmDiscardUnsavedEnvironment()) {
+      return;
+    }
+
+    event.preventDefault();
+    event.returnValue = "";
   }
 </script>
 
@@ -444,8 +725,8 @@
     <section class="panel collections-page-panel">
       <div class="editor-header">
         <h2>Environment Detail</h2>
-        {#if isDetailLoading}
-          <span class="history-meta">Loading...</span>
+        {#if environmentSaveStatus}
+          <span class="history-meta">{environmentSaveStatus}</span>
         {/if}
       </div>
 
@@ -455,7 +736,12 @@
         <div class="editor-block">
           <label>
             <span class="field-label">Environment name</span>
-            <input class="text-input" bind:value={environmentDetail.name} placeholder="Untitled environment" />
+            <input
+              class="text-input"
+              value={environmentDetail.name}
+              placeholder="Untitled environment"
+              oninput={(event) => setEnvironmentName(event.currentTarget.value)}
+            />
           </label>
 
           <div class="editor-header">
@@ -554,13 +840,15 @@
 
           <div class="collections-page-actions">
             <button class="send-button" type="button" onclick={handleSave} disabled={isSaving}>
-              {isSaving ? "Saving..." : "Save environment"}
+              {isSaving ? "Saving..." : settings.environmentAutosave ? "Save now" : "Save environment"}
             </button>
           </div>
         </div>
       {/if}
     </section>
   </div>
+
+  <svelte:window onkeydown={handleWindowKeydown} onbeforeunload={handleBeforeUnload} />
 
   {#if isImportModalOpen}
     <div
