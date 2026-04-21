@@ -6,6 +6,22 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.17.4] - 2026-04-21
+
+### Changed
+
+- Unified the hydration-flash strategy across pages by introducing a shared synchronous `localStorage` cache (`src/lib/ui-cache.ts`) that seeds state on first paint instead of gating UI behind an `isHydrated` prop. This replaces the earlier "hide until hydrated" approach with "render with last-known-good state immediately, reconcile from backend."
+
+### Fixed
+
+- Requests page profile bar (request timeout, redirects, TLS, history limit) now renders with the last-known persisted values from the very first paint, eliminating the empty-to-populated flash users were still seeing after the 0.17.3 release.
+- Active environment selector and variable-count hint on the Requests page now paint from a persisted cache, so the previously selected environment and its enabled-variable count are visible immediately on launch instead of appearing once the backend list loads.
+- Request tabs strip and the request editor now paint from a cached workspace snapshot on launch, removing the brief "no tabs" and blank-editor flashes that remained after the 0.17.3 tab-strip gate.
+- Sidebar collections list, its expand/collapse state, and items for previously expanded collections now render from cache on first paint, so the sidebar no longer flashes from a collapsed or empty state to the persisted layout.
+- Collections page empty states (`Pick a collection…` and `Select a collection…`) no longer appear for a frame when a collection was already selected previously; the collections store is now seeded from cache so the correct selection paints immediately.
+- Environments page list and active status badges now paint from cache on launch, eliminating the flicker of the empty `Create an environment…` state when environments are already present.
+- History panel's collapsed/expanded state continues to be cached (now via the shared settings cache) and paints correctly on first frame.
+
 ## [0.17.3] - 2026-04-20
 
 ### Fixed

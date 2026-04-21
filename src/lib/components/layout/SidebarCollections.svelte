@@ -13,11 +13,26 @@
   import FolderGlyph from "$lib/components/icons/FolderGlyph.svelte";
   import { collectionDnd } from "$lib/stores/collection-dnd.svelte";
   import { collections } from "$lib/stores/collections.svelte";
+  import { readCachedJson, writeCachedJson, UI_CACHE_KEYS } from "$lib/ui-cache";
 
-  let expandedCollectionIds = new SvelteSet<string>();
-  let expandedFolderIds = new SvelteSet<string>();
-  let hasLoadedSidebarState = $state(false);
+  type CachedSidebarState = {
+    expandedCollectionIds: string[];
+    expandedFolderIds: string[];
+  };
+
+  const cachedSidebarState = readCachedJson<CachedSidebarState>(UI_CACHE_KEYS.sidebarExpanded);
+
+  let expandedCollectionIds = new SvelteSet<string>(cachedSidebarState?.expandedCollectionIds ?? []);
+  let expandedFolderIds = new SvelteSet<string>(cachedSidebarState?.expandedFolderIds ?? []);
+  let hasLoadedSidebarState = $state(cachedSidebarState !== null);
   let isSavingSidebarState = false;
+
+  function writeSidebarStateCache() {
+    writeCachedJson(UI_CACHE_KEYS.sidebarExpanded, {
+      expandedCollectionIds: Array.from(expandedCollectionIds),
+      expandedFolderIds: Array.from(expandedFolderIds)
+    });
+  }
 
   function formatUpdatedAt(value: string) {
     try {
@@ -47,6 +62,7 @@
       for (const id of sidebarState.expandedFolderIds) {
         expandedFolderIds.add(id);
       }
+      writeSidebarStateCache();
 
       const validExpandedCollectionIds = sidebarState.expandedCollectionIds.filter((collectionId) =>
         collections.collections.some((collection) => collection.id === collectionId)
@@ -65,6 +81,8 @@
   }
 
   async function persistSidebarState() {
+    writeSidebarStateCache();
+
     if (!hasLoadedSidebarState || isSavingSidebarState) {
       return;
     }
@@ -258,26 +276,24 @@
                 <span class="sidebar-collection-meta">Updated {formatUpdatedAt(collection.updatedAt)}</span>
               </button>
 
-              {#if hasLoadedSidebarState}
-                <button
-                  class="sidebar-toggle-button"
-                  type="button"
-                  onclick={() => toggleCollection(collection.id)}
-                  aria-expanded={expandedCollectionIds.has(collection.id)}
-                  aria-label={expandedCollectionIds.has(collection.id) ? "Collapse collection" : "Expand collection"}
-                  title={expandedCollectionIds.has(collection.id) ? "Collapse" : "Expand"}
+              <button
+                class="sidebar-toggle-button"
+                type="button"
+                onclick={() => toggleCollection(collection.id)}
+                aria-expanded={expandedCollectionIds.has(collection.id)}
+                aria-label={expandedCollectionIds.has(collection.id) ? "Collapse collection" : "Expand collection"}
+                title={expandedCollectionIds.has(collection.id) ? "Collapse" : "Expand"}
+              >
+                <span
+                  class={["sidebar-toggle-icon", expandedCollectionIds.has(collection.id) && "sidebar-toggle-icon-expanded"]}
+                  aria-hidden="true"
                 >
-                  <span
-                    class={["sidebar-toggle-icon", expandedCollectionIds.has(collection.id) && "sidebar-toggle-icon-expanded"]}
-                    aria-hidden="true"
-                  >
-                    &gt;
-                  </span>
-                </button>
-              {/if}
+                  &gt;
+                </span>
+              </button>
             </div>
 
-            {#if hasLoadedSidebarState && expandedCollectionIds.has(collection.id)}
+            {#if expandedCollectionIds.has(collection.id)}
               <div class="sidebar-request-stack">
                 {#if collections.isCollectionItemsLoading && !(collections.collectionItemsByCollection[collection.id]?.length)}
                   <span class="sidebar-collection-meta">Loading items...</span>

@@ -21,6 +21,7 @@ import type {
   UpdateCollectionFolderInput
 } from "$lib/api/types";
 import { notifications } from "$lib/stores/notifications.svelte";
+import { readCachedJson, writeCachedJson, UI_CACHE_KEYS } from "$lib/ui-cache";
 
 type FolderTarget = {
   id: string | null;
@@ -28,8 +29,23 @@ type FolderTarget = {
   depth: number;
 };
 
+const CACHED_COLLECTIONS = readCachedJson<CollectionSummary[]>(UI_CACHE_KEYS.collectionsList);
+const CACHED_SELECTED_ID = readCachedJson<string>(UI_CACHE_KEYS.collectionsSelectedId) ?? "";
+const CACHED_ITEMS_MAP =
+  readCachedJson<Record<string, CollectionItemSummary[]>>(UI_CACHE_KEYS.collectionsItemsByCollection) ?? {};
+
+function resolveCachedSelectedId(): string {
+  if (!CACHED_COLLECTIONS || CACHED_COLLECTIONS.length === 0) {
+    return "";
+  }
+  if (CACHED_SELECTED_ID && CACHED_COLLECTIONS.some((c) => c.id === CACHED_SELECTED_ID)) {
+    return CACHED_SELECTED_ID;
+  }
+  return CACHED_COLLECTIONS[0]?.id ?? "";
+}
+
 class CollectionsStore {
-  initialized = $state(false);
+  initialized = $state(CACHED_COLLECTIONS !== null);
   isCollectionsLoading = $state(false);
   isCollectionItemsLoading = $state(false);
   isCreatingCollection = $state(false);
@@ -37,9 +53,11 @@ class CollectionsStore {
   isSavingFolder = $state(false);
   isSavingRequest = $state(false);
   isMovingCollectionItem = $state(false);
-  selectedCollectionId = $state("");
-  collections = $state.raw<CollectionSummary[]>([]);
-  collectionItemsByCollection = $state.raw<Record<string, CollectionItemSummary[]>>({});
+  selectedCollectionId = $state(resolveCachedSelectedId());
+  collections = $state.raw<CollectionSummary[]>(CACHED_COLLECTIONS ?? []);
+  collectionItemsByCollection = $state.raw<Record<string, CollectionItemSummary[]>>(
+    CACHED_ITEMS_MAP
+  );
   pendingDeleteCollectionId = $state("");
   pendingDeleteCollectionItemId = $state("");
   pendingSaveFolderId = $state("");
@@ -92,10 +110,16 @@ class CollectionsStore {
       this.initialized = true;
       this.errorText = "";
 
+      writeCachedJson(UI_CACHE_KEYS.collectionsList, fetched);
+      writeCachedJson(UI_CACHE_KEYS.collectionsSelectedId, nextId);
+
+      this.pruneCachedItems();
+
       if (nextId) {
         await this.loadCollectionItems(nextId);
       } else {
         this.collectionItemsByCollection = {};
+        writeCachedJson(UI_CACHE_KEYS.collectionsItemsByCollection, {});
       }
     } catch (error) {
       this.initialized = true;
@@ -116,6 +140,11 @@ class CollectionsStore {
         [collectionId]: items
       };
       this.errorText = "";
+
+      writeCachedJson(
+        UI_CACHE_KEYS.collectionsItemsByCollection,
+        this.collectionItemsByCollection
+      );
     } catch (error) {
       this.errorText = error instanceof Error ? error.message : String(error);
     } finally {
@@ -125,7 +154,20 @@ class CollectionsStore {
 
   async selectCollection(collectionId: string) {
     this.selectedCollectionId = collectionId;
+    writeCachedJson(UI_CACHE_KEYS.collectionsSelectedId, collectionId);
     await this.loadCollectionItems(collectionId);
+  }
+
+  private pruneCachedItems() {
+    const validIds = new Set(this.collections.map((c) => c.id));
+    const next: Record<string, CollectionItemSummary[]> = {};
+    for (const [id, items] of Object.entries(this.collectionItemsByCollection)) {
+      if (validIds.has(id)) {
+        next[id] = items;
+      }
+    }
+    this.collectionItemsByCollection = next;
+    writeCachedJson(UI_CACHE_KEYS.collectionsItemsByCollection, next);
   }
 
   async createBlankCollection() {
@@ -208,6 +250,7 @@ class CollectionsStore {
       await deleteCollection(collectionId);
       const { [collectionId]: _, ...rest } = this.collectionItemsByCollection;
       this.collectionItemsByCollection = rest;
+      writeCachedJson(UI_CACHE_KEYS.collectionsItemsByCollection, this.collectionItemsByCollection);
 
       const preferredId = this.selectedCollectionId === collectionId ? "" : this.selectedCollectionId;
       await this.loadCollections(preferredId);

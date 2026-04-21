@@ -47,10 +47,19 @@
   import { collections } from "$lib/stores/collections.svelte";
   import { notifications } from "$lib/stores/notifications.svelte";
   import { requestWorkspace } from "$lib/stores/request-workspace.svelte";
+  import { readCachedJson, writeCachedJson, UI_CACHE_KEYS } from "$lib/ui-cache";
+
+  function mergeCachedSettings(): AppSettings {
+    const defaults = createDefaultSettings();
+    const cached = readCachedJson<Partial<AppSettings>>(UI_CACHE_KEYS.settings);
+    if (!cached || typeof cached !== "object") {
+      return defaults;
+    }
+    return { ...defaults, ...cached };
+  }
 
   let request = $state(createRequestDraft());
-  let settings: AppSettings = $state(createDefaultSettings());
-  let settingsHydrated = $state(false);
+  let settings: AppSettings = $state(mergeCachedSettings());
   let history: HistoryEntrySummary[] = $state([]);
   let isHistoryLoading = $state(true);
   let isHistoryDetailLoading = $state(false);
@@ -59,9 +68,16 @@
   let historyErrorText = $state("");
   let historyDetailErrorText = $state("");
   let settingsErrorText = $state("");
-  let environments: EnvironmentSummary[] = $state([]);
-  let activeEnvironmentId = $state("");
+  let environments: EnvironmentSummary[] = $state(
+    readCachedJson<EnvironmentSummary[]>(UI_CACHE_KEYS.environmentsList) ?? []
+  );
+  let activeEnvironmentId = $state(
+    readCachedJson<string>(UI_CACHE_KEYS.environmentsActiveId) ?? ""
+  );
   let activeEnvironmentDetail: EnvironmentDetail | null = $state(null);
+  let cachedActiveEnvironmentVarCount: number | null = $state(
+    readCachedJson<number>(UI_CACHE_KEYS.environmentsActiveVarCount)
+  );
   let isEnvironmentsLoading = $state(true);
   let isEnvironmentChanging = $state(false);
   let environmentsErrorText = $state("");
@@ -91,6 +107,11 @@
   let activeTabIsSending = $derived(activeTab?.id === requestWorkspace.inFlightTabId);
   let activeTabSendLocked = $derived(
     Boolean(requestWorkspace.inFlightTabId && requestWorkspace.inFlightTabId !== activeTab?.id)
+  );
+  let activeEnvironmentVarCount: number | null = $derived(
+    activeEnvironmentDetail
+      ? computeActiveEnvironmentVarCount(activeEnvironmentDetail)
+      : cachedActiveEnvironmentVarCount
   );
   let isSyncingRequestFromWorkspace = false;
   let requestOwnerTabId = "";
@@ -242,11 +263,10 @@ paths:
   async function loadSettings() {
     try {
       settings = await getSettings();
+      writeCachedJson(UI_CACHE_KEYS.settings, settings);
       settingsErrorText = "";
     } catch (error) {
       settingsErrorText = error instanceof Error ? error.message : String(error);
-    } finally {
-      settingsHydrated = true;
     }
   }
 
@@ -264,13 +284,16 @@ paths:
       ...settings,
       isHistoryCollapsed: isCollapsed
     };
+    writeCachedJson(UI_CACHE_KEYS.settings, settings);
     isHistoryCollapseSaving = true;
 
     try {
       settings = await updateSettings(settings);
+      writeCachedJson(UI_CACHE_KEYS.settings, settings);
       settingsErrorText = "";
     } catch (error) {
       settings = previousSettings;
+      writeCachedJson(UI_CACHE_KEYS.settings, previousSettings);
       settingsErrorText = error instanceof Error ? error.message : String(error);
       notifications.error(settingsErrorText, "History preference not saved");
     } finally {
@@ -304,6 +327,9 @@ paths:
       activeEnvironmentId = activeEnvironment?.id ?? "";
       environmentsErrorText = "";
 
+      writeCachedJson(UI_CACHE_KEYS.environmentsList, environments);
+      writeCachedJson(UI_CACHE_KEYS.environmentsActiveId, activeEnvironmentId);
+
       const detailEnvironmentId =
         preferredEnvironmentId && environments.some((environment) => environment.id === preferredEnvironmentId)
           ? preferredEnvironmentId
@@ -314,11 +340,31 @@ paths:
       } else {
         activeEnvironmentDetail = null;
       }
+
+      cacheActiveEnvironmentVarCount(activeEnvironmentDetail);
     } catch (error) {
       environmentsErrorText = error instanceof Error ? error.message : String(error);
       activeEnvironmentDetail = null;
+      cacheActiveEnvironmentVarCount(null);
     } finally {
       isEnvironmentsLoading = false;
+    }
+  }
+
+  function computeActiveEnvironmentVarCount(detail: EnvironmentDetail | null): number | null {
+    if (!detail) {
+      return null;
+    }
+    return detail.variables.filter((variable) => variable.enabled && variable.key.trim()).length;
+  }
+
+  function cacheActiveEnvironmentVarCount(detail: EnvironmentDetail | null) {
+    const count = computeActiveEnvironmentVarCount(detail);
+    cachedActiveEnvironmentVarCount = count;
+    if (count === null) {
+      writeCachedJson(UI_CACHE_KEYS.environmentsActiveVarCount, null);
+    } else {
+      writeCachedJson(UI_CACHE_KEYS.environmentsActiveVarCount, count);
     }
   }
 
@@ -422,6 +468,8 @@ paths:
 
     activeEnvironmentDetail = updated;
     activeEnvironmentId = updated.id;
+    cacheActiveEnvironmentVarCount(updated);
+    writeCachedJson(UI_CACHE_KEYS.environmentsActiveId, activeEnvironmentId);
     environments = environments.map((environment) =>
       environment.id === updated.id
         ? {
@@ -433,6 +481,7 @@ paths:
           }
         : environment
     );
+    writeCachedJson(UI_CACHE_KEYS.environmentsList, environments);
 
     return updated;
   }
@@ -940,11 +989,9 @@ paths:
         </select>
       </label>
 
-      {#if isEnvironmentsLoading}
-        <span class="profile-env-hint">Loading...</span>
-      {:else if activeEnvironmentDetail}
+      {#if activeEnvironmentVarCount !== null}
         <span class="profile-env-hint">
-          {activeEnvironmentDetail.variables.filter((item) => item.enabled && item.key.trim()).length} var{activeEnvironmentDetail.variables.filter((item) => item.enabled && item.key.trim()).length === 1 ? "" : "s"}
+          {activeEnvironmentVarCount} var{activeEnvironmentVarCount === 1 ? "" : "s"}
         </span>
       {/if}
     </div>
@@ -962,7 +1009,6 @@ paths:
     tabs={requestWorkspace.tabs}
     activeTabId={requestWorkspace.activeTabId}
     inFlightTabId={requestWorkspace.inFlightTabId}
-    isHydrated={requestWorkspace.initialized}
     scrollRequest={requestTabsScrollRequest}
     onIsDirty={(tab) => requestWorkspace.isDirty(tab)}
     onActivate={handleActivateTab}
@@ -970,38 +1016,35 @@ paths:
     onCreate={handleNewRequest}
   />
 
-  {#if requestWorkspace.initialized}
-    <RequestEditor
-      bind:request
-      environmentVariables={activeEnvironmentDetail?.variables ?? []}
-      isSending={activeTabIsSending}
-      isCanceling={requestWorkspace.isCanceling}
-      isSaving={collections.isSavingRequest}
-      saveLabel={activeTab?.savedRequestId ? "Update" : "Save"}
-      saveDisabled={activeTabIsSending}
-      sendDisabled={activeTabSendLocked}
-      handleNewRequest={handleNewRequest}
-      handleOpenImport={openRequestImportDialog}
-      handleSendRequest={handleSend}
-      handleCancelRequest={handleCancelRequest}
-      handleSaveRequest={handleSaveRequest}
-      showSaveMenu={collections.collections.length > 0}
-      handleSaveAsRequest={handleSaveAsNewRequest}
-    />
+  <RequestEditor
+    bind:request
+    environmentVariables={activeEnvironmentDetail?.variables ?? []}
+    isSending={activeTabIsSending}
+    isCanceling={requestWorkspace.isCanceling}
+    isSaving={collections.isSavingRequest}
+    saveLabel={activeTab?.savedRequestId ? "Update" : "Save"}
+    saveDisabled={activeTabIsSending}
+    sendDisabled={activeTabSendLocked}
+    handleNewRequest={handleNewRequest}
+    handleOpenImport={openRequestImportDialog}
+    handleSendRequest={handleSend}
+    handleCancelRequest={handleCancelRequest}
+    handleSaveRequest={handleSaveRequest}
+    showSaveMenu={collections.collections.length > 0}
+    handleSaveAsRequest={handleSaveAsNewRequest}
+  />
 
-    {#if activeTabErrorText}
-      <div class="response-error">{activeTabErrorText}</div>
-    {/if}
-
-    <ResponseViewer response={activeTabResponse} scriptExecution={activeTabScriptExecution} />
+  {#if activeTabErrorText}
+    <div class="response-error">{activeTabErrorText}</div>
   {/if}
+
+  <ResponseViewer response={activeTabResponse} scriptExecution={activeTabScriptExecution} />
 
   <HistoryPanel
     items={history}
     isLoading={isHistoryLoading}
     errorText={historyErrorText}
     isCollapsed={settings.isHistoryCollapsed}
-    isHydrated={settingsHydrated}
     selectedId={selectedHistoryId}
     detail={selectedHistoryDetail}
     detailErrorText={historyDetailErrorText}

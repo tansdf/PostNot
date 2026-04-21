@@ -7,7 +7,6 @@
     isLoading = false,
     errorText = "",
     isCollapsed = false,
-    isHydrated = true,
     selectedId = "",
     detail = null,
     detailErrorText = "",
@@ -24,7 +23,6 @@
     isLoading?: boolean;
     errorText?: string;
     isCollapsed?: boolean;
-    isHydrated?: boolean;
     selectedId?: string;
     detail?: HistoryEntryDetail | null;
     detailErrorText?: string;
@@ -61,38 +59,34 @@
   <div class="editor-header">
     <div class="history-heading">
       <h2>History</h2>
-      {#if isHydrated}
-        <button
-          class="system-button"
-          type="button"
-          aria-expanded={!isCollapsed}
-          onclick={() => onToggleCollapse(!isCollapsed)}
-        >
-          {isCollapsed ? "Expand" : "Collapse"}
-        </button>
-      {/if}
+      <button
+        class="system-button"
+        type="button"
+        aria-expanded={!isCollapsed}
+        onclick={() => onToggleCollapse(!isCollapsed)}
+      >
+        {isCollapsed ? "Expand" : "Collapse"}
+      </button>
     </div>
 
-    {#if isHydrated}
-      <div class="history-toolbar">
-        {#if isLoading}
-          <span class="history-meta">Refreshing...</span>
-        {:else}
-          <span class="history-meta">{items.length} entries</span>
-        {/if}
+    <div class="history-toolbar">
+      {#if isLoading}
+        <span class="history-meta">Refreshing...</span>
+      {:else}
+        <span class="history-meta">{items.length} entries</span>
+      {/if}
 
-        <button class="ghost-button" type="button" disabled={isClearing || items.length === 0} onclick={() => onClear()}>
-          {isClearing ? "Clearing..." : "Clear history"}
-        </button>
-      </div>
-    {/if}
+      <button class="ghost-button" type="button" disabled={isClearing || items.length === 0} onclick={() => onClear()}>
+        {isClearing ? "Clearing..." : "Clear history"}
+      </button>
+    </div>
   </div>
 
-  {#if isHydrated && !isCollapsed && errorText}
+  {#if !isCollapsed && errorText}
     <div class="response-error">{errorText}</div>
-  {:else if isHydrated && !isCollapsed && items.length === 0 && !isLoading}
+  {:else if !isCollapsed && items.length === 0 && !isLoading}
     <div class="empty-state">Request history will appear here after the first send.</div>
-  {:else if isHydrated && !isCollapsed}
+  {:else if !isCollapsed}
     <div class={["history-content", hasActiveDetail && "history-content-detail-open"]}>
       <div class="history-list-column">
         <div class="history-list">

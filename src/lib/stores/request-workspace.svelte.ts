@@ -18,9 +18,27 @@ import {
   createRequestDraft
 } from "$lib/api/types";
 import { createEmptyRequestScriptExecution } from "$lib/request-scripts";
+import { readCachedJson, writeCachedJson, UI_CACHE_KEYS } from "$lib/ui-cache";
 
 const REQUEST_PERSIST_DEBOUNCE_MS = 300;
 const VALID_TAB_SOURCES = new Set(["blank", "saved", "imported", "history"]);
+
+function seedWorkspaceFromCache(): RequestWorkspaceState {
+  const cachedTabs = readCachedJson<RequestWorkspaceTab[]>(UI_CACHE_KEYS.workspaceTabs);
+  const cachedActiveTabId = readCachedJson<string>(UI_CACHE_KEYS.workspaceActiveTabId) ?? "";
+
+  if (!cachedTabs || cachedTabs.length === 0) {
+    const fallbackTab = createBlankWorkspaceTab();
+    return { tabs: [fallbackTab], activeTabId: fallbackTab.id };
+  }
+
+  const normalizedTabs = cachedTabs.map(normalizeWorkspaceTab);
+  const activeTabId = normalizedTabs.some((tab) => tab.id === cachedActiveTabId)
+    ? cachedActiveTabId
+    : normalizedTabs[0].id;
+
+  return { tabs: normalizedTabs, activeTabId };
+}
 
 function createId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -121,11 +139,13 @@ function normalizeWorkspaceState(state: RequestWorkspaceState | null): RequestWo
   };
 }
 
+const INITIAL_WORKSPACE_STATE = seedWorkspaceFromCache();
+
 class RequestWorkspaceStore {
   initialized = $state(false);
   isInitializing = $state(false);
-  tabs = $state.raw<RequestWorkspaceTab[]>([]);
-  activeTabId = $state("");
+  tabs = $state.raw<RequestWorkspaceTab[]>(INITIAL_WORKSPACE_STATE.tabs);
+  activeTabId = $state(INITIAL_WORKSPACE_STATE.activeTabId);
   inFlightTabId = $state("");
   isCanceling = $state(false);
   persistTimer: ReturnType<typeof setTimeout> | null = null;
@@ -163,6 +183,7 @@ class RequestWorkspaceStore {
       this.tabs = nextState.tabs;
       this.activeTabId = nextState.activeTabId;
       this.initialized = true;
+      this.writeCache();
 
       if (!restored) {
         await this.persistNow();
@@ -170,6 +191,11 @@ class RequestWorkspaceStore {
     } finally {
       this.isInitializing = false;
     }
+  }
+
+  private writeCache() {
+    writeCachedJson(UI_CACHE_KEYS.workspaceTabs, this.tabs);
+    writeCachedJson(UI_CACHE_KEYS.workspaceActiveTabId, this.activeTabId);
   }
 
   activateTab(tabId: string) {
@@ -345,6 +371,8 @@ class RequestWorkspaceStore {
       return;
     }
 
+    this.writeCache();
+
     if (this.persistTimer) {
       window.clearTimeout(this.persistTimer);
     }
@@ -365,6 +393,7 @@ class RequestWorkspaceStore {
       this.persistTimer = null;
     }
 
+    this.writeCache();
     await saveRequestWorkspaceState(this.serialize());
   }
 

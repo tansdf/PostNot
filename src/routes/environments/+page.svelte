@@ -25,11 +25,23 @@
   import { createStaleGuard } from "$lib/async-stale-guard";
   import { modalFocusTrap } from "$lib/modal-focus-trap";
   import { notifications } from "$lib/stores/notifications.svelte";
+  import { readCachedJson, writeCachedJson, UI_CACHE_KEYS } from "$lib/ui-cache";
 
   const ENVIRONMENT_AUTOSAVE_DELAY_MS = 400;
 
-  let environments: EnvironmentSummary[] = $state([]);
-  let settings: AppSettings = $state(createDefaultSettings());
+  function mergeCachedSettings(): AppSettings {
+    const defaults = createDefaultSettings();
+    const cached = readCachedJson<Partial<AppSettings>>(UI_CACHE_KEYS.settings);
+    if (!cached || typeof cached !== "object") {
+      return defaults;
+    }
+    return { ...defaults, ...cached };
+  }
+
+  let environments: EnvironmentSummary[] = $state(
+    readCachedJson<EnvironmentSummary[]>(UI_CACHE_KEYS.environmentsList) ?? []
+  );
+  let settings: AppSettings = $state(mergeCachedSettings());
   let selectedEnvironmentId = $state("");
   let environmentDetail: EnvironmentDetail | null = $state(null);
   let isLoading = $state(true);
@@ -152,6 +164,7 @@
   async function loadSettings() {
     try {
       settings = await getSettings();
+      writeCachedJson(UI_CACHE_KEYS.settings, settings);
     } catch (error) {
       errorText = error instanceof Error ? error.message : String(error);
     }
@@ -188,6 +201,7 @@
       }
 
       errorText = "";
+      writeCachedJson(UI_CACHE_KEYS.environmentsList, environments);
 
       const nextEnvironmentId =
         preferredEnvironmentId && environments.some((environment) => environment.id === preferredEnvironmentId)
@@ -569,6 +583,7 @@
           }
         : environment
     );
+    writeCachedJson(UI_CACHE_KEYS.environmentsList, environments);
   }
 
   async function persistEnvironmentDetail(
@@ -731,7 +746,9 @@
       </div>
 
       {#if !environmentDetail}
-        <div class="empty-state">Select an environment to edit its variables.</div>
+        {#if !isLoading && !isDetailLoading}
+          <div class="empty-state">Select an environment to edit its variables.</div>
+        {/if}
       {:else}
         <div class="editor-block">
           <label>

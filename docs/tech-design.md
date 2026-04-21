@@ -33,7 +33,7 @@ Why this stack:
 
 ## 3. Current Application State
 
-This section reflects the code currently implemented in the repository, including the shipped `0.15.0` scripting update, the `0.15.1` route/modal polish work, the `0.16.0` OpenAPI 3 import release, the `0.17.0` multitab request workspace release, the `0.17.1` history-restore patch, the `0.17.2` requests/environments workflow follow-up, and the `0.17.3` hydration-flash polish release (see [CHANGELOG.md](../CHANGELOG.md)).
+This section reflects the code currently implemented in the repository, including the shipped `0.15.0` scripting update, the `0.15.1` route/modal polish work, the `0.16.0` OpenAPI 3 import release, the `0.17.0` multitab request workspace release, the `0.17.1` history-restore patch, the `0.17.2` requests/environments workflow follow-up, the `0.17.3` hydration-flash polish release, and the `0.17.4` follow-up that unifies hydration-flash handling through a shared synchronous paint cache (see [CHANGELOG.md](../CHANGELOG.md)).
 
 ### Implemented
 

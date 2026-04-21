@@ -80,7 +80,7 @@ body:
     attributes:
       label: Environment
       description: Platform, app version, install source, and any other relevant setup.
-      placeholder: Windows 11 / PostNot 0.17.3 / local dev build / repros with default settings
+      placeholder: Windows 11 / PostNot 0.17.4 / local dev build / repros with default settings
     validations:
       required: true
 
