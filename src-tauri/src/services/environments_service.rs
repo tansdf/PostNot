@@ -316,14 +316,27 @@ pub async fn set_active_environment(
     pool: &SqlitePool,
     environment_id: Option<&str>,
 ) -> AppResult<()> {
+    let mut transaction = pool.begin().await?;
+
+    if let Some(environment_id) = environment_id {
+        let exists: Option<String> = sqlx::query_scalar("SELECT id FROM environments WHERE id = ?1")
+            .bind(environment_id)
+            .fetch_optional(&mut *transaction)
+            .await?;
+
+        if exists.is_none() {
+            return Err(AppError::Message("Environment not found.".to_string()));
+        }
+    }
+
     sqlx::query("UPDATE environments SET is_active = 0")
-        .execute(pool)
+        .execute(&mut *transaction)
         .await?;
 
     if let Some(environment_id) = environment_id {
         let result = sqlx::query("UPDATE environments SET is_active = 1 WHERE id = ?1")
             .bind(environment_id)
-            .execute(pool)
+            .execute(&mut *transaction)
             .await?;
 
         if result.rows_affected() == 0 {
@@ -331,6 +344,7 @@ pub async fn set_active_environment(
         }
     }
 
+    transaction.commit().await?;
     Ok(())
 }
 

@@ -131,6 +131,34 @@ async fn delete_environment_removes_secret_from_store() {
     );
 }
 
+#[tokio::test]
+async fn set_active_environment_keeps_existing_active_when_target_is_missing() {
+    let pool = setup_test_db().await;
+    let first = environments_service::create_environment(&pool)
+        .await
+        .expect("create first environment");
+    let _second = environments_service::create_environment(&pool)
+        .await
+        .expect("create second environment");
+
+    environments_service::set_active_environment(&pool, Some(&first.id))
+        .await
+        .expect("activate first environment");
+
+    let error = environments_service::set_active_environment(&pool, Some("missing-environment"))
+        .await
+        .expect_err("missing environment should fail");
+    assert_eq!(error.to_string(), "Environment not found.");
+
+    let active_id: Option<String> =
+        sqlx::query_scalar("SELECT id FROM environments WHERE is_active = 1")
+            .fetch_optional(&pool)
+            .await
+            .expect("load active environment");
+
+    assert_eq!(active_id, Some(first.id));
+}
+
 #[test]
 fn resolve_string_supports_dynamic_variables() {
     let variables = HashMap::new();

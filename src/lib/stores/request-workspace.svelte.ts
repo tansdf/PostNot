@@ -12,7 +12,6 @@ import type {
 } from "$lib/api/types";
 import {
   cloneRequestDraft,
-  cloneRequestScriptExecution,
   cloneRequestWorkspaceState,
   cloneResponsePayload,
   createRequestDraft
@@ -32,7 +31,7 @@ function seedWorkspaceFromCache(): RequestWorkspaceState {
     return { tabs: [fallbackTab], activeTabId: fallbackTab.id };
   }
 
-  const normalizedTabs = cachedTabs.map(normalizeWorkspaceTab);
+  const normalizedTabs = cachedTabs.map(normalizePersistedWorkspaceTab);
   const activeTabId = normalizedTabs.some((tab) => tab.id === cachedActiveTabId)
     ? cachedActiveTabId
     : normalizedTabs[0].id;
@@ -129,8 +128,18 @@ function normalizeWorkspaceTab(tab: RequestWorkspaceTab): RequestWorkspaceTab {
   };
 }
 
+function normalizePersistedWorkspaceTab(tab: RequestWorkspaceTab): RequestWorkspaceTab {
+  const normalized = normalizeWorkspaceTab(tab);
+  return {
+    ...normalized,
+    response: null,
+    scriptExecution: createEmptyRequestScriptExecution(),
+    errorText: ""
+  };
+}
+
 function normalizeWorkspaceState(state: RequestWorkspaceState | null): RequestWorkspaceState {
-  const tabs = state?.tabs?.length ? state.tabs.map(normalizeWorkspaceTab) : [createBlankWorkspaceTab()];
+  const tabs = state?.tabs?.length ? state.tabs.map(normalizePersistedWorkspaceTab) : [createBlankWorkspaceTab()];
   const activeTabId = tabs.some((tab) => tab.id === state?.activeTabId) ? state?.activeTabId ?? tabs[0].id : tabs[0].id;
 
   return {
@@ -194,7 +203,7 @@ class RequestWorkspaceStore {
   }
 
   private writeCache() {
-    writeCachedJson(UI_CACHE_KEYS.workspaceTabs, this.tabs);
+    writeCachedJson(UI_CACHE_KEYS.workspaceTabs, this.serializeForPersistence().tabs);
     writeCachedJson(UI_CACHE_KEYS.workspaceActiveTabId, this.activeTabId);
   }
 
@@ -360,8 +369,12 @@ class RequestWorkspaceStore {
   }
 
   serialize(): RequestWorkspaceState {
+    return this.serializeForPersistence();
+  }
+
+  serializeForPersistence(): RequestWorkspaceState {
     return cloneRequestWorkspaceState({
-      tabs: this.tabs,
+      tabs: this.tabs.map(normalizePersistedWorkspaceTab),
       activeTabId: this.activeTabId
     });
   }
@@ -394,7 +407,7 @@ class RequestWorkspaceStore {
     }
 
     this.writeCache();
-    await saveRequestWorkspaceState(this.serialize());
+    await saveRequestWorkspaceState(this.serializeForPersistence());
   }
 
   private insertAfterActive(nextTab: RequestWorkspaceTab) {

@@ -6,6 +6,18 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.18.1] - 2026-04-26
+
+### Changed
+
+- Request scripts now run in a short-lived worker-backed sandbox with explicit bridges for `pn.http.send(...)` helper requests and active-environment variable writes.
+- Restored request workspaces now persist tab drafts and metadata without storing response bodies, script output, or transient tab errors in the local first-paint cache or settings-backed workspace snapshot.
+
+### Fixed
+
+- Active environment switching now verifies the target environment inside a transaction before clearing the previous active environment, so stale environment IDs no longer leave the app with no active environment.
+- Worker-backed scripts now clone Svelte reactive payloads before crossing the worker boundary and avoid invalid strict-mode shadowing, preventing script failures such as `The object can not be cloned.` and `Cannot declare a variable named eval in strict mode.`.
+
 ## [0.18.0] - 2026-04-26
 
 ### Added

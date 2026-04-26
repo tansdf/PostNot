@@ -1,4 +1,3 @@
-import { sendRequest } from "$lib/api/commands";
 import {
   createEnvironmentVariable,
   createFileRow,
@@ -14,6 +13,7 @@ import {
   type ResponsePayload,
   type ScriptTestResult
 } from "$lib/api/types";
+import type { InheritedRequestScripts } from "$lib/request-scripts";
 
 const VALID_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]);
 const VALID_BODY_MODES = new Set(["none", "json", "raw", "form-urlencoded", "multipart"]);
@@ -22,31 +22,28 @@ const VALID_API_KEY_PLACEMENTS = new Set(["header", "query"]);
 const AsyncFunction = Object.getPrototypeOf(async function () {
   return undefined;
 }).constructor as new (argumentName: string, body: string) => (pn: unknown) => Promise<unknown>;
-
-let scriptRowCounter = 0;
-let scriptTestCounter = 0;
-
-class ScriptAssertionError extends Error {}
+const SANDBOX_PREAMBLE = `"use strict";
+const window = undefined;
+const document = undefined;
+const localStorage = undefined;
+const sessionStorage = undefined;
+const indexedDB = undefined;
+const caches = undefined;
+const fetch = undefined;
+const XMLHttpRequest = undefined;
+const WebSocket = undefined;
+const EventSource = undefined;
+const Worker = undefined;
+const SharedWorker = undefined;
+const importScripts = undefined;
+const Function = undefined;
+const self = undefined;
+const globalThis = undefined;
+`;
 
 type VariableMap = Map<string, string>;
-export type InheritedRequestScripts = {
-  preRequestScript: string;
-  testScript: string;
-  folderScripts?: {
-    name: string;
-    preRequestScript: string;
-    testScript: string;
-  }[];
-};
 
-export type ScriptRuntimeContext = {
-  activeEnvironment?: EnvironmentDetail | null;
-  persistActiveEnvironment?: (environment: EnvironmentDetail) => Promise<EnvironmentDetail>;
-};
-
-const SCRIPT_WORKER_TIMEOUT_MS = 60_000;
-
-type ScriptWorkerRequest =
+type WorkerRequest =
   | {
       id: string;
       kind: "pre-request";
@@ -65,16 +62,39 @@ type ScriptWorkerRequest =
       activeEnvironment: EnvironmentDetail | null;
     };
 
-type ScriptWorkerToMainMessage =
+type WorkerToMainMessage =
   | { type: "done"; id: string; result: unknown }
   | { type: "error"; id: string; errorText: string }
   | { type: "http-send"; id: string; bridgeId: string; request: RequestDraft }
   | { type: "persist-environment"; id: string; bridgeId: string; environment: EnvironmentDetail };
 
-type ScriptMainToWorkerMessage =
-  | ScriptWorkerRequest
+type MainToWorkerMessage =
+  | WorkerRequest
   | { type: "bridge-result"; id: string; bridgeId: string; value: unknown }
   | { type: "bridge-error"; id: string; bridgeId: string; errorText: string };
+type BridgeRequestMessage =
+  | Omit<Extract<WorkerToMainMessage, { type: "http-send" }>, "id" | "bridgeId">
+  | Omit<Extract<WorkerToMainMessage, { type: "persist-environment" }>, "id" | "bridgeId">;
+
+type WorkerScope = {
+  postMessage: (message: WorkerToMainMessage) => void;
+  onmessage: ((event: MessageEvent<MainToWorkerMessage>) => void) | null;
+};
+
+const workerScope = globalThis as unknown as WorkerScope;
+const bridgeCallbacks = new Map<
+  string,
+  {
+    resolve: (value: unknown) => void;
+    reject: (error: Error) => void;
+  }
+>();
+
+let scriptRowCounter = 0;
+let scriptTestCounter = 0;
+let bridgeCounter = 0;
+
+class ScriptAssertionError extends Error {}
 
 function nextScriptRowId(prefix: string) {
   scriptRowCounter += 1;
@@ -84,6 +104,11 @@ function nextScriptRowId(prefix: string) {
 function nextScriptTestId() {
   scriptTestCounter += 1;
   return `script-test-${scriptTestCounter}`;
+}
+
+function nextBridgeId() {
+  bridgeCounter += 1;
+  return `bridge-${bridgeCounter}`;
 }
 
 function normalizeScriptError(error: unknown) {
@@ -106,16 +131,22 @@ function normalizeEnabled(value: unknown, fallback = true) {
   return typeof value === "boolean" ? value : fallback;
 }
 
+function cloneRequestDraft(request: RequestDraft): RequestDraft {
+  return JSON.parse(JSON.stringify(request)) as RequestDraft;
+}
+
+function cloneEnvironmentDetail(environment: EnvironmentDetail): EnvironmentDetail {
+  return JSON.parse(JSON.stringify(environment)) as EnvironmentDetail;
+}
+
 function buildVariableMap(environmentVariables: EnvironmentVariable[]) {
   const variables = new Map<string, string>();
 
   for (const variable of environmentVariables) {
     const key = variable.key.trim();
-    if (!variable.enabled || !key) {
-      continue;
+    if (variable.enabled && key) {
+      variables.set(key, variable.value);
     }
-
-    variables.set(key, variable.value);
   }
 
   return variables;
@@ -126,6 +157,14 @@ function syncVariableMap(target: VariableMap, source: VariableMap) {
   for (const [key, value] of source.entries()) {
     target.set(key, value);
   }
+}
+
+function createEmptyExecution(): RequestScriptExecution {
+  return {
+    preRequestErrorText: "",
+    testScriptErrorText: "",
+    tests: []
+  };
 }
 
 function findEnvironmentVariableIndex(variables: EnvironmentVariable[], name: string) {
@@ -167,55 +206,16 @@ function buildFileRow(name: string, path: string, enabled = true): FileRow {
   };
 }
 
-function createEmptyExecution(): RequestScriptExecution {
-  return {
-    preRequestErrorText: "",
-    testScriptErrorText: "",
-    tests: []
-  };
-}
-
-function cloneRequestDraft(request: RequestDraft): RequestDraft {
-  return JSON.parse(JSON.stringify(request)) as RequestDraft;
-}
-
-function cloneEnvironmentDetail(environment: EnvironmentDetail): EnvironmentDetail {
-  return JSON.parse(JSON.stringify(environment)) as EnvironmentDetail;
-}
-
-function cloneEnvironmentVariables(variables: EnvironmentVariable[]): EnvironmentVariable[] {
-  return JSON.parse(JSON.stringify(variables)) as EnvironmentVariable[];
-}
-
-function cloneResponsePayload(response: ResponsePayload): ResponsePayload {
-  return JSON.parse(JSON.stringify(response)) as ResponsePayload;
-}
-
-function cloneInheritedScripts(scripts: InheritedRequestScripts | null): InheritedRequestScripts | null {
-  return scripts ? (JSON.parse(JSON.stringify(scripts)) as InheritedRequestScripts) : null;
-}
-
-function cloneScriptWorkerRequest(request: ScriptWorkerRequest): ScriptWorkerRequest {
-  if (request.kind === "pre-request") {
-    return {
-      id: request.id,
-      kind: request.kind,
-      request: cloneRequestDraft(request.request),
-      environmentVariables: cloneEnvironmentVariables(request.environmentVariables),
-      inheritedScripts: cloneInheritedScripts(request.inheritedScripts),
-      activeEnvironment: request.activeEnvironment ? cloneEnvironmentDetail(request.activeEnvironment) : null
-    };
+function formatValue(value: unknown) {
+  if (typeof value === "string") {
+    return value;
   }
 
-  return {
-    id: request.id,
-    kind: request.kind,
-    request: cloneRequestDraft(request.request),
-    response: cloneResponsePayload(request.response),
-    environmentVariables: cloneEnvironmentVariables(request.environmentVariables),
-    inheritedScripts: cloneInheritedScripts(request.inheritedScripts),
-    activeEnvironment: request.activeEnvironment ? cloneEnvironmentDetail(request.activeEnvironment) : null
-  };
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
 }
 
 function isDeepEqual(left: unknown, right: unknown): boolean {
@@ -250,18 +250,6 @@ function isDeepEqual(left: unknown, right: unknown): boolean {
   }
 
   return false;
-}
-
-function formatValue(value: unknown) {
-  if (typeof value === "string") {
-    return value;
-  }
-
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
 }
 
 function createExpectation(actual: unknown) {
@@ -377,12 +365,7 @@ function createRequestFacade(request: RequestDraft, variables: VariableMap) {
       const nextValue = asString(value);
       const index = findRowIndex(request.queryParams, nextKey);
       if (index >= 0) {
-        request.queryParams[index] = {
-          ...request.queryParams[index],
-          key: nextKey,
-          value: nextValue,
-          enabled: true
-        };
+        request.queryParams[index] = { ...request.queryParams[index], key: nextKey, value: nextValue, enabled: true };
         return;
       }
 
@@ -393,11 +376,7 @@ function createRequestFacade(request: RequestDraft, variables: VariableMap) {
       request.queryParams = request.queryParams.filter((row) => row.key.trim().toLowerCase() !== normalizedKey);
     },
     setRawBody(value: string) {
-      request.body = {
-        ...request.body,
-        mode: "raw",
-        raw: asString(value)
-      };
+      request.body = { ...request.body, mode: "raw", raw: asString(value) };
     },
     setJsonBody(value: unknown) {
       request.body = {
@@ -407,18 +386,10 @@ function createRequestFacade(request: RequestDraft, variables: VariableMap) {
       };
     },
     clearBody() {
-      request.body = {
-        ...request.body,
-        mode: "none",
-        raw: ""
-      };
+      request.body = { ...request.body, mode: "none", raw: "" };
     },
     setBearerToken(token: string) {
-      request.auth = {
-        ...request.auth,
-        type: "bearer",
-        bearerToken: asString(token)
-      };
+      request.auth = { ...request.auth, type: "bearer", bearerToken: asString(token) };
     },
     setBasicAuth(username: string, password: string) {
       request.auth = {
@@ -457,14 +428,74 @@ function createRequestFacade(request: RequestDraft, variables: VariableMap) {
   };
 }
 
-function createVariableFacade(variables: VariableMap, runtimeContext: ScriptRuntimeContext = {}) {
-  let draftEnvironment = runtimeContext.activeEnvironment
-    ? cloneEnvironmentDetail(runtimeContext.activeEnvironment)
-    : null;
+function createResponseFacade(response: ResponsePayload) {
+  return {
+    code: response.statusCode,
+    status: response.statusText,
+    durationMs: response.durationMs,
+    sizeBytes: response.sizeBytes,
+    errorText: response.errorText,
+    executedAt: response.executedAt,
+    text() {
+      return response.bodyText;
+    },
+    json() {
+      return JSON.parse(response.bodyText);
+    },
+    header(name: string) {
+      const normalizedName = asString(name).trim().toLowerCase();
+      return response.headers.find((header) => header.key.trim().toLowerCase() === normalizedName)?.value ?? null;
+    },
+    headers: response.headers.map((header) => ({
+      key: header.key,
+      value: header.value
+    })),
+    raw: response
+  };
+}
+
+function bridgeToMain<T>(
+  requestId: string,
+  message: BridgeRequestMessage
+): Promise<T> {
+  const bridgeId = nextBridgeId();
+
+  return new Promise<T>((resolve, reject) => {
+    bridgeCallbacks.set(bridgeId, {
+      resolve: (value) => resolve(value as T),
+      reject
+    });
+    workerScope.postMessage({
+      ...message,
+      id: requestId,
+      bridgeId
+    } as WorkerToMainMessage);
+  });
+}
+
+function createHttpFacade(requestId: string) {
+  return {
+    async send(input: unknown) {
+      const preparedRequest = normalizeScriptRequestInput(input);
+      const response = await bridgeToMain<ResponsePayload>(requestId, {
+        type: "http-send",
+        request: preparedRequest
+      });
+      return createResponseFacade(response);
+    }
+  };
+}
+
+function createVariableFacade(
+  requestId: string,
+  variables: VariableMap,
+  activeEnvironment: EnvironmentDetail | null
+) {
+  let draftEnvironment = activeEnvironment ? cloneEnvironmentDetail(activeEnvironment) : null;
   let hasPendingWrites = false;
 
   function assertWritableEnvironment() {
-    if (!draftEnvironment || !runtimeContext.persistActiveEnvironment) {
+    if (!draftEnvironment) {
       throw new Error("Active environment writes are unavailable because no active environment is selected.");
     }
   }
@@ -495,7 +526,6 @@ function createVariableFacade(variables: VariableMap, runtimeContext: ScriptRunt
       },
       async set(name: string, value: string, options: { secret?: boolean; enabled?: boolean } = {}) {
         const environment = writableEnvironment();
-
         const key = normalizeEnvironmentVariableName(name);
         const nextValue = asString(value);
         const nextEnabled = typeof options.enabled === "boolean" ? options.enabled : true;
@@ -503,25 +533,24 @@ function createVariableFacade(variables: VariableMap, runtimeContext: ScriptRunt
 
         if (existingIndex >= 0) {
           const existing = environment.variables[existingIndex]!;
-          const nextVariable: EnvironmentVariable = {
+          environment.variables[existingIndex] = {
             ...existing,
             key,
             value: nextValue,
             enabled: nextEnabled,
             isSecret: typeof options.secret === "boolean" ? options.secret : existing.isSecret
           };
-
-          environment.variables[existingIndex] = nextVariable;
         } else {
-          const nextVariable: EnvironmentVariable = {
-            ...createEnvironmentVariable(),
-            key,
-            value: nextValue,
-            enabled: nextEnabled,
-            isSecret: options.secret ?? false
-          };
-
-          environment.variables = [...environment.variables, nextVariable];
+          environment.variables = [
+            ...environment.variables,
+            {
+              ...createEnvironmentVariable(),
+              key,
+              value: nextValue,
+              enabled: nextEnabled,
+              isSecret: options.secret ?? false
+            }
+          ];
         }
 
         syncDraftVariablesToMap();
@@ -529,7 +558,6 @@ function createVariableFacade(variables: VariableMap, runtimeContext: ScriptRunt
       },
       async remove(name: string) {
         const environment = writableEnvironment();
-
         const key = normalizeEnvironmentVariableName(name);
         environment.variables = environment.variables.filter(
           (variable) => variable.key.trim().toLowerCase() !== key.toLowerCase()
@@ -539,41 +567,18 @@ function createVariableFacade(variables: VariableMap, runtimeContext: ScriptRunt
       }
     },
     async flushPendingWrites() {
-      if (!hasPendingWrites || !draftEnvironment || !runtimeContext.persistActiveEnvironment) {
+      if (!hasPendingWrites || !draftEnvironment) {
         return;
       }
 
-      const persisted = await runtimeContext.persistActiveEnvironment(cloneEnvironmentDetail(draftEnvironment));
+      const persisted = await bridgeToMain<EnvironmentDetail>(requestId, {
+        type: "persist-environment",
+        environment: cloneEnvironmentDetail(draftEnvironment)
+      });
       draftEnvironment = cloneEnvironmentDetail(persisted);
       syncVariableMap(variables, buildVariableMap(draftEnvironment.variables));
       hasPendingWrites = false;
     }
-  };
-}
-
-function createResponseFacade(response: ResponsePayload) {
-  return {
-    code: response.statusCode,
-    status: response.statusText,
-    durationMs: response.durationMs,
-    sizeBytes: response.sizeBytes,
-    errorText: response.errorText,
-    executedAt: response.executedAt,
-    text() {
-      return response.bodyText;
-    },
-    json() {
-      return JSON.parse(response.bodyText);
-    },
-    header(name: string) {
-      const normalizedName = asString(name).trim().toLowerCase();
-      return response.headers.find((header) => header.key.trim().toLowerCase() === normalizedName)?.value ?? null;
-    },
-    headers: response.headers.map((header) => ({
-      key: header.key,
-      value: header.value
-    })),
-    raw: response
   };
 }
 
@@ -584,13 +589,7 @@ function normalizeKeyValueRows(value: unknown): KeyValueRow[] {
         return [];
       }
 
-      return [
-        buildRow(
-          asString(entry.key ?? ""),
-          asString(entry.value ?? ""),
-          normalizeEnabled(entry.enabled)
-        )
-      ];
+      return [buildRow(asString(entry.key ?? ""), asString(entry.value ?? ""), normalizeEnabled(entry.enabled))];
     });
   }
 
@@ -626,30 +625,15 @@ function normalizeFileRows(value: unknown): FileRow[] {
 
 function normalizeBody(value: unknown): RequestBody {
   if (value == null) {
-    return {
-      mode: "none",
-      raw: "",
-      form: [],
-      files: []
-    };
+    return { mode: "none", raw: "", form: [], files: [] };
   }
 
   if (typeof value === "string") {
-    return {
-      mode: "raw",
-      raw: value,
-      form: [],
-      files: []
-    };
+    return { mode: "raw", raw: value, form: [], files: [] };
   }
 
   if (!isRecord(value)) {
-    return {
-      mode: "raw",
-      raw: asString(value),
-      form: [],
-      files: []
-    };
+    return { mode: "raw", raw: asString(value), form: [], files: [] };
   }
 
   if (typeof value.mode === "string" && VALID_BODY_MODES.has(value.mode)) {
@@ -744,211 +728,36 @@ function normalizeScriptRequestInput(input: unknown): RequestDraft {
   };
 }
 
-function createHttpFacade() {
-  return {
-    async send(input: unknown) {
-      const preparedRequest = normalizeScriptRequestInput(input);
-      const result = await sendRequest(preparedRequest, { persistHistory: false });
-      return createResponseFacade(result.response);
-    }
-  };
-}
-
-export function createEmptyRequestScriptExecution() {
-  return createEmptyExecution();
-}
-
-async function runScriptInWorker<T>(
-  request: ScriptWorkerRequest,
-  runtimeContext: ScriptRuntimeContext
-): Promise<T> {
-  if (typeof Worker === "undefined") {
-    throw new Error("Script workers are unavailable in this runtime.");
-  }
-
-  const workerRequest = cloneScriptWorkerRequest(request);
-  const worker = new Worker(new URL("./request-script-worker.ts", import.meta.url), {
-    type: "module"
-  });
-
-  return new Promise<T>((resolve, reject) => {
-    let settled = false;
-    const timeoutId = window.setTimeout(() => {
-      finish("reject", new Error("Script execution timed out."));
-    }, SCRIPT_WORKER_TIMEOUT_MS);
-
-    function finish(mode: "resolve" | "reject", value: T | Error) {
-      if (settled) {
-        return;
-      }
-
-      settled = true;
-      window.clearTimeout(timeoutId);
-      worker.terminate();
-
-      if (mode === "resolve") {
-        resolve(value as T);
-      } else {
-        reject(value);
-      }
-    }
-
-    worker.onmessage = (event: MessageEvent<ScriptWorkerToMainMessage>) => {
-      const message = event.data;
-
-      if (message.id !== workerRequest.id) {
-        return;
-      }
-
-      if (message.type === "done") {
-        finish("resolve", message.result as T);
-        return;
-      }
-
-      if (message.type === "error") {
-        finish("reject", new Error(message.errorText));
-        return;
-      }
-
-      if (message.type === "http-send") {
-        void sendRequest(message.request, { persistHistory: false })
-          .then((result) => {
-            if (settled) {
-              return;
-            }
-            worker.postMessage({
-              type: "bridge-result",
-              id: workerRequest.id,
-              bridgeId: message.bridgeId,
-              value: result.response
-            } satisfies ScriptMainToWorkerMessage);
-          })
-          .catch((error) => {
-            if (settled) {
-              return;
-            }
-            worker.postMessage({
-              type: "bridge-error",
-              id: workerRequest.id,
-              bridgeId: message.bridgeId,
-              errorText: normalizeScriptError(error)
-            } satisfies ScriptMainToWorkerMessage);
-          });
-        return;
-      }
-
-      if (message.type === "persist-environment") {
-        if (!runtimeContext.persistActiveEnvironment) {
-          worker.postMessage({
-            type: "bridge-error",
-            id: workerRequest.id,
-            bridgeId: message.bridgeId,
-            errorText: "Active environment writes are unavailable because no active environment is selected."
-          } satisfies ScriptMainToWorkerMessage);
-          return;
-        }
-
-        void runtimeContext.persistActiveEnvironment(message.environment)
-          .then((environment) => {
-            if (settled) {
-              return;
-            }
-            worker.postMessage({
-              type: "bridge-result",
-              id: workerRequest.id,
-              bridgeId: message.bridgeId,
-              value: environment
-            } satisfies ScriptMainToWorkerMessage);
-          })
-          .catch((error) => {
-            if (settled) {
-              return;
-            }
-            worker.postMessage({
-              type: "bridge-error",
-              id: workerRequest.id,
-              bridgeId: message.bridgeId,
-              errorText: normalizeScriptError(error)
-            } satisfies ScriptMainToWorkerMessage);
-          });
-      }
-    };
-
-    worker.onerror = (event) => {
-      finish("reject", new Error(event.message || "Script worker failed."));
-    };
-
-    worker.postMessage(workerRequest satisfies ScriptMainToWorkerMessage);
-  });
-}
-
-function scriptWorkerRequestId(prefix: string) {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-export async function runPreRequestScript(
-  request: RequestDraft,
-  environmentVariables: EnvironmentVariable[],
-  inheritedScripts: InheritedRequestScripts | null = null,
-  runtimeContext: ScriptRuntimeContext = {}
-): Promise<{ request: RequestDraft; errorText: string }> {
-  try {
-    return await runScriptInWorker(
-      {
-        id: scriptWorkerRequestId("pre-request"),
-        kind: "pre-request",
-        request,
-        environmentVariables,
-        inheritedScripts,
-        activeEnvironment: runtimeContext.activeEnvironment ?? null
-      },
-      runtimeContext
-    );
-  } catch (error) {
-    return {
-      request: cloneRequestDraft(request),
-      errorText: `Script worker: ${normalizeScriptError(error)}`
-    };
-  }
-}
-
-async function runPreRequestScriptInPage(
-  request: RequestDraft,
-  environmentVariables: EnvironmentVariable[],
-  inheritedScripts: InheritedRequestScripts | null = null,
-  runtimeContext: ScriptRuntimeContext = {},
-  workerError: unknown = null
-): Promise<{ request: RequestDraft; errorText: string }> {
+async function runPreRequestScript(request: Extract<WorkerRequest, { kind: "pre-request" }>) {
   const scriptSources = [
-    { label: "Collection pre-request script", script: inheritedScripts?.preRequestScript ?? "" },
-    ...(inheritedScripts?.folderScripts ?? []).map((folder) => ({
+    { label: "Collection pre-request script", script: request.inheritedScripts?.preRequestScript ?? "" },
+    ...(request.inheritedScripts?.folderScripts ?? []).map((folder) => ({
       label: `Folder pre-request script (${folder.name})`,
       script: folder.preRequestScript
     })),
-    { label: "Pre-request script", script: request.preRequestScript }
+    { label: "Pre-request script", script: request.request.preRequestScript }
   ].filter((source) => source.script.trim());
 
   if (scriptSources.length === 0) {
     return {
-      request: cloneRequestDraft(request),
-      errorText: workerError ? `Script worker: ${normalizeScriptError(workerError)}` : ""
+      request: cloneRequestDraft(request.request),
+      errorText: ""
     };
   }
 
-  const preparedRequest = cloneRequestDraft(request);
-  const variables = buildVariableMap(environmentVariables);
-  const http = createHttpFacade();
-  const variableFacade = createVariableFacade(variables, runtimeContext);
+  const preparedRequest = cloneRequestDraft(request.request);
+  const variables = buildVariableMap(request.environmentVariables);
+  const variableFacade = createVariableFacade(request.id, variables, request.activeEnvironment);
   const pn = {
     variables: variableFacade.facade,
     request: createRequestFacade(preparedRequest, variables),
     expect: createExpectation,
-    http
+    http: createHttpFacade(request.id)
   };
 
   for (const source of scriptSources) {
     try {
-      const execute = new AsyncFunction("pn", '"use strict";\n' + source.script);
+      const execute = new AsyncFunction("pn", SANDBOX_PREAMBLE + source.script);
       await execute(pn);
     } catch (error) {
       return {
@@ -973,70 +782,31 @@ async function runPreRequestScriptInPage(
   };
 }
 
-export async function runTestScript(
-  request: RequestDraft,
-  response: ResponsePayload,
-  environmentVariables: EnvironmentVariable[],
-  inheritedScripts: InheritedRequestScripts | null = null,
-  runtimeContext: ScriptRuntimeContext = {}
-): Promise<RequestScriptExecution> {
-  try {
-    return await runScriptInWorker(
-      {
-        id: scriptWorkerRequestId("test"),
-        kind: "test",
-        request,
-        response,
-        environmentVariables,
-        inheritedScripts,
-        activeEnvironment: runtimeContext.activeEnvironment ?? null
-      },
-      runtimeContext
-    );
-  } catch (error) {
-    return {
-      ...createEmptyExecution(),
-      testScriptErrorText: `Script worker: ${normalizeScriptError(error)}`
-    };
-  }
-}
-
-async function runTestScriptInPage(
-  request: RequestDraft,
-  response: ResponsePayload,
-  environmentVariables: EnvironmentVariable[],
-  inheritedScripts: InheritedRequestScripts | null = null,
-  runtimeContext: ScriptRuntimeContext = {},
-  workerError: unknown = null
-): Promise<RequestScriptExecution> {
+async function runTestScript(request: Extract<WorkerRequest, { kind: "test" }>) {
   const scriptSources = [
-    { label: "Collection test script", script: inheritedScripts?.testScript ?? "" },
-    ...(inheritedScripts?.folderScripts ?? []).map((folder) => ({
+    { label: "Collection test script", script: request.inheritedScripts?.testScript ?? "" },
+    ...(request.inheritedScripts?.folderScripts ?? []).map((folder) => ({
       label: `Folder test script (${folder.name})`,
       script: folder.testScript
     })),
-    { label: "Test script", script: request.testScript }
+    { label: "Test script", script: request.request.testScript }
   ].filter((source) => source.script.trim());
 
   if (scriptSources.length === 0) {
-    return {
-      ...createEmptyExecution(),
-      testScriptErrorText: workerError ? `Script worker: ${normalizeScriptError(workerError)}` : ""
-    };
+    return createEmptyExecution();
   }
 
   const execution = createEmptyExecution();
-  const variables = buildVariableMap(environmentVariables);
+  const variables = buildVariableMap(request.environmentVariables);
   const tests: ScriptTestResult[] = [];
-  const http = createHttpFacade();
-  const variableFacade = createVariableFacade(variables, runtimeContext);
+  const variableFacade = createVariableFacade(request.id, variables, request.activeEnvironment);
   let testChain = Promise.resolve();
 
   const pn = {
     variables: variableFacade.facade,
-    response: createResponseFacade(response),
+    response: createResponseFacade(request.response),
     expect: createExpectation,
-    http,
+    http: createHttpFacade(request.id),
     test(name: string, assertion: () => void | Promise<void>) {
       const promise = testChain.then(async () => {
         try {
@@ -1064,7 +834,7 @@ async function runTestScriptInPage(
 
   for (const source of scriptSources) {
     try {
-      const execute = new AsyncFunction("pn", '"use strict";\n' + source.script);
+      const execute = new AsyncFunction("pn", SANDBOX_PREAMBLE + source.script);
       await execute(pn);
       await testChain;
     } catch (error) {
@@ -1085,3 +855,43 @@ async function runTestScriptInPage(
   execution.tests = tests;
   return execution;
 }
+
+workerScope.onmessage = (event: MessageEvent<MainToWorkerMessage>) => {
+  const message = event.data;
+
+  if ("type" in message && (message.type === "bridge-result" || message.type === "bridge-error")) {
+    const callback = bridgeCallbacks.get(message.bridgeId);
+    if (!callback) {
+      return;
+    }
+
+    bridgeCallbacks.delete(message.bridgeId);
+
+    if (message.type === "bridge-result") {
+      callback.resolve(message.value);
+    } else {
+      callback.reject(new Error(message.errorText));
+    }
+    return;
+  }
+
+  void (async () => {
+    try {
+      const result = message.kind === "pre-request"
+        ? await runPreRequestScript(message)
+        : await runTestScript(message);
+
+      workerScope.postMessage({
+        type: "done",
+        id: message.id,
+        result
+      });
+    } catch (error) {
+      workerScope.postMessage({
+        type: "error",
+        id: message.id,
+        errorText: normalizeScriptError(error)
+      });
+    }
+  })();
+};
