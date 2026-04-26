@@ -7,8 +7,8 @@ PostNot is pre-1.0. Security fixes are applied on a best-effort basis to the cur
 | Version | Supported |
 | --- | --- |
 | `master` | Yes |
-| `0.17.x` | Yes |
-| `< 0.17` | No |
+| `0.18.x` | Yes |
+| `< 0.18` | No |
 
 ## Reporting a Vulnerability
 
@@ -43,6 +43,14 @@ Reports in these areas are especially important for PostNot:
 - updater trust, release signing, or install-path vulnerabilities
 - script runtime escapes or privilege boundary issues
 - local file access, import/export, or credential-store misuse
+
+## Scripting Security Notes
+
+PostNot request scripts are local automation code. They are intended for scripts you wrote or scripts from API workspaces you trust.
+
+As of `0.18.1`, pre-request and test scripts run in a short-lived worker-backed JavaScript sandbox with explicit bridges for `pn.http.send(...)` helper requests and active-environment variable writes. Please report any way for scripts to escape that boundary, access app/page globals unexpectedly, bypass helper-request history behavior, or read/write secrets outside the documented `pn.variables` APIs.
+
+Imported Postman collection scripts are preserved for portability, but complex or untrusted imported scripts should be reviewed before running.
 
 ## Disclosure Expectations
 
