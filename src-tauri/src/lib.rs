@@ -44,6 +44,7 @@ pub fn run() -> Result<(), String> {
             commands::history::get_history_entry,
             commands::history::clear_history,
             commands::collections::list_collections,
+            commands::collections::search_collection_entities,
             commands::collections::get_collection_sidebar_state,
             commands::collections::save_collection_sidebar_state,
             commands::collections::create_collection,

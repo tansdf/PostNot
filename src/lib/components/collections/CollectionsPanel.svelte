@@ -20,6 +20,7 @@
     pendingSaveFolderId = "",
     pendingDeleteCollectionId = "",
     pendingDeleteCollectionItemId = "",
+    revealedItemId = "",
     errorText = "",
     isImporting = false,
     isExporting = false,
@@ -42,6 +43,7 @@
     pendingSaveFolderId?: string;
     pendingDeleteCollectionId?: string;
     pendingDeleteCollectionItemId?: string;
+    revealedItemId?: string;
     errorText?: string;
     isImporting?: boolean;
     isExporting?: boolean;
@@ -196,6 +198,7 @@
               class={[
                 "collection-item",
                 item.kind === "folder" && "collection-folder-item",
+                item.id === revealedItemId && "collection-item-revealed",
                 item.kind === "request" && collectionDnd.isDraggingRequest(item.id) && "collection-item-dragging",
                 collection?.id && collectionDnd.matchesDropIndicator(collection.id, item.id, "before") && "collection-drop-target-before",
                 collection?.id && collectionDnd.matchesDropIndicator(collection.id, item.id, "after") && "collection-drop-target-after",
@@ -207,6 +210,7 @@
               data-collection-id={collection?.id}
               data-item-id={item.id}
               data-item-kind={item.kind}
+              data-collection-reveal-id={item.id}
             >
               <div class="saved-request-meta">
                 {#if item.kind === "folder"}

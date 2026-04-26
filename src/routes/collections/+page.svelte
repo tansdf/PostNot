@@ -2,6 +2,7 @@
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { page } from "$app/state";
+  import { tick } from "svelte";
 
   import type { CollectionItemSummary } from "$lib/api/types";
   import { createStaleGuard } from "$lib/async-stale-guard";
@@ -19,16 +20,19 @@
   let importErrorText = $state("");
   let isImportModalOpen = $state(false);
   let importFileInput: HTMLInputElement | null = $state(null);
+  let revealedItemId = $state("");
+  let revealResetTimer: ReturnType<typeof setTimeout> | null = null;
 
   let requestedCollectionId = $derived(page.url.searchParams.get("collectionId") ?? "");
+  let requestedItemId = $derived(page.url.searchParams.get("itemId") ?? "");
 
   const collectionRoute = createStaleGuard();
 
   $effect(() => {
-    void syncCollectionFromRoute(requestedCollectionId);
+    void syncCollectionFromRoute(requestedCollectionId, requestedItemId);
   });
 
-  async function syncCollectionFromRoute(collectionId: string) {
+  async function syncCollectionFromRoute(collectionId: string, itemId: string) {
     const seq = collectionRoute.next();
     await collections.ensureLoaded(collectionId);
     if (collectionRoute.isStale(seq)) {
@@ -40,10 +44,10 @@
       if (collectionRoute.isStale(seq)) {
         return;
       }
-      return;
     }
 
     if (!collectionId) {
+      resetReveal();
       const fallbackCollectionId = collections.selectedCollectionId;
       if (fallbackCollectionId) {
         await goto(resolve(`/collections?collectionId=${encodeURIComponent(fallbackCollectionId)}`), {
@@ -52,6 +56,58 @@
           keepFocus: true
         });
       }
+      return;
+    }
+
+    if (!itemId) {
+      resetReveal();
+      return;
+    }
+
+    await revealCollectionItem(itemId, seq);
+  }
+
+  async function revealCollectionItem(itemId: string, seq: number) {
+    revealedItemId = itemId;
+    await tick();
+    if (collectionRoute.isStale(seq)) {
+      return;
+    }
+
+    const escapedId =
+      typeof CSS !== "undefined" && typeof CSS.escape === "function"
+        ? CSS.escape(itemId)
+        : itemId.replace(/["\\]/g, "\\$&");
+
+    const element = document.querySelector<HTMLElement>(
+      `[data-collection-reveal-id="${escapedId}"]`
+    );
+
+    if (!element) {
+      resetReveal();
+      return;
+    }
+
+    element.scrollIntoView({
+      block: "start",
+      behavior: "smooth"
+    });
+
+    if (revealResetTimer) {
+      clearTimeout(revealResetTimer);
+    }
+
+    revealResetTimer = setTimeout(() => {
+      revealedItemId = "";
+      revealResetTimer = null;
+    }, 1800);
+  }
+
+  function resetReveal() {
+    revealedItemId = "";
+    if (revealResetTimer) {
+      clearTimeout(revealResetTimer);
+      revealResetTimer = null;
     }
   }
 
@@ -246,6 +302,7 @@
     pendingSaveFolderId={collections.pendingSaveFolderId}
     pendingDeleteCollectionId={collections.pendingDeleteCollectionId}
     pendingDeleteCollectionItemId={collections.pendingDeleteCollectionItemId}
+    {revealedItemId}
     errorText={collections.errorText}
     {isImporting}
     {isExporting}

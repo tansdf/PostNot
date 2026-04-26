@@ -33,7 +33,7 @@ Why this stack:
 
 ## 3. Current Application State
 
-This section reflects the code currently implemented in the repository, including the shipped `0.15.0` scripting update, the `0.15.1` route/modal polish work, the `0.16.0` OpenAPI 3 import release, the `0.17.0` multitab request workspace release, the `0.17.1` history-restore patch, the `0.17.2` requests/environments workflow follow-up, the `0.17.3` hydration-flash polish release, and the `0.17.4` follow-up that unifies hydration-flash handling through a shared synchronous paint cache (see [CHANGELOG.md](../CHANGELOG.md)).
+This section reflects the code currently implemented in the repository, including the shipped `0.15.0` scripting update, the `0.15.1` route/modal polish work, the `0.16.0` OpenAPI 3 import release, the `0.17.0` multitab request workspace release, the `0.17.1` history-restore patch, the `0.17.2` requests/environments workflow follow-up, the `0.17.3` hydration-flash polish release, the `0.17.4` follow-up that unifies hydration-flash handling through a shared synchronous paint cache, and the `0.18.0` sidebar collection search release (see [CHANGELOG.md](../CHANGELOG.md)).
 
 ### Implemented
 
@@ -61,6 +61,7 @@ This section reflects the code currently implemented in the repository, includin
 - Restoring stored history requests into new request tabs
 - Collections and saved requests
 - Collection folders with nested request organization
+- Sidebar collection search across collections, folders, and saved requests
 - Drag-and-drop saved-request moves across collection trees, including reorder, folder moves, and cross-collection placement
 - Environments and variable resolution
 - OS-backed secret storage for secret environment variables
@@ -102,6 +103,7 @@ Responsibilities:
 - Persist and restore request-tab workspace state, including active tab selection and per-tab draft/response/script data
 - Render global floating notifications for cross-screen action feedback
 - Coordinate shared pointer-driven collection drag-and-drop interactions across the sidebar and Collections page
+- Provide sidebar collection search that navigates directly to matching collections, folders, or saved requests
 - Keep URL query parameters for saved requests, collections, and environments in sync with the visible editor or browser, including canceling stale async work when the user navigates quickly
 - Run inherited collection, folder, and saved-request pre-request and test scripts in JavaScript before and after invoking `send_request`
 - Invoke typed Tauri commands for persistence and request execution
@@ -716,10 +718,9 @@ This means the project does not need to hold all remaining `v1` features for one
 
 One reasonable path from the current state is:
 
-1. `0.18.0`: restore request from history
-2. `0.19.0`: simple collections search
-3. `0.20.0`: hardening, optimization, and UX/error-handling improvements
-4. `1.0.0`: release-signoff build after the `v1` scope is complete and verified
+1. `0.18.0`: sidebar collection search
+2. `0.19.0`: hardening, optimization, and UX/error-handling improvements
+3. `1.0.0`: release-signoff build after the `v1` scope is complete and verified
 
 The exact version numbers are less important than the policy: `1.0.0` is allowed to be a smaller visible release than earlier `0.x` milestones if it represents a meaningful jump in confidence and support commitment.
 
@@ -738,4 +739,4 @@ Treat the repository as being on the path from active Milestone 1 delivery to a 
 
 The current design is already grounded in a real desktop workflow: persisted settings influence request execution, history is stored in SQLite with secret-derived environment values redacted, secret environment values live in the OS credential store, environments resolve variables at send time, collections support nested folders in the working UI with consistent sidebar and collections-panel tree affordances, saved requests can be reordered or moved across folders and collections through a shared drag-and-drop model, collections, folders, and saved requests can run inherited pre-request and test scripts in the frontend before and after native execution, scripts can await helper HTTP requests through `pn.http.send(...)` without polluting history and can persist active-environment variable updates during script execution, import can pull requests in from Postman collections, OpenAPI 3 documents, and cURL, multipart requests can attach local files, built-in dynamic variables resolve at runtime, and the desktop shell can check GitHub Releases for signed updater builds both on launch and from Settings.
 
-The remaining `v1` work should stay focused on the features and release-quality steps that close the last day-to-day gaps: history restore, simple collections search, and strong hardening of correctness, UX, and performance.
+The remaining `v1` work should stay focused on release-quality steps that close the last day-to-day gaps: strong hardening of correctness, UX, and performance, plus any small workflow fixes that surface during validation.

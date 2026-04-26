@@ -7,9 +7,9 @@ use uuid::Uuid;
 use crate::{
     domain::{
         collections::{
-            CollectionItemSummary, CollectionSummary, CreateCollectionFolderInput,
-            CreateCollectionInput, MoveCollectionItemInput, SavedRequestDetail,
-            SavedRequestSummary, UpdateCollectionFolderInput,
+            CollectionItemSummary, CollectionSearchResult, CollectionSummary,
+            CreateCollectionFolderInput, CreateCollectionInput, MoveCollectionItemInput,
+            SavedRequestDetail, SavedRequestSummary, UpdateCollectionFolderInput,
         },
         requests::SendRequestPayload,
     },
@@ -49,6 +49,128 @@ pub async fn list_collection_items(
 
     let rows = list_collection_item_rows(pool, collection_id).await?;
     Ok(build_collection_item_tree(rows))
+}
+
+pub async fn search_collection_entities(
+    pool: &SqlitePool,
+    query: &str,
+    limit: Option<usize>,
+) -> AppResult<Vec<CollectionSearchResult>> {
+    let trimmed_query = query.trim();
+    if trimmed_query.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let tokens = tokenize_search_query(trimmed_query);
+    if tokens.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let collections = list_search_collection_rows(pool).await?;
+    let item_rows = list_search_collection_item_rows(pool).await?;
+    let collection_name_by_id: HashMap<String, String> = collections
+        .iter()
+        .map(|collection| (collection.id.clone(), collection.name.clone()))
+        .collect();
+    let items_by_id: HashMap<String, SearchCollectionItemRow> = item_rows
+        .iter()
+        .cloned()
+        .map(|item| (item.id.clone(), item))
+        .collect();
+
+    let mut ranked_results = Vec::new();
+
+    for collection in collections {
+        if let Some(rank) = classify_search_match(
+            &collection.name,
+            &collection.name,
+            None,
+            None,
+            &tokens,
+            trimmed_query,
+        ) {
+            ranked_results.push(RankedSearchResult {
+                rank,
+                updated_at: collection.updated_at.clone(),
+                name: collection.name.clone(),
+                result: CollectionSearchResult {
+                    id: collection.id.clone(),
+                    kind: "collection".to_string(),
+                    collection_id: collection.id,
+                    parent_id: None,
+                    name: collection.name.clone(),
+                    method: None,
+                    url: None,
+                    updated_at: collection.updated_at,
+                    collection_name: collection.name,
+                    ancestor_ids: Vec::new(),
+                    ancestor_names: Vec::new(),
+                    request_count: Some(collection.request_count),
+                },
+            });
+        }
+    }
+
+    for item in item_rows {
+        let Some(collection_name) = collection_name_by_id.get(&item.collection_id).cloned() else {
+            continue;
+        };
+        let ancestors = build_ancestors(&item, &items_by_id);
+        let ancestor_ids: Vec<String> = ancestors
+            .iter()
+            .map(|ancestor| ancestor.id.clone())
+            .collect();
+        let ancestor_names: Vec<String> = ancestors
+            .iter()
+            .map(|ancestor| ancestor.name.clone())
+            .collect();
+        let path_text = format_search_path_text(&collection_name, &ancestor_names);
+
+        if let Some(rank) = classify_search_match(
+            &item.name,
+            &path_text,
+            item.method.as_deref(),
+            item.url.as_deref(),
+            &tokens,
+            trimmed_query,
+        ) {
+            ranked_results.push(RankedSearchResult {
+                rank,
+                updated_at: item.updated_at.clone(),
+                name: item.name.clone(),
+                result: CollectionSearchResult {
+                    id: item.id,
+                    kind: item.kind,
+                    collection_id: item.collection_id,
+                    parent_id: item.parent_id,
+                    name: item.name,
+                    method: item.method,
+                    url: item.url,
+                    updated_at: item.updated_at,
+                    collection_name,
+                    ancestor_ids,
+                    ancestor_names,
+                    request_count: None,
+                },
+            });
+        }
+    }
+
+    ranked_results.sort_by(|left, right| {
+        right
+            .rank
+            .cmp(&left.rank)
+            .then_with(|| right.updated_at.cmp(&left.updated_at))
+            .then_with(|| left.name.cmp(&right.name))
+    });
+
+    let max_results = limit.unwrap_or(30).clamp(1, 50);
+
+    Ok(ranked_results
+        .into_iter()
+        .take(max_results)
+        .map(|entry| entry.result)
+        .collect())
 }
 
 pub async fn create_collection(
@@ -770,6 +892,63 @@ async fn list_collection_item_rows(
         .collect())
 }
 
+async fn list_search_collection_rows(pool: &SqlitePool) -> AppResult<Vec<SearchCollectionRow>> {
+    let rows = sqlx::query(
+        r#"
+        SELECT
+          collections.id,
+          collections.name,
+          collections.updated_at,
+          COUNT(collection_items.id) AS request_count
+        FROM collections
+        LEFT JOIN collection_items
+          ON collection_items.collection_id = collections.id
+          AND collection_items.kind = 'request'
+        GROUP BY collections.id
+        "#,
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|row| SearchCollectionRow {
+            id: row.get("id"),
+            name: row.get("name"),
+            updated_at: row.get("updated_at"),
+            request_count: row.get("request_count"),
+        })
+        .collect())
+}
+
+async fn list_search_collection_item_rows(
+    pool: &SqlitePool,
+) -> AppResult<Vec<SearchCollectionItemRow>> {
+    let rows = sqlx::query(
+        r#"
+        SELECT id, collection_id, parent_id, kind, name, method, url, updated_at
+        FROM collection_items
+        ORDER BY updated_at DESC, name ASC
+        "#,
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|row| SearchCollectionItemRow {
+            id: row.get("id"),
+            collection_id: row.get("collection_id"),
+            parent_id: row.get("parent_id"),
+            kind: row.get("kind"),
+            name: row.get("name"),
+            method: row.get("method"),
+            url: row.get("url"),
+            updated_at: row.get("updated_at"),
+        })
+        .collect())
+}
+
 fn build_collection_item_tree(rows: Vec<CollectionItemRow>) -> Vec<CollectionItemSummary> {
     let mut children_by_parent: HashMap<Option<String>, Vec<CollectionItemRow>> = HashMap::new();
 
@@ -859,6 +1038,130 @@ fn normalize_target_index(target_index: Option<i64>, sibling_count: usize) -> us
     }
 }
 
+fn tokenize_search_query(query: &str) -> Vec<String> {
+    query
+        .split_whitespace()
+        .map(normalize_search_text)
+        .filter(|token| !token.is_empty())
+        .collect()
+}
+
+fn normalize_search_text(value: &str) -> String {
+    value.trim().to_lowercase()
+}
+
+fn search_words(value: &str) -> Vec<String> {
+    value
+        .split(|ch: char| !ch.is_alphanumeric())
+        .filter(|part| !part.is_empty())
+        .map(|part| part.to_lowercase())
+        .collect()
+}
+
+fn contains_all_tokens(haystacks: &[String], tokens: &[String]) -> bool {
+    tokens
+        .iter()
+        .all(|token| haystacks.iter().any(|haystack| haystack.contains(token)))
+}
+
+fn all_tokens_match_word_prefix(words: &[String], tokens: &[String]) -> bool {
+    tokens
+        .iter()
+        .all(|token| words.iter().any(|word| word.starts_with(token)))
+}
+
+fn classify_search_match(
+    name: &str,
+    path_text: &str,
+    method: Option<&str>,
+    url: Option<&str>,
+    tokens: &[String],
+    raw_query: &str,
+) -> Option<u8> {
+    let normalized_name = normalize_search_text(name);
+    let normalized_path = normalize_search_text(path_text);
+    let normalized_query = normalize_search_text(raw_query);
+    let normalized_method = method.map(normalize_search_text);
+    let normalized_url = url.map(normalize_search_text);
+
+    let mut haystacks = vec![normalized_name.clone(), normalized_path.clone()];
+    if let Some(method) = &normalized_method {
+        haystacks.push(method.clone());
+    }
+    if let Some(url) = &normalized_url {
+        haystacks.push(url.clone());
+    }
+
+    if !contains_all_tokens(&haystacks, tokens) {
+        return None;
+    }
+
+    if normalized_name == normalized_query {
+        return Some(6);
+    }
+
+    if normalized_name.starts_with(&normalized_query) {
+        return Some(5);
+    }
+
+    let name_words = search_words(name);
+    let path_words = search_words(path_text);
+    if all_tokens_match_word_prefix(&name_words, tokens)
+        || all_tokens_match_word_prefix(&path_words, tokens)
+    {
+        return Some(4);
+    }
+
+    if tokens.iter().all(|token| normalized_name.contains(token)) {
+        return Some(3);
+    }
+
+    let method_or_url_match = tokens.iter().all(|token| {
+        normalized_method
+            .as_ref()
+            .is_some_and(|method| method.contains(token))
+            || normalized_url
+                .as_ref()
+                .is_some_and(|url| url.contains(token))
+    });
+
+    if method_or_url_match {
+        return Some(1);
+    }
+
+    Some(2)
+}
+
+fn build_ancestors(
+    item: &SearchCollectionItemRow,
+    items_by_id: &HashMap<String, SearchCollectionItemRow>,
+) -> Vec<SearchAncestor> {
+    let mut ancestors = Vec::new();
+    let mut current_parent_id = item.parent_id.clone();
+
+    while let Some(parent_id) = current_parent_id {
+        let Some(parent) = items_by_id.get(&parent_id) else {
+            break;
+        };
+
+        ancestors.push(SearchAncestor {
+            id: parent.id.clone(),
+            name: parent.name.clone(),
+        });
+        current_parent_id = parent.parent_id.clone();
+    }
+
+    ancestors.reverse();
+    ancestors
+}
+
+fn format_search_path_text(collection_name: &str, ancestor_names: &[String]) -> String {
+    let mut path_parts = Vec::with_capacity(ancestor_names.len() + 1);
+    path_parts.push(collection_name.to_string());
+    path_parts.extend(ancestor_names.iter().cloned());
+    path_parts.join(" / ")
+}
+
 fn map_collection_summary(row: sqlx::sqlite::SqliteRow) -> CollectionSummary {
     CollectionSummary {
         id: row.get("id"),
@@ -930,4 +1233,38 @@ struct CollectionItemRow {
     test_script: String,
     updated_at: String,
     sort_order: i64,
+}
+
+#[derive(Debug)]
+struct SearchCollectionRow {
+    id: String,
+    name: String,
+    updated_at: String,
+    request_count: i64,
+}
+
+#[derive(Debug, Clone)]
+struct SearchCollectionItemRow {
+    id: String,
+    collection_id: String,
+    parent_id: Option<String>,
+    kind: String,
+    name: String,
+    method: Option<String>,
+    url: Option<String>,
+    updated_at: String,
+}
+
+#[derive(Debug)]
+struct RankedSearchResult {
+    rank: u8,
+    updated_at: String,
+    name: String,
+    result: CollectionSearchResult,
+}
+
+#[derive(Debug)]
+struct SearchAncestor {
+    id: String,
+    name: String,
 }

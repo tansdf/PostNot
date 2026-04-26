@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import {
   type CollectionItemSummary,
+  type CollectionSearchResult,
   type CollectionSidebarState,
   type CollectionSummary,
   type CreateCollectionFolderInput,
@@ -382,6 +383,59 @@ export async function listCollections(): Promise<CollectionSummary[]> {
   }
 
   return invoke<CollectionSummary[]>("list_collections");
+}
+
+export async function searchCollectionEntities(
+  query: string,
+  limit = 30
+): Promise<CollectionSearchResult[]> {
+  if (!hasTauriRuntime()) {
+    const collection = createMockCollections()[0];
+    const item = createMockCollectionItems()[0]?.children[0];
+    const results: CollectionSearchResult[] = item
+      ? [
+          {
+            id: collection.id,
+            kind: "collection",
+            collectionId: collection.id,
+            parentId: null,
+            name: collection.name,
+            method: null,
+            url: null,
+            updatedAt: collection.updatedAt,
+            collectionName: collection.name,
+            ancestorIds: [],
+            ancestorNames: [],
+            requestCount: collection.requestCount
+          },
+          {
+            id: item.id,
+            kind: "request",
+            collectionId: item.collectionId,
+            parentId: item.parentId ?? null,
+            name: item.name,
+            method: item.method,
+            url: item.url,
+            updatedAt: item.updatedAt,
+            collectionName: collection.name,
+            ancestorIds: item.parentId ? [item.parentId] : [],
+            ancestorNames: ["Examples"],
+            requestCount: null
+          }
+        ]
+      : [];
+
+    return results
+      .filter((result) =>
+        [result.name, result.url ?? "", result.method ?? ""]
+          .join(" ")
+          .toLowerCase()
+          .includes(query.trim().toLowerCase())
+      )
+      .slice(0, limit);
+  }
+
+  return invoke<CollectionSearchResult[]>("search_collection_entities", { query, limit });
 }
 
 export async function getCollectionSidebarState(): Promise<CollectionSidebarState> {

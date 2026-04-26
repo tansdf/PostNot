@@ -6,6 +6,12 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-04-26
+
+### Added
+
+- Sidebar collection search for quickly finding collections, folders, and saved requests, with keyboard navigation and direct open/reveal flows into the Requests and Collections pages.
+
 ## [0.17.4] - 2026-04-21
 
 ### Changed

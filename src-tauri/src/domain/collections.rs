@@ -79,6 +79,23 @@ pub struct CollectionSidebarState {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct CollectionSearchResult {
+    pub id: String,
+    pub kind: String,
+    pub collection_id: String,
+    pub parent_id: Option<String>,
+    pub name: String,
+    pub method: Option<String>,
+    pub url: Option<String>,
+    pub updated_at: String,
+    pub collection_name: String,
+    pub ancestor_ids: Vec<String>,
+    pub ancestor_names: Vec<String>,
+    pub request_count: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SavedRequestSummary {
     pub id: String,
     pub collection_id: String,

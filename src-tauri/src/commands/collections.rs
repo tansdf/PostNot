@@ -4,9 +4,10 @@ use crate::{
     app_state::AppState,
     domain::{
         collections::{
-            CollectionItemSummary, CollectionSidebarState, CollectionSummary,
-            CreateCollectionFolderInput, CreateCollectionInput, MoveCollectionItemInput,
-            SavedRequestDetail, SavedRequestSummary, UpdateCollectionFolderInput,
+            CollectionItemSummary, CollectionSearchResult, CollectionSidebarState,
+            CollectionSummary, CreateCollectionFolderInput, CreateCollectionInput,
+            MoveCollectionItemInput, SavedRequestDetail, SavedRequestSummary,
+            UpdateCollectionFolderInput,
         },
         exports::ExportResult,
         requests::SendRequestPayload,
@@ -18,6 +19,15 @@ use crate::{
 #[tauri::command]
 pub async fn list_collections(state: State<'_, AppState>) -> AppResult<Vec<CollectionSummary>> {
     collections_service::list_collections(state.db()).await
+}
+
+#[tauri::command]
+pub async fn search_collection_entities(
+    state: State<'_, AppState>,
+    query: String,
+    limit: Option<usize>,
+) -> AppResult<Vec<CollectionSearchResult>> {
+    collections_service::search_collection_entities(state.db(), &query, limit).await
 }
 
 #[tauri::command]

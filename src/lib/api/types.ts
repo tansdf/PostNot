@@ -176,6 +176,21 @@ export type CollectionSidebarState = {
   expandedFolderIds: string[];
 };
 
+export type CollectionSearchResult = {
+  id: string;
+  kind: "collection" | "folder" | "request";
+  collectionId: string;
+  parentId?: string | null;
+  name: string;
+  method?: HttpMethod | null;
+  url?: string | null;
+  updatedAt: string;
+  collectionName: string;
+  ancestorIds: string[];
+  ancestorNames: string[];
+  requestCount?: number | null;
+};
+
 export type ImportFormat = "postman" | "curl" | "openapi";
 
 export type ImportRequestInput = {

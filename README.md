@@ -19,6 +19,7 @@ PostNot is built for working with HTTP APIs on your own machine, with local pers
 - Work across multiple request tabs with restored local workspace state between launches
 - Save requests into collections and nested folders
 - Browse those folders in the sidebar and collections page with aligned tree guides and folder icons
+- Search collections, folders, and saved requests from the sidebar
 - Reorder saved requests and move them across folders or collections with drag-and-drop from the sidebar and collections page
 - Work with environments and `{{variable}}` substitution
 - Use built-in dynamic variables like Postman-style `$guid` and `$timestamp`
