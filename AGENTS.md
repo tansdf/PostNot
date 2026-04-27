@@ -12,7 +12,7 @@ PostNot is a local-first desktop API client built with:
 - TypeScript
 - SQLite
 
-The app already supports request execution, history, collections with nested folders and drag-and-drop request moves, sidebar collection search, environments, secret environment storage, import/export flows including OpenAPI 3 import, notifications, settings, signed in-app update checks, inherited collection/folder/saved-request pre-request and test scripts (frontend JavaScript execution around the native send), async script helper requests through `pn.http.send(...)`, and script-driven active-environment variable writes.
+The app already supports request execution, capped response body previews with binary response handling, history, collections with nested folders and drag-and-drop request moves, sidebar collection search, environments, secret environment storage, import/export flows including OpenAPI 3 import, notifications, settings, signed in-app update checks, inherited collection/folder/saved-request pre-request and test scripts (worker-backed frontend JavaScript execution around the native send), async script helper requests through `pn.http.send(...)`, and script-driven active-environment variable writes.
 
 ## Canonical Working Directory
 
@@ -59,9 +59,10 @@ Implemented now:
 - cURL import
 - multipart request composition with local file uploads
 - built-in dynamic request variables
-- pre-request and test scripts on collections, folders, and saved requests (`request-scripts.ts`, `ScriptEditor.svelte`)
+- pre-request and test scripts on collections, folders, and saved requests (`request-scripts.ts`, `request-script-worker.ts`, `ScriptEditor.svelte`)
 - async script helper requests through `await pn.http.send(...)`
 - script-driven active-environment variable writes, including persisted secret writes
+- capped response body previews with binary metadata, manual binary-preview text decoding, and an opt-in setting for automatic binary preview decoding
 - floating notifications
 - signed in-app update checks with silent startup refresh
 - window size and position restore
@@ -70,7 +71,7 @@ Implemented now:
 Still intentionally open:
 
 - multi-tab workflow decisions
-- deeper scripting beyond the shipped async helper and environment-write surface (broader runtime API, stronger isolation, richer inherited execution controls)
+- deeper scripting beyond the shipped async helper and environment-write surface (broader runtime API, richer inherited execution controls)
 - additional UX polish and error handling
 - updater channel decision for prereleases vs stable-only discovery
 

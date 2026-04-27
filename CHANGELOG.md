@@ -6,6 +6,19 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.18.2] - 2026-04-26
+
+### Added
+
+- Native response body previews are now capped at 5 MB, with response metadata indicating when a body was truncated.
+- Binary-looking responses now show content-type and truncation details in the response panel, with a manual action to decode the retained preview as text.
+- Added a persisted Requests setting for automatically decoding binary response previews when users prefer immediate text inspection.
+- The Requests profile bar now shows whether binary responses are kept as previews or decoded automatically.
+
+### Changed
+
+- History persistence now avoids writing binary or truncated response bodies as full text files, keeping only safe previews and explanatory placeholders.
+
 ## [0.18.1] - 2026-04-26
 
 ### Changed

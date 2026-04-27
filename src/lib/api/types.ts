@@ -61,6 +61,12 @@ export type ResponsePayload = {
   sizeBytes: number;
   headers: KeyValueRow[];
   bodyText: string;
+  bodyBase64: string;
+  bodyContentType: string;
+  bodyIsBinary: boolean;
+  bodyIsTruncated: boolean;
+  bodyTruncatedAtBytes: number | null;
+  bodyEncoding: "utf-8" | "lossy-utf8" | "not-decoded" | string;
   errorText: string;
   executedAt: string;
 };
@@ -76,6 +82,7 @@ export type AppSettings = {
   requestTimeoutMs: number;
   followRedirects: boolean;
   validateTls: boolean;
+  alwaysDecodeBinaryResponseBodies: boolean;
   historyLimit: number;
   isHistoryCollapsed: boolean;
   environmentAutosave: boolean;
@@ -377,6 +384,7 @@ export function createDefaultSettings(): AppSettings {
     requestTimeoutMs: 30_000,
     followRedirects: true,
     validateTls: true,
+    alwaysDecodeBinaryResponseBodies: false,
     historyLimit: 200,
     isHistoryCollapsed: false,
     environmentAutosave: true,

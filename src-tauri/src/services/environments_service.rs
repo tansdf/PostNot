@@ -319,10 +319,11 @@ pub async fn set_active_environment(
     let mut transaction = pool.begin().await?;
 
     if let Some(environment_id) = environment_id {
-        let exists: Option<String> = sqlx::query_scalar("SELECT id FROM environments WHERE id = ?1")
-            .bind(environment_id)
-            .fetch_optional(&mut *transaction)
-            .await?;
+        let exists: Option<String> =
+            sqlx::query_scalar("SELECT id FROM environments WHERE id = ?1")
+                .bind(environment_id)
+                .fetch_optional(&mut *transaction)
+                .await?;
 
         if exists.is_none() {
             return Err(AppError::Message("Environment not found.".to_string()));

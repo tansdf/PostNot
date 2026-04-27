@@ -49,7 +49,7 @@
         <p class="eyebrow">PostNot scripting</p>
         <h1 id="scripting-heading">Inherited scripts for API workflows</h1>
         <p class="section-lead">
-          PostNot scripts are JavaScript snippets that run in the desktop UI before a request is sent
+          PostNot scripts are JavaScript snippets that run in a short-lived frontend worker before a request is sent
           and after its response returns. Request-level scripts work on the current request draft, while
           collection and folder scripts layer on top for saved requests in a collection tree. They can
           set headers, query parameters, body content, authentication, and response assertions while
@@ -109,7 +109,7 @@
               </article>
             </div>
             <p class="section-lead">
-              Scripts run as awaited JavaScript in the frontend layer. The actual HTTP request still goes
+              Scripts run as awaited JavaScript in a frontend worker-backed sandbox. The actual HTTP request still goes
               through the native Rust sender, which means script helpers can prepare requests and inspect
               responses without moving network execution into the browser runtime.
             </p>
@@ -583,7 +583,7 @@ pn.test('response has an id', () => {
         </div>
         <div class="status-callout status-callout--spaced">
           <p>
-            The scripting runtime is intentionally small right now. The stable contract is the
+            The scripting runtime is intentionally small and worker-backed right now. The stable contract is the
             <span class="code-inline">pn</span> surface documented here; browser globals or Postman
             <span class="code-inline">pm</span> helpers should not be treated as supported compatibility
             APIs.

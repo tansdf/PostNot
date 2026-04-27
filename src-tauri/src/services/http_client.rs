@@ -5,10 +5,11 @@ use std::{
     time::{Duration, Instant},
 };
 
+use base64::{engine::general_purpose, Engine as _};
 use chrono::Utc;
-use reqwest::header::{HeaderName, HeaderValue};
+use reqwest::header::{HeaderName, HeaderValue, CONTENT_TYPE};
 use reqwest::redirect::Policy;
-use reqwest::{multipart, Client, Method};
+use reqwest::{multipart, Client, Method, Response};
 use tokio::sync::watch;
 use url::Url;
 
@@ -26,6 +27,7 @@ struct ClientCacheKey {
 }
 
 const HTTP_CLIENT_CACHE_MAX: usize = 32;
+const RESPONSE_BODY_PREVIEW_LIMIT_BYTES: usize = 5 * 1024 * 1024;
 
 struct ClientCache {
     clients: HashMap<ClientCacheKey, Client>,
@@ -207,11 +209,18 @@ pub async fn send_request(
     }
 
     let started_at = Instant::now();
-    let response = tokio::select! {
+    let mut response = tokio::select! {
         response = request.send() => response?,
         _ = wait_for_cancellation(&mut cancel_rx) => return Err(AppError::Cancelled),
     };
     let status = response.status();
+    let content_length = response.content_length();
+    let content_type = response
+        .headers()
+        .get(CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default()
+        .to_string();
 
     let headers = response
         .headers()
@@ -225,21 +234,132 @@ pub async fn send_request(
         })
         .collect();
 
-    let body_bytes = tokio::select! {
-        body = response.bytes() => body?,
-        _ = wait_for_cancellation(&mut cancel_rx) => return Err(AppError::Cancelled),
+    let body_read = read_limited_body(&mut response, &mut cancel_rx).await?;
+    let body_size = content_length
+        .and_then(|value| usize::try_from(value).ok())
+        .unwrap_or_else(|| body_read.bytes.len() + usize::from(body_read.is_truncated));
+    let utf8_body = std::str::from_utf8(&body_read.bytes);
+    let body_is_binary = is_binary_response_body(&body_read.bytes, &content_type);
+    let should_decode_body = !body_is_binary || settings.always_decode_binary_response_bodies;
+    let (body_text, body_encoding) = if should_decode_body {
+        match utf8_body {
+            Ok(text) => (text.to_string(), "utf-8".to_string()),
+            Err(_) => (
+                String::from_utf8_lossy(&body_read.bytes).to_string(),
+                "lossy-utf8".to_string(),
+            ),
+        }
+    } else {
+        (String::new(), "not-decoded".to_string())
+    };
+    let body_base64 = if body_is_binary && !body_read.bytes.is_empty() {
+        general_purpose::STANDARD.encode(&body_read.bytes)
+    } else {
+        String::new()
     };
 
     Ok(ResponsePayload {
         status_code: Some(status.as_u16()),
         status_text: status.canonical_reason().unwrap_or_default().to_string(),
         duration_ms: started_at.elapsed().as_millis(),
-        size_bytes: body_bytes.len(),
+        size_bytes: body_size,
         headers,
-        body_text: String::from_utf8_lossy(&body_bytes).to_string(),
+        body_text,
+        body_base64,
+        body_content_type: content_type,
+        body_is_binary,
+        body_is_truncated: body_read.is_truncated,
+        body_truncated_at_bytes: body_read
+            .is_truncated
+            .then_some(RESPONSE_BODY_PREVIEW_LIMIT_BYTES),
+        body_encoding,
         error_text: String::new(),
         executed_at: Utc::now().to_rfc3339(),
     })
+}
+
+struct LimitedBody {
+    bytes: Vec<u8>,
+    is_truncated: bool,
+}
+
+async fn read_limited_body(
+    response: &mut Response,
+    cancel_rx: &mut watch::Receiver<bool>,
+) -> AppResult<LimitedBody> {
+    let mut bytes = Vec::new();
+    let mut is_truncated = false;
+
+    while bytes.len() < RESPONSE_BODY_PREVIEW_LIMIT_BYTES {
+        let chunk = tokio::select! {
+            chunk = response.chunk() => chunk?,
+            _ = wait_for_cancellation(cancel_rx) => return Err(AppError::Cancelled),
+        };
+
+        let Some(chunk) = chunk else {
+            return Ok(LimitedBody {
+                bytes,
+                is_truncated,
+            });
+        };
+
+        let remaining = RESPONSE_BODY_PREVIEW_LIMIT_BYTES - bytes.len();
+        if chunk.len() > remaining {
+            bytes.extend_from_slice(&chunk[..remaining]);
+            is_truncated = true;
+            break;
+        }
+
+        bytes.extend_from_slice(&chunk);
+    }
+
+    if !is_truncated {
+        let next_chunk = tokio::select! {
+            chunk = response.chunk() => chunk?,
+            _ = wait_for_cancellation(cancel_rx) => return Err(AppError::Cancelled),
+        };
+        is_truncated = next_chunk.is_some();
+    }
+
+    Ok(LimitedBody {
+        bytes,
+        is_truncated,
+    })
+}
+
+fn is_text_content_type(content_type: &str) -> bool {
+    let media_type = content_type
+        .split(';')
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .to_ascii_lowercase();
+
+    media_type.starts_with("text/")
+        || matches!(
+            media_type.as_str(),
+            "application/json"
+                | "application/problem+json"
+                | "application/xml"
+                | "application/xhtml+xml"
+                | "application/javascript"
+                | "application/x-javascript"
+                | "application/x-www-form-urlencoded"
+                | "application/yaml"
+                | "application/x-yaml"
+                | "image/svg+xml"
+        )
+        || media_type.ends_with("+json")
+        || media_type.ends_with("+xml")
+}
+
+fn is_binary_response_body(bytes: &[u8], content_type: &str) -> bool {
+    if bytes.is_empty() {
+        return false;
+    }
+
+    let has_content_type = !content_type.trim().is_empty();
+    (has_content_type && !is_text_content_type(content_type)) || std::str::from_utf8(bytes).is_err()
 }
 
 async fn wait_for_cancellation(cancel_rx: &mut watch::Receiver<bool>) {
@@ -255,5 +375,38 @@ async fn wait_for_cancellation(cancel_rx: &mut watch::Receiver<bool>) {
         if *cancel_rx.borrow() {
             return;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{is_binary_response_body, is_text_content_type};
+
+    #[test]
+    fn text_content_type_detection_covers_api_formats() {
+        assert!(is_text_content_type("text/plain; charset=utf-8"));
+        assert!(is_text_content_type("application/json"));
+        assert!(is_text_content_type("application/vnd.api+json"));
+        assert!(is_text_content_type("application/xml"));
+        assert!(is_text_content_type("image/svg+xml"));
+        assert!(!is_text_content_type(""));
+        assert!(!is_text_content_type("image/png"));
+        assert!(!is_text_content_type("application/octet-stream"));
+    }
+
+    #[test]
+    fn binary_response_detection_respects_content_type_and_utf8() {
+        assert!(!is_binary_response_body(b"hello", ""));
+        assert!(!is_binary_response_body(
+            b"{\"ok\":true}",
+            "application/json"
+        ));
+        assert!(is_binary_response_body(
+            b"hello",
+            "application/octet-stream"
+        ));
+        assert!(is_binary_response_body(&[0, 159, 146, 150], ""));
+        assert!(is_binary_response_body(&[0, 159, 146, 150], "text/plain"));
+        assert!(!is_binary_response_body(&[], "application/octet-stream"));
     }
 }

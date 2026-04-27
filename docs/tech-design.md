@@ -33,7 +33,7 @@ Why this stack:
 
 ## 3. Current Application State
 
-This section reflects the code currently implemented in the repository, including the shipped `0.15.0` scripting update, the `0.15.1` route/modal polish work, the `0.16.0` OpenAPI 3 import release, the `0.17.0` multitab request workspace release, the `0.17.1` history-restore patch, the `0.17.2` requests/environments workflow follow-up, the `0.17.3` hydration-flash polish release, the `0.17.4` follow-up that unifies hydration-flash handling through a shared synchronous paint cache, and the `0.18.0` sidebar collection search release (see [CHANGELOG.md](../CHANGELOG.md)).
+This section reflects the code currently implemented in the repository, including the shipped `0.15.0` scripting update, the `0.15.1` route/modal polish work, the `0.16.0` OpenAPI 3 import release, the `0.17.0` multitab request workspace release, the `0.17.1` history-restore patch, the `0.17.2` requests/environments workflow follow-up, the `0.17.3` hydration-flash polish release, the `0.17.4` follow-up that unifies hydration-flash handling through a shared synchronous paint cache, the `0.18.0` sidebar collection search release, the `0.18.1` scripting/workspace hardening patch, and the `0.18.2` response body safety patch (see [CHANGELOG.md](../CHANGELOG.md)).
 
 ### Implemented
 
@@ -55,6 +55,8 @@ This section reflects the code currently implemented in the repository, includin
   - size
   - headers
   - body text / JSON pretty rendering
+  - capped body previews for oversized responses
+  - binary response metadata and manual binary-preview text decoding
 - Persisted application settings in SQLite
 - Persisted request history in SQLite, including a collapsible Requests-page history panel state stored in app settings
 - Cancel in-flight request
@@ -81,10 +83,10 @@ This section reflects the code currently implemented in the repository, includin
 - History detail inspection from persisted snapshots
 - Restore action that opens a stored history request snapshot as a new standalone tab
 - Clear history action
-- Pre-request scripts and test scripts for collections, folders, and saved requests (executed in the frontend as sandboxed JavaScript before send and after response)
+- Pre-request scripts and test scripts for collections, folders, and saved requests (executed in a short-lived worker-backed frontend sandbox before send and after response)
 - Async scripting helper requests through `await pn.http.send(...)`
 - Active-environment variable reads and writes from scripts, including persisted secret writes through the OS credential store path
-- Request tabs persist through the existing `app_settings` store, keeping draft state, active tab selection, and per-tab responses/script output across restarts
+- Request tabs persist through the existing `app_settings` store, keeping draft state and active tab selection across restarts without persisting response bodies, script output, or transient tab errors
 - URL-driven selection for the main saved request (`savedRequestId`), collections (`collectionId`), and environments (`environmentId`) uses generation guards so overlapping async loads from rapid navigation do not apply stale UI state; clearing `savedRequestId` from the URL resets deep-link tracking so the same request can load again from the query string
 - Save-request, cURL import, collection import, and environment import modals trap focus (initial focus, Tab cycle within the dialog, Escape to close, prior focus restored on close) for keyboard and assistive technology users
 - `Ctrl+S` / `Cmd+S` shortcuts save the active request on the Requests page and the selected environment on the Environments page
@@ -100,12 +102,12 @@ Responsibilities:
 
 - Render request editor (including script editors), response viewer, settings page, and history panel
 - Manage page-level UI state
-- Persist and restore request-tab workspace state, including active tab selection and per-tab draft/response/script data
+- Persist and restore request-tab workspace state, including active tab selection and per-tab drafts
 - Render global floating notifications for cross-screen action feedback
 - Coordinate shared pointer-driven collection drag-and-drop interactions across the sidebar and Collections page
 - Provide sidebar collection search that navigates directly to matching collections, folders, or saved requests
 - Keep URL query parameters for saved requests, collections, and environments in sync with the visible editor or browser, including canceling stale async work when the user navigates quickly
-- Run inherited collection, folder, and saved-request pre-request and test scripts in JavaScript before and after invoking `send_request`
+- Run inherited collection, folder, and saved-request pre-request and test scripts in a worker-backed JavaScript sandbox before and after invoking `send_request`
 - Invoke typed Tauri commands for persistence and request execution
 - Provide a desktop-oriented workflow without browser networking
 
@@ -134,8 +136,8 @@ Responsibilities:
 5. Rust loads persisted request settings from SQLite
 6. Rust resolves environment variables and built-in dynamic variables
 7. Rust executes the request with `reqwest`
-8. Rust returns response metadata and body to the UI
-9. Rust writes a history entry to SQLite, redacting secret-derived environment substitutions back to their original `{{variable}}` form
+8. Rust returns response metadata plus a capped response body preview to the UI, including binary/truncation metadata
+9. Rust writes a history entry to SQLite, redacting secret-derived environment substitutions back to their original `{{variable}}` form and avoiding full body-file persistence for binary or truncated responses
 10. Frontend runs inherited collection, folder, and saved-request test scripts (if any) against the returned response for assertion output
 11. Frontend reloads history, updates the originating tab, and persists the refreshed workspace state
 
@@ -383,7 +385,8 @@ CREATE TABLE history_entries (
 Implementation notes:
 
 - successful requests are persisted with a response preview
-- successful requests also persist the full response body to a file path referenced by `response_body_path`
+- successful text responses below the response body cap also persist the full response body to a file path referenced by `response_body_path`
+- binary or truncated responses persist explanatory previews instead of full response body files
 - failed requests are also persisted with `error_text`
 - history is pruned based on the persisted `history_limit` setting
 
@@ -607,6 +610,7 @@ Current state:
 - requests are executed in Rust, not the browser
 - secret environment values are stored in the OS credential store, while SQLite keeps only non-secret environment metadata
 - history snapshots redact resolved values that came from secret environment variables
+- binary and oversized response bodies are not persisted as full text history body files
 - if an environment update or delete fails after partially changing the credential store, rollback of secrets is attempted; failure to roll back is logged with `log::warn` for diagnostics (the primary error still returns to the UI)
 
 This is the current security posture for environment variables; broader secret handling beyond environment-backed values remains future work.
@@ -649,13 +653,13 @@ Ship a usable desktop app that can compose and execute HTTP requests locally, pe
 - collections sidebar and collections panel folder trees with shared `FolderGlyph` styling
 - route/query stale-load guards, modal focus trapping, bounded `reqwest` client cache, and secret rollback warning logs as in `0.15.1`
 - OpenAPI 3 collection import plus single-operation draft import, with the Rust importer split into format-focused modules, as in `0.16.0`
-- restored multitab request workspaces with tab-local draft/response/script state persisted through `app_settings`
+- restored multitab request workspaces with tab-local drafts persisted through `app_settings`, while response bodies and script output remain session-local
 
 ### Current Scripting Boundary
 
 The async scripting milestone shipped in `0.15.0`.
 
-Scripts now run as awaited frontend JavaScript around one request send. Pre-request scripts can read and write active environment variables, mutate the outgoing request draft, and call `await pn.http.send(...)` to perform helper HTTP requests before the main request runs. Test scripts can inspect the returned response, register sync or async assertions through `pn.test(...)`, and also call helper requests when needed.
+Scripts now run as awaited frontend JavaScript inside a short-lived worker-backed sandbox around one request send. Pre-request scripts can read and write active environment variables, mutate the outgoing request draft, and call `await pn.http.send(...)` to perform helper HTTP requests before the main request runs. Test scripts can inspect the returned response, register sync or async assertions through `pn.test(...)`, and also call helper requests when needed.
 
 Helper script requests reuse the native request pipeline and active environment resolution, but they do not write separate history entries. Active-environment variable writes are buffered while scripts run and then persisted through the normal environment update path before the main request continues. The current runtime still allows only one native request in flight at a time, so helper requests should be awaited sequentially instead of fired concurrently.
 

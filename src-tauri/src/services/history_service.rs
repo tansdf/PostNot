@@ -26,7 +26,18 @@ pub async fn record_success(
     let history_id = Uuid::new_v4().to_string();
     let request_snapshot_json = serde_json::to_string(request)?;
     let response_headers_json = serde_json::to_string(&response.headers)?;
-    let response_body_path = write_response_body(app, &history_id, &response.body_text).await?;
+    let response_body_path = if response.body_is_binary || response.body_is_truncated {
+        None
+    } else {
+        write_response_body(app, &history_id, &response.body_text).await?
+    };
+    let response_body_preview = if response.body_is_binary {
+        format_binary_preview(response)
+    } else if response.body_is_truncated {
+        format_truncated_preview(response)
+    } else {
+        preview(&response.body_text)
+    };
 
     sqlx::query(
         "INSERT INTO history_entries (id, request_name, method, url, request_snapshot_json, status_code, duration_ms, response_headers_json, response_body_path, response_body_preview, error_text, executed_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
@@ -40,7 +51,7 @@ pub async fn record_success(
     .bind(response.duration_ms as i64)
     .bind(response_headers_json)
     .bind(response_body_path)
-    .bind(preview(&response.body_text))
+    .bind(response_body_preview)
     .bind(&response.error_text)
     .bind(&response.executed_at)
     .execute(pool)
@@ -178,6 +189,42 @@ async fn prune(pool: &SqlitePool) -> AppResult<()> {
 
 fn preview(body: &str) -> String {
     body.chars().take(PREVIEW_LIMIT).collect()
+}
+
+fn format_binary_preview(response: &ResponsePayload) -> String {
+    let content_type = response.body_content_type.trim();
+    let content_type_label = if content_type.is_empty() {
+        "unknown content type"
+    } else {
+        content_type
+    };
+
+    if response.body_is_truncated {
+        format!(
+            "Binary response preview omitted ({content_type_label}, at least {} bytes; body preview capped at {} bytes).",
+            response.size_bytes,
+            response.body_truncated_at_bytes.unwrap_or(response.size_bytes)
+        )
+    } else {
+        format!(
+            "Binary response preview omitted ({content_type_label}, {} bytes).",
+            response.size_bytes
+        )
+    }
+}
+
+fn format_truncated_preview(response: &ResponsePayload) -> String {
+    let cap = response
+        .body_truncated_at_bytes
+        .unwrap_or(response.body_text.len());
+    let mut body_preview = preview(&response.body_text);
+    if !body_preview.is_empty() {
+        body_preview.push_str("\n\n");
+    }
+    body_preview.push_str(&format!(
+        "Response body preview was truncated at {cap} bytes."
+    ));
+    body_preview
 }
 
 async fn write_response_body(
