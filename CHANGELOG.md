@@ -6,6 +6,12 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.19.1] - 2026-04-28
+
+### Fixed
+
+- Debian and RPM package updates now use a bounded PolicyKit install handoff so missing or cancelled authentication prompts surface an error instead of leaving the app stuck in the installing state.
+
 ## [0.19.0] - 2026-04-28
 
 ### Added
