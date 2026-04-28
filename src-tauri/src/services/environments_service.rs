@@ -53,6 +53,11 @@ pub struct RequestSecretUsage {
     pub auth_bearer_token: bool,
     pub auth_api_key_name: bool,
     pub auth_api_key_value: bool,
+    pub auth_oauth2_access_token: bool,
+    pub auth_oauth2_token_url: bool,
+    pub auth_oauth2_client_id: bool,
+    pub auth_oauth2_client_secret: bool,
+    pub auth_oauth2_scope: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -478,12 +483,26 @@ pub fn resolve_request(
     let (api_key_name, auth_api_key_name) = resolve_string(&payload.auth.api_key_name, &variables);
     let (api_key_value, auth_api_key_value) =
         resolve_string(&payload.auth.api_key_value, &variables);
+    let (oauth2_access_token, auth_oauth2_access_token) =
+        resolve_string(&payload.auth.oauth2_access_token, &variables);
+    let (oauth2_token_url, auth_oauth2_token_url) =
+        resolve_string(&payload.auth.oauth2_token_url, &variables);
+    let (oauth2_client_id, auth_oauth2_client_id) =
+        resolve_string(&payload.auth.oauth2_client_id, &variables);
+    let (oauth2_client_secret, auth_oauth2_client_secret) =
+        resolve_string(&payload.auth.oauth2_client_secret, &variables);
+    let (oauth2_scope, auth_oauth2_scope) = resolve_string(&payload.auth.oauth2_scope, &variables);
 
     secret_usage.auth_basic_username = auth_basic_username;
     secret_usage.auth_basic_password = auth_basic_password;
     secret_usage.auth_bearer_token = auth_bearer_token;
     secret_usage.auth_api_key_name = auth_api_key_name;
     secret_usage.auth_api_key_value = auth_api_key_value;
+    secret_usage.auth_oauth2_access_token = auth_oauth2_access_token;
+    secret_usage.auth_oauth2_token_url = auth_oauth2_token_url;
+    secret_usage.auth_oauth2_client_id = auth_oauth2_client_id;
+    secret_usage.auth_oauth2_client_secret = auth_oauth2_client_secret;
+    secret_usage.auth_oauth2_scope = auth_oauth2_scope;
 
     ResolvedRequestPayload {
         payload: SendRequestPayload {
@@ -506,6 +525,11 @@ pub fn resolve_request(
                 api_key_name,
                 api_key_value,
                 api_key_in: payload.auth.api_key_in.clone(),
+                oauth2_access_token,
+                oauth2_token_url,
+                oauth2_client_id,
+                oauth2_client_secret,
+                oauth2_scope,
             },
             pre_request_script: payload.pre_request_script.clone(),
             test_script: payload.test_script.clone(),
@@ -635,6 +659,31 @@ pub fn redact_secret_history_payload(
                 resolved.auth.api_key_value.clone()
             },
             api_key_in: resolved.auth.api_key_in.clone(),
+            oauth2_access_token: if usage.auth_oauth2_access_token {
+                original.auth.oauth2_access_token.clone()
+            } else {
+                resolved.auth.oauth2_access_token.clone()
+            },
+            oauth2_token_url: if usage.auth_oauth2_token_url {
+                original.auth.oauth2_token_url.clone()
+            } else {
+                resolved.auth.oauth2_token_url.clone()
+            },
+            oauth2_client_id: if usage.auth_oauth2_client_id {
+                original.auth.oauth2_client_id.clone()
+            } else {
+                resolved.auth.oauth2_client_id.clone()
+            },
+            oauth2_client_secret: if usage.auth_oauth2_client_secret {
+                original.auth.oauth2_client_secret.clone()
+            } else {
+                resolved.auth.oauth2_client_secret.clone()
+            },
+            oauth2_scope: if usage.auth_oauth2_scope {
+                original.auth.oauth2_scope.clone()
+            } else {
+                resolved.auth.oauth2_scope.clone()
+            },
         },
         pre_request_script: original.pre_request_script.clone(),
         test_script: original.test_script.clone(),

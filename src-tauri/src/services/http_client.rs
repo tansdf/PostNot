@@ -135,6 +135,14 @@ pub async fn send_request(
         "bearer" => {
             request = request.bearer_auth(&payload.auth.bearer_token);
         }
+        "oauth2" => {
+            let token = if payload.auth.oauth2_access_token.trim().is_empty() {
+                &payload.auth.bearer_token
+            } else {
+                &payload.auth.oauth2_access_token
+            };
+            request = request.bearer_auth(token);
+        }
         "api-key"
             if payload.auth.api_key_in == "header"
                 && !payload.auth.api_key_name.trim().is_empty() =>

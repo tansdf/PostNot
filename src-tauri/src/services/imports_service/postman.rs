@@ -114,6 +114,8 @@ struct PostmanAuth {
     basic: Vec<PostmanAuthValue>,
     #[serde(default)]
     bearer: Vec<PostmanAuthValue>,
+    #[serde(default)]
+    oauth2: Vec<PostmanAuthValue>,
     #[serde(rename = "apikey", default)]
     api_key: Vec<PostmanAuthValue>,
 }
@@ -553,6 +555,15 @@ fn map_postman_auth(auth: Option<&PostmanAuth>) -> RequestAuth {
                 "query" => "query".to_string(),
                 _ => "header".to_string(),
             },
+            ..empty_auth()
+        },
+        "oauth2" => RequestAuth {
+            auth_type: "oauth2".to_string(),
+            oauth2_access_token: auth_value(&auth.oauth2, "accessToken"),
+            oauth2_token_url: auth_value(&auth.oauth2, "tokenUrl"),
+            oauth2_client_id: auth_value(&auth.oauth2, "clientId"),
+            oauth2_client_secret: auth_value(&auth.oauth2, "clientSecret"),
+            oauth2_scope: auth_value(&auth.oauth2, "scope"),
             ..empty_auth()
         },
         _ => empty_auth(),

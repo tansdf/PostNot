@@ -1,6 +1,6 @@
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
 export type BodyMode = "none" | "json" | "raw" | "form-urlencoded" | "multipart";
-export type AuthType = "none" | "basic" | "bearer" | "api-key";
+export type AuthType = "none" | "basic" | "bearer" | "api-key" | "oauth2";
 export type ApiKeyPlacement = "header" | "query";
 
 export type KeyValueRow = {
@@ -40,6 +40,11 @@ export type RequestAuth = {
   apiKeyName: string;
   apiKeyValue: string;
   apiKeyIn: ApiKeyPlacement;
+  oauth2AccessToken: string;
+  oauth2TokenUrl: string;
+  oauth2ClientId: string;
+  oauth2ClientSecret: string;
+  oauth2Scope: string;
 };
 
 export type RequestDraft = {
@@ -370,7 +375,12 @@ export function createRequestDraft(): RequestDraft {
       bearerToken: "",
       apiKeyName: "",
       apiKeyValue: "",
-      apiKeyIn: "header"
+      apiKeyIn: "header",
+      oauth2AccessToken: "",
+      oauth2TokenUrl: "",
+      oauth2ClientId: "",
+      oauth2ClientSecret: "",
+      oauth2Scope: ""
     },
     preRequestScript: "",
     testScript: ""
@@ -398,7 +408,17 @@ function deepCloneSerializable<T>(value: T): T {
 }
 
 export function cloneRequestDraft(request: RequestDraft): RequestDraft {
-  return deepCloneSerializable(request);
+  const cloned = deepCloneSerializable(request);
+  const defaultAuth = createRequestDraft().auth;
+
+  return {
+    ...cloned,
+    auth: {
+      ...defaultAuth,
+      ...(cloned.auth ?? {}),
+      apiKeyIn: cloned.auth?.apiKeyIn === "query" ? "query" : "header"
+    }
+  };
 }
 
 export function cloneResponsePayload(response: ResponsePayload): ResponsePayload {

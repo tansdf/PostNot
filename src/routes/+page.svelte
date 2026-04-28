@@ -90,6 +90,8 @@
   let requestImportFormat = $state<"curl" | "openapi">("curl");
   let curlImportSource = $state("");
   let openApiImportSource = $state("");
+  let isRequestExportDialogOpen = $state(false);
+  let requestExportFormat = $state<"curl" | "json">("curl");
   let isImportingRequest = $state(false);
   let isHistoryCollapseSaving = $state(false);
   let requestImportErrorText = $state("");
@@ -127,6 +129,134 @@ paths:
   /items:
     get:
       summary: List items`;
+
+  let requestExportSource = $derived(buildRequestExportSource(request, requestExportFormat));
+
+  function shellQuote(value: string) {
+    if (value.length === 0) {
+      return "''";
+    }
+
+    return `'${value.replace(/'/g, "'\\''")}'`;
+  }
+
+  function hasHeader(requestDraft: RequestDraft, headerName: string) {
+    return requestDraft.headers.some(
+      (header) => header.enabled && header.key.trim().toLowerCase() === headerName.toLowerCase()
+    );
+  }
+
+  function buildUrlWithQueryParams(requestDraft: RequestDraft) {
+    const activeQueryRows = requestDraft.queryParams.filter((row) => row.enabled && row.key.trim());
+    const apiKeyQueryRows =
+      requestDraft.auth.type === "api-key" &&
+      requestDraft.auth.apiKeyIn === "query" &&
+      requestDraft.auth.apiKeyName.trim()
+        ? [
+            {
+              key: requestDraft.auth.apiKeyName,
+              value: requestDraft.auth.apiKeyValue
+            }
+          ]
+        : [];
+    const queryRows = [
+      ...activeQueryRows.map((row) => ({ key: row.key, value: row.value })),
+      ...apiKeyQueryRows
+    ];
+
+    if (queryRows.length === 0) {
+      return requestDraft.url;
+    }
+
+    const hashIndex = requestDraft.url.indexOf("#");
+    const hash = hashIndex >= 0 ? requestDraft.url.slice(hashIndex) : "";
+    const beforeHash = hashIndex >= 0 ? requestDraft.url.slice(0, hashIndex) : requestDraft.url;
+    const separator = beforeHash.includes("?") ? "&" : "?";
+    const queryString = queryRows
+      .map((row) => `${row.key}${row.value.length > 0 ? `=${row.value}` : ""}`)
+      .join("&");
+
+    return `${beforeHash}${separator}${queryString}${hash}`;
+  }
+
+  function buildCurlExport(requestDraft: RequestDraft) {
+    const lines = ["curl"];
+    lines.push(`  --request ${shellQuote(requestDraft.method)}`);
+    lines.push(`  --url ${shellQuote(buildUrlWithQueryParams(requestDraft))}`);
+
+    for (const header of requestDraft.headers.filter((row) => row.enabled && row.key.trim())) {
+      lines.push(`  --header ${shellQuote(`${header.key.trim()}: ${header.value}`)}`);
+    }
+
+    switch (requestDraft.auth.type) {
+      case "basic":
+        if (requestDraft.auth.basicUsername.trim() || requestDraft.auth.basicPassword.length > 0) {
+          lines.push(
+            `  --user ${shellQuote(`${requestDraft.auth.basicUsername}:${requestDraft.auth.basicPassword}`)}`
+          );
+        }
+        break;
+      case "bearer":
+        if (requestDraft.auth.bearerToken.trim()) {
+          lines.push(`  --header ${shellQuote(`Authorization: Bearer ${requestDraft.auth.bearerToken}`)}`);
+        }
+        break;
+      case "oauth2":
+        if (requestDraft.auth.oauth2AccessToken.trim()) {
+          lines.push(`  --header ${shellQuote(`Authorization: Bearer ${requestDraft.auth.oauth2AccessToken}`)}`);
+        }
+        break;
+      case "api-key":
+        if (
+          requestDraft.auth.apiKeyIn === "header" &&
+          requestDraft.auth.apiKeyName.trim()
+        ) {
+          lines.push(
+            `  --header ${shellQuote(`${requestDraft.auth.apiKeyName.trim()}: ${requestDraft.auth.apiKeyValue}`)}`
+          );
+        }
+        break;
+    }
+
+    switch (requestDraft.body.mode) {
+      case "json":
+        if (!hasHeader(requestDraft, "Content-Type")) {
+          lines.push(`  --header ${shellQuote("Content-Type: application/json")}`);
+        }
+        if (requestDraft.body.raw.length > 0) {
+          lines.push(`  --data-raw ${shellQuote(requestDraft.body.raw)}`);
+        }
+        break;
+      case "raw":
+        if (requestDraft.body.raw.length > 0) {
+          lines.push(`  --data-raw ${shellQuote(requestDraft.body.raw)}`);
+        }
+        break;
+      case "form-urlencoded":
+        for (const field of requestDraft.body.form.filter((row) => row.enabled && row.key.trim())) {
+          lines.push(`  --data-urlencode ${shellQuote(`${field.key}=${field.value}`)}`);
+        }
+        break;
+      case "multipart":
+        for (const field of requestDraft.body.form.filter((row) => row.enabled && row.key.trim())) {
+          lines.push(`  --form ${shellQuote(`${field.key}=${field.value}`)}`);
+        }
+        for (const file of requestDraft.body.files.filter((row) => row.enabled && row.name.trim() && row.path.trim())) {
+          lines.push(`  --form ${shellQuote(`${file.name}=@${file.path}`)}`);
+        }
+        break;
+    }
+
+    return lines.map((line, index) => (index === lines.length - 1 ? line : `${line} \\`)).join("\n");
+  }
+
+  function buildRequestExportSource(requestDraft: RequestDraft, format: "curl" | "json") {
+    if (format === "json") {
+      return JSON.stringify(cloneRequestDraft(requestDraft), null, 2);
+    }
+
+    return buildCurlExport(requestDraft);
+  }
 
   onMount(() => {
     void initializePage();
@@ -907,6 +1037,24 @@ paths:
     requestImportErrorText = "";
   }
 
+  function openRequestExportDialog() {
+    requestExportFormat = "curl";
+    isRequestExportDialogOpen = true;
+  }
+
+  function closeRequestExportDialog() {
+    isRequestExportDialogOpen = false;
+  }
+
+  async function handleCopyRequestExport() {
+    try {
+      await navigator.clipboard.writeText(requestExportSource);
+      notifications.success("The exported request text is on your clipboard.", "Export copied");
+    } catch (error) {
+      notifications.error(error instanceof Error ? error.message : String(error), "Copy failed");
+    }
+  }
+
   async function handleImportRequest() {
     requestImportErrorText = "";
     const source = requestImportFormat === "curl" ? curlImportSource.trim() : openApiImportSource.trim();
@@ -943,7 +1091,7 @@ paths:
   }
 
   function handleSaveDialogBackdropKeydown(event: KeyboardEvent) {
-    if (event.key === "Enter" || event.key === " ") {
+    if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
       event.preventDefault();
       closeSaveDialog();
     }
@@ -954,7 +1102,7 @@ paths:
       return;
     }
 
-    if (isRequestImportDialogOpen) {
+    if (isRequestImportDialogOpen || isRequestExportDialogOpen) {
       event.preventDefault();
       return;
     }
@@ -1040,6 +1188,7 @@ paths:
     sendDisabled={activeTabSendLocked}
     handleNewRequest={handleNewRequest}
     handleOpenImport={openRequestImportDialog}
+    handleOpenExport={openRequestExportDialog}
     handleSendRequest={handleSend}
     handleCancelRequest={handleCancelRequest}
     handleSaveRequest={handleSaveRequest}
@@ -1160,6 +1309,77 @@ paths:
   </div>
 {/if}
 
+{#if isRequestExportDialogOpen}
+  <div
+    class="modal-backdrop"
+    role="button"
+    tabindex="0"
+    aria-label="Close request export dialog"
+    use:modalFocusTrap={{ onEscape: closeRequestExportDialog }}
+    onclick={(event) => {
+      if (event.target === event.currentTarget) {
+        closeRequestExportDialog();
+      }
+    }}
+    onkeydown={(event) => {
+      if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+        event.preventDefault();
+        closeRequestExportDialog();
+      }
+    }}
+  >
+    <div class="panel save-dialog" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="request-export-title">
+      <div class="editor-header import-dialog-header">
+        <h2 id="request-export-title">Export Request</h2>
+        <span class="history-meta">
+          {requestExportFormat === "curl" ? "cURL command" : "PostNot request JSON"}
+        </span>
+      </div>
+
+      <div class="editor-block">
+        <div class="import-format-toggle" role="tablist" aria-label="Choose request export format">
+          <button
+            class={["system-button", requestExportFormat === "curl" && "toggle-active"]}
+            type="button"
+            role="tab"
+            aria-selected={requestExportFormat === "curl"}
+            onclick={() => (requestExportFormat = "curl")}
+          >
+            cURL
+          </button>
+          <button
+            class={["system-button", requestExportFormat === "json" && "toggle-active"]}
+            type="button"
+            role="tab"
+            aria-selected={requestExportFormat === "json"}
+            onclick={() => (requestExportFormat = "json")}
+          >
+            JSON
+          </button>
+        </div>
+
+        <label>
+          <span class="field-label">{requestExportFormat === "curl" ? "cURL command" : "Request JSON"}</span>
+          <textarea
+            class="text-input collections-import-source"
+            value={requestExportSource}
+            readonly
+          ></textarea>
+        </label>
+
+        <div class="collections-page-actions">
+          <button class="send-button" type="button" onclick={handleCopyRequestExport}>
+            Copy
+          </button>
+          <button class="ghost-button" type="button" onclick={closeRequestExportDialog}>
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+{/if}
+
 {#if isRequestImportDialogOpen}
   <div
     class="modal-backdrop"
@@ -1173,7 +1393,7 @@ paths:
       }
     }}
     onkeydown={(event) => {
-      if (event.key === "Enter" || event.key === " ") {
+      if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
         event.preventDefault();
         closeRequestImportDialog();
       }

@@ -6,6 +6,19 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-04-28
+
+### Added
+
+- cURL import now handles common real-world flags including `--url`, `--get`, repeated `--data`, multipart `--form`, `--compressed`, cookies, redirects, and shell line continuations.
+- Added OAuth2 bearer auth fields, OAuth2 token refresh script scaffolding, and script helpers for setting OAuth2 tokens from pre-request scripts.
+- Added single-request export from the Requests page, with cURL and PostNot request JSON output in a read-only modal.
+
+### Fixed
+
+- cURL imports now split URL query strings into query parameter rows without keeping duplicate query text in the imported request URL.
+- Request import/export dialogs no longer close when Space or Enter is pressed inside their text areas.
+
 ## [0.18.2] - 2026-04-26
 
 ### Added

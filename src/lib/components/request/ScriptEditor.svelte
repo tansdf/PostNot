@@ -131,6 +131,12 @@
       insertText: "pn.request.setBearerToken(__CURSOR__)"
     },
     {
+      id: "req-set-oauth2",
+      label: "setOAuth2Token(token)",
+      detail: "Switch auth to OAuth2 bearer token",
+      insertText: "pn.request.setOAuth2Token(__CURSOR__)"
+    },
+    {
       id: "req-set-basic",
       label: "setBasicAuth(username, password)",
       detail: "Switch auth to basic auth",

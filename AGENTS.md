@@ -12,7 +12,7 @@ PostNot is a local-first desktop API client built with:
 - TypeScript
 - SQLite
 
-The app already supports request execution, capped response body previews with binary response handling, history, collections with nested folders and drag-and-drop request moves, sidebar collection search, environments, secret environment storage, import/export flows including OpenAPI 3 import, notifications, settings, signed in-app update checks, inherited collection/folder/saved-request pre-request and test scripts (worker-backed frontend JavaScript execution around the native send), async script helper requests through `pn.http.send(...)`, and script-driven active-environment variable writes.
+The app already supports request execution, capped response body previews with binary response handling, history, collections with nested folders and drag-and-drop request moves, sidebar collection search, environments, secret environment storage, import/export flows including OpenAPI 3 import, broader cURL flag coverage, and single-request cURL/JSON export, OAuth2 bearer auth helpers, notifications, settings, signed in-app update checks, inherited collection/folder/saved-request pre-request and test scripts (worker-backed frontend JavaScript execution around the native send), async script helper requests through `pn.http.send(...)`, and script-driven active-environment variable writes.
 
 ## Canonical Working Directory
 
@@ -57,6 +57,9 @@ Implemented now:
 - Postman environment import/export
 - OpenAPI 3 collection import and single-request draft import
 - cURL import
+- broader cURL import coverage for common flags such as `--url`, `--get`, repeated `--data`, `--form`, cookies, compression, redirects, and shell continuations
+- single-request export from the Requests page as cURL or PostNot request JSON
+- OAuth2 bearer auth fields and a client-credentials refresh script scaffold
 - multipart request composition with local file uploads
 - built-in dynamic request variables
 - pre-request and test scripts on collections, folders, and saved requests (`request-scripts.ts`, `request-script-worker.ts`, `ScriptEditor.svelte`)

@@ -17,7 +17,7 @@ import {
 
 const VALID_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]);
 const VALID_BODY_MODES = new Set(["none", "json", "raw", "form-urlencoded", "multipart"]);
-const VALID_AUTH_TYPES = new Set(["none", "basic", "bearer", "api-key"]);
+const VALID_AUTH_TYPES = new Set(["none", "basic", "bearer", "api-key", "oauth2"]);
 const VALID_API_KEY_PLACEMENTS = new Set(["header", "query"]);
 const AsyncFunction = Object.getPrototypeOf(async function () {
   return undefined;
@@ -420,6 +420,13 @@ function createRequestFacade(request: RequestDraft, variables: VariableMap) {
         bearerToken: asString(token)
       };
     },
+    setOAuth2Token(token: string) {
+      request.auth = {
+        ...request.auth,
+        type: "oauth2",
+        oauth2AccessToken: asString(token)
+      };
+    },
     setBasicAuth(username: string, password: string) {
       request.auth = {
         ...request.auth,
@@ -446,7 +453,12 @@ function createRequestFacade(request: RequestDraft, variables: VariableMap) {
         bearerToken: "",
         apiKeyName: "",
         apiKeyValue: "",
-        apiKeyIn: "header"
+        apiKeyIn: "header",
+        oauth2AccessToken: "",
+        oauth2TokenUrl: "",
+        oauth2ClientId: "",
+        oauth2ClientSecret: "",
+        oauth2Scope: ""
       };
     },
     getHeader(name: string) {
@@ -684,7 +696,12 @@ function normalizeAuth(value: unknown): RequestAuth {
     bearerToken: "",
     apiKeyName: "",
     apiKeyValue: "",
-    apiKeyIn: "header"
+    apiKeyIn: "header",
+    oauth2AccessToken: "",
+    oauth2TokenUrl: "",
+    oauth2ClientId: "",
+    oauth2ClientSecret: "",
+    oauth2Scope: ""
   };
 
   if (!isRecord(value)) {
@@ -694,7 +711,9 @@ function normalizeAuth(value: unknown): RequestAuth {
   const authType: RequestAuth["type"] =
     typeof value.type === "string" && VALID_AUTH_TYPES.has(value.type)
       ? (value.type as RequestAuth["type"])
-      : typeof value.bearerToken === "string"
+      : typeof value.oauth2AccessToken === "string"
+        ? "oauth2"
+        : typeof value.bearerToken === "string"
         ? "bearer"
         : typeof value.basicUsername === "string" || typeof value.basicPassword === "string"
           ? "basic"
@@ -712,7 +731,12 @@ function normalizeAuth(value: unknown): RequestAuth {
     apiKeyIn:
       typeof value.apiKeyIn === "string" && VALID_API_KEY_PLACEMENTS.has(value.apiKeyIn)
         ? (value.apiKeyIn as RequestAuth["apiKeyIn"])
-        : "header"
+        : "header",
+    oauth2AccessToken: asString(value.oauth2AccessToken ?? ""),
+    oauth2TokenUrl: asString(value.oauth2TokenUrl ?? ""),
+    oauth2ClientId: asString(value.oauth2ClientId ?? ""),
+    oauth2ClientSecret: asString(value.oauth2ClientSecret ?? ""),
+    oauth2Scope: asString(value.oauth2Scope ?? "")
   };
 }
 

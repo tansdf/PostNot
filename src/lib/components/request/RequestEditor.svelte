@@ -25,6 +25,7 @@
     environmentVariables = [],
     handleNewRequest = () => {},
     handleOpenImport = () => {},
+    handleOpenExport = () => {},
     handleSendRequest = () => {},
     handleCancelRequest = () => {},
     handleSaveRequest = () => {},
@@ -41,6 +42,7 @@
     environmentVariables?: EnvironmentVariable[];
     handleNewRequest?: () => Promise<void> | void;
     handleOpenImport?: () => Promise<void> | void;
+    handleOpenExport?: () => Promise<void> | void;
     handleSendRequest?: () => Promise<void> | void;
     handleCancelRequest?: () => Promise<void> | void;
     handleSaveRequest?: () => Promise<void> | void;
@@ -99,6 +101,60 @@
   const TEST_SCRIPT_PLACEHOLDER = `pn.test('status is 200', () => {
   pn.expect(pn.response.code).toBe(200);
 });`;
+
+  const OAUTH2_CLIENT_CREDENTIALS_SCRIPT = `const tokenUrl = pn.variables.get('oauth_token_url');
+const clientId = pn.variables.get('oauth_client_id');
+const clientSecret = pn.variables.get('oauth_client_secret');
+const scope = pn.variables.get('oauth_scope') ?? '';
+
+if (!tokenUrl || !clientId || !clientSecret) {
+  throw new Error('Missing OAuth2 environment variables.');
+}
+
+const tokenResponse = await pn.http.send({
+  name: 'OAuth2 token refresh',
+  method: 'POST',
+  url: tokenUrl,
+  queryParams: [],
+  headers: [
+    { id: 'content-type', key: 'Content-Type', value: 'application/x-www-form-urlencoded', enabled: true }
+  ],
+  body: {
+    mode: 'form-urlencoded',
+    raw: '',
+    form: [
+      { id: 'grant-type', key: 'grant_type', value: 'client_credentials', enabled: true },
+      { id: 'client-id', key: 'client_id', value: clientId, enabled: true },
+      { id: 'client-secret', key: 'client_secret', value: clientSecret, enabled: true },
+      { id: 'scope', key: 'scope', value: scope, enabled: Boolean(scope) }
+    ],
+    files: []
+  },
+  auth: {
+    type: 'none',
+    basicUsername: '',
+    basicPassword: '',
+    bearerToken: '',
+    apiKeyName: '',
+    apiKeyValue: '',
+    apiKeyIn: 'header',
+    oauth2AccessToken: '',
+    oauth2TokenUrl: '',
+    oauth2ClientId: '',
+    oauth2ClientSecret: '',
+    oauth2Scope: ''
+  },
+  preRequestScript: '',
+  testScript: ''
+});
+
+const tokenBody = tokenResponse.json();
+if (!tokenBody.access_token) {
+  throw new Error('OAuth2 token response did not include access_token.');
+}
+
+await pn.variables.set('oauth_access_token', String(tokenBody.access_token), { secret: true });
+pn.request.setOAuth2Token(String(tokenBody.access_token));`;
 
   function splitUrlAndQuery(value: string) {
     const hashIndex = value.indexOf("#");
@@ -555,6 +611,16 @@
       [field]: value
     };
   }
+
+  function insertOAuth2RefreshScript() {
+    request = {
+      ...request,
+      preRequestScript: request.preRequestScript.trim()
+        ? `${request.preRequestScript.trim()}\n\n${OAUTH2_CLIENT_CREDENTIALS_SCRIPT}`
+        : OAUTH2_CLIENT_CREDENTIALS_SCRIPT
+    };
+    activePanel = "scripts";
+  }
 </script>
 
 <svelte:window onkeydown={closeSaveMenuOnWindowKeydown} />
@@ -566,6 +632,7 @@
       <h2>Request</h2>
       <button class="system-button" type="button" onclick={handleNewRequest}>New</button>
       <button class="system-button" type="button" onclick={handleOpenImport}>Import</button>
+      <button class="system-button" type="button" onclick={handleOpenExport}>Export</button>
     </div>
   </div>
 
@@ -935,6 +1002,7 @@
             <option value="basic">Basic</option>
             <option value="bearer">Bearer</option>
             <option value="api-key">API key</option>
+            <option value="oauth2">OAuth2</option>
           </select>
         </label>
       </div>
@@ -1032,6 +1100,86 @@
               <option value="query">Query parameter</option>
             </select>
           </label>
+        </div>
+      {/if}
+
+      {#if request.auth.type === "oauth2"}
+        <div class="auth-grid">
+          <label>
+            <span class="field-label">Access token</span>
+            <VariableField
+              className="text-input"
+              type="password"
+              value={request.auth.oauth2AccessToken}
+              variables={environmentVariables}
+              placeholder={"{{oauth_access_token}}"}
+              onValueInput={(nextValue) =>
+                (request = {
+                  ...request,
+                  auth: { ...request.auth, oauth2AccessToken: nextValue }
+                })}
+            />
+          </label>
+          <label>
+            <span class="field-label">Token URL</span>
+            <VariableField
+              className="text-input"
+              value={request.auth.oauth2TokenUrl}
+              variables={environmentVariables}
+              placeholder={"{{oauth_token_url}}"}
+              onValueInput={(nextValue) =>
+                (request = {
+                  ...request,
+                  auth: { ...request.auth, oauth2TokenUrl: nextValue }
+                })}
+            />
+          </label>
+          <label>
+            <span class="field-label">Client ID</span>
+            <VariableField
+              className="text-input"
+              value={request.auth.oauth2ClientId}
+              variables={environmentVariables}
+              placeholder={"{{oauth_client_id}}"}
+              onValueInput={(nextValue) =>
+                (request = {
+                  ...request,
+                  auth: { ...request.auth, oauth2ClientId: nextValue }
+                })}
+            />
+          </label>
+          <label>
+            <span class="field-label">Client secret</span>
+            <VariableField
+              className="text-input"
+              type="password"
+              value={request.auth.oauth2ClientSecret}
+              variables={environmentVariables}
+              placeholder={"{{oauth_client_secret}}"}
+              onValueInput={(nextValue) =>
+                (request = {
+                  ...request,
+                  auth: { ...request.auth, oauth2ClientSecret: nextValue }
+                })}
+            />
+          </label>
+          <label>
+            <span class="field-label">Scope</span>
+            <VariableField
+              className="text-input"
+              value={request.auth.oauth2Scope}
+              variables={environmentVariables}
+              placeholder={"{{oauth_scope}}"}
+              onValueInput={(nextValue) =>
+                (request = {
+                  ...request,
+                  auth: { ...request.auth, oauth2Scope: nextValue }
+                })}
+            />
+          </label>
+          <div class="auth-action-row">
+            <button class="ghost-button" type="button" onclick={insertOAuth2RefreshScript}>Insert refresh script</button>
+          </div>
         </div>
       {/if}
     </div>

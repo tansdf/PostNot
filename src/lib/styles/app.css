@@ -1298,6 +1298,10 @@ select option {
   flex: 1 1 220px;
 }
 
+.auth-action-row {
+  flex: 1 1 100%;
+}
+
 .settings-page {
   width: 100%;
   max-width: none;

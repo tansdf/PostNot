@@ -211,7 +211,12 @@ function createMockHistoryDetail(id: string): HistoryEntryDetail {
         bearerToken: "",
         apiKeyName: "",
         apiKeyValue: "",
-        apiKeyIn: "header" as const
+        apiKeyIn: "header" as const,
+        oauth2AccessToken: "",
+        oauth2TokenUrl: "",
+        oauth2ClientId: "",
+        oauth2ClientSecret: "",
+        oauth2Scope: ""
       },
       preRequestScript: "",
       testScript: ""
@@ -267,7 +272,12 @@ function createMockSavedRequestDetail(id: string): SavedRequestDetail {
         bearerToken: "",
         apiKeyName: "",
         apiKeyValue: "",
-        apiKeyIn: "header"
+        apiKeyIn: "header",
+        oauth2AccessToken: "",
+        oauth2TokenUrl: "",
+        oauth2ClientId: "",
+        oauth2ClientSecret: "",
+        oauth2Scope: ""
       },
       preRequestScript: "",
       testScript: ""
@@ -715,7 +725,12 @@ export async function importCurlRequestToDraft(input: CurlImportInput): Promise<
           bearerToken: "",
           apiKeyName: "",
           apiKeyValue: "",
-          apiKeyIn: "header"
+          apiKeyIn: "header",
+          oauth2AccessToken: "",
+          oauth2TokenUrl: "",
+          oauth2ClientId: "",
+          oauth2ClientSecret: "",
+          oauth2Scope: ""
         },
         preRequestScript: "",
         testScript: ""
@@ -771,7 +786,12 @@ export async function importOpenApiRequestToDraft(
           bearerToken: "",
           apiKeyName: "",
           apiKeyValue: "",
-          apiKeyIn: "header"
+          apiKeyIn: "header",
+          oauth2AccessToken: "",
+          oauth2TokenUrl: "",
+          oauth2ClientId: "",
+          oauth2ClientSecret: "",
+          oauth2Scope: ""
         },
         preRequestScript: "",
         testScript: ""

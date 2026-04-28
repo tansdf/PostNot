@@ -247,6 +247,15 @@ fn map_auth(auth: &RequestAuth) -> Option<PostmanAuthExport> {
             }],
             api_key: vec![],
         }),
+        "oauth2" => Some(PostmanAuthExport {
+            auth_type: "bearer".to_string(),
+            basic: vec![],
+            bearer: vec![PostmanAuthValueExport {
+                key: "token".to_string(),
+                value: auth.oauth2_access_token.clone(),
+            }],
+            api_key: vec![],
+        }),
         "api-key" => Some(PostmanAuthExport {
             auth_type: "apikey".to_string(),
             basic: vec![],

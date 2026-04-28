@@ -33,7 +33,7 @@ Why this stack:
 
 ## 3. Current Application State
 
-This section reflects the code currently implemented in the repository, including the shipped `0.15.0` scripting update, the `0.15.1` route/modal polish work, the `0.16.0` OpenAPI 3 import release, the `0.17.0` multitab request workspace release, the `0.17.1` history-restore patch, the `0.17.2` requests/environments workflow follow-up, the `0.17.3` hydration-flash polish release, the `0.17.4` follow-up that unifies hydration-flash handling through a shared synchronous paint cache, the `0.18.0` sidebar collection search release, the `0.18.1` scripting/workspace hardening patch, and the `0.18.2` response body safety patch (see [CHANGELOG.md](../CHANGELOG.md)).
+This section reflects the code currently implemented in the repository, including the shipped `0.15.0` scripting update, the `0.15.1` route/modal polish work, the `0.16.0` OpenAPI 3 import release, the `0.17.0` multitab request workspace release, the `0.17.1` history-restore patch, the `0.17.2` requests/environments workflow follow-up, the `0.17.3` hydration-flash polish release, the `0.17.4` follow-up that unifies hydration-flash handling through a shared synchronous paint cache, the `0.18.0` sidebar collection search release, the `0.18.1` scripting/workspace hardening patch, the `0.18.2` response body safety patch, and the `0.19.0` cURL/OAuth2 import-auth and request-export polish (see [CHANGELOG.md](../CHANGELOG.md)).
 
 ### Implemented
 
@@ -46,7 +46,7 @@ This section reflects the code currently implemented in the repository, includin
   - URL
   - query parameters
   - headers
-  - auth: none, basic, bearer, API key
+  - auth: none, basic, bearer, API key, OAuth2 bearer
   - body: none, JSON, raw, form-urlencoded, multipart with file uploads
 - Native request execution through Rust
 - Response viewer with:
@@ -72,7 +72,8 @@ This section reflects the code currently implemented in the repository, includin
 - OpenAPI 3 JSON/YAML import for collections and single-request drafts
 - Postman collection JSON export
 - Postman environment JSON export
-- cURL command import
+- cURL command import, including `--url`, `--get`, repeated `--data`, multipart `--form`, cookies, compression, redirect flags, and shell continuation cleanup
+- Single-request cURL and PostNot request JSON export from the Requests page
 - Multipart request composition with native file selection
 - Built-in dynamic variables at request runtime
 - App-level floating notification system for action feedback
@@ -86,6 +87,7 @@ This section reflects the code currently implemented in the repository, includin
 - Pre-request scripts and test scripts for collections, folders, and saved requests (executed in a short-lived worker-backed frontend sandbox before send and after response)
 - Async scripting helper requests through `await pn.http.send(...)`
 - Active-environment variable reads and writes from scripts, including persisted secret writes through the OS credential store path
+- OAuth2 bearer tokens can be sourced from environment variables, refreshed through the inserted client-credentials pre-request script scaffold, and set at runtime with `pn.request.setOAuth2Token(...)`
 - Request tabs persist through the existing `app_settings` store, keeping draft state and active tab selection across restarts without persisting response bodies, script output, or transient tab errors
 - URL-driven selection for the main saved request (`savedRequestId`), collections (`collectionId`), and environments (`environmentId`) uses generation guards so overlapping async loads from rapid navigation do not apply stale UI state; clearing `savedRequestId` from the URL resets deep-link tracking so the same request can load again from the query string
 - Save-request, cURL import, collection import, and environment import modals trap focus (initial focus, Tab cycle within the dialog, Escape to close, prior focus restored on close) for keyboard and assistive technology users
@@ -558,7 +560,8 @@ Current UI sections:
 - active environment selector
 - request editor and collection editor with pre-request and test script editors (`ScriptEditor.svelte`)
 - save flow with collection and folder target selection
-- cURL import modal
+- request import modal for cURL and OpenAPI 3 single-request drafts
+- request export modal for cURL and PostNot request JSON
 - request-level save/update action
 - response viewer
 - history panel
@@ -722,8 +725,8 @@ This means the project does not need to hold all remaining `v1` features for one
 
 One reasonable path from the current state is:
 
-1. `0.18.0`: sidebar collection search
-2. `0.19.0`: hardening, optimization, and UX/error-handling improvements
+1. `0.19.0`: cURL/OAuth2 import-auth and request-export polish
+2. `0.20.0`: hardening, optimization, and UX/error-handling improvements
 3. `1.0.0`: release-signoff build after the `v1` scope is complete and verified
 
 The exact version numbers are less important than the policy: `1.0.0` is allowed to be a smaller visible release than earlier `0.x` milestones if it represents a meaningful jump in confidence and support commitment.

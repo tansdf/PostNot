@@ -66,6 +66,11 @@ pub(super) fn empty_auth() -> RequestAuth {
         api_key_name: String::new(),
         api_key_value: String::new(),
         api_key_in: "header".to_string(),
+        oauth2_access_token: String::new(),
+        oauth2_token_url: String::new(),
+        oauth2_client_id: String::new(),
+        oauth2_client_secret: String::new(),
+        oauth2_scope: String::new(),
     }
 }
 

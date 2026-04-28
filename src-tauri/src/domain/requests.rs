@@ -33,12 +33,28 @@ pub struct RequestBody {
 pub struct RequestAuth {
     #[serde(rename = "type")]
     pub auth_type: String,
+    #[serde(default)]
     pub basic_username: String,
+    #[serde(default)]
     pub basic_password: String,
+    #[serde(default)]
     pub bearer_token: String,
+    #[serde(default)]
     pub api_key_name: String,
+    #[serde(default)]
     pub api_key_value: String,
+    #[serde(default = "default_api_key_in")]
     pub api_key_in: String,
+    #[serde(default)]
+    pub oauth2_access_token: String,
+    #[serde(default)]
+    pub oauth2_token_url: String,
+    #[serde(default)]
+    pub oauth2_client_id: String,
+    #[serde(default)]
+    pub oauth2_client_secret: String,
+    #[serde(default)]
+    pub oauth2_scope: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -85,4 +101,8 @@ pub struct SendRequestResult {
 
 fn default_true() -> bool {
     true
+}
+
+fn default_api_key_in() -> String {
+    "header".to_string()
 }

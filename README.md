@@ -29,12 +29,14 @@ PostNot is built for working with HTTP APIs on your own machine, with local pers
 - Restore a past request from history into a new request tab
 - Import from Postman collections and environments
 - Import collections or single requests from OpenAPI 3 JSON or YAML
-- Import from cURL
+- Import from cURL, including common flags for URL selection, query/body data, multipart forms, cookies, compression, redirects, and shell continuations
+- Export the active request as cURL or PostNot request JSON
 - Export collections and environments back to Postman-compatible JSON
 - Attach local files to multipart requests
 - Run inherited collection, folder, and saved-request pre-request and test scripts (worker-backed JavaScript around each send)
 - Call helper HTTP requests from scripts with `await pn.http.send(...)`
 - Read and persist active environment variable updates from scripts, including secret writes
+- Configure OAuth2 bearer auth with environment-backed tokens and insert a client-credentials refresh script scaffold
 - Inspect binary and oversized responses through capped, metadata-rich response previews
 - Use floating notifications, persisted settings, and signed in-app update checks
 - Autosave environment edits by default, with keyboard saves via `Ctrl+S` / `Cmd+S` on requests and environments
