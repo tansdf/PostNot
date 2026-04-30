@@ -1327,6 +1327,45 @@ select option {
   flex: 1 1 100%;
 }
 
+.oauth2-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.inline-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+}
+
+.inline-checkbox input {
+  margin: 0;
+}
+
+.inline-checkbox-disabled {
+  opacity: 0.72;
+}
+
+.auth-status-text,
+.auth-error-text {
+  margin: 8px 0 0;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+.auth-status-text {
+  color: var(--text-secondary);
+}
+
+.auth-error-text {
+  color: var(--danger);
+}
+
 .settings-page {
   width: 100%;
   max-width: none;

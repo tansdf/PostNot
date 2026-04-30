@@ -31,7 +31,12 @@
     RequestWorkspaceTab,
     RequestScriptExecution
   } from "$lib/api/types";
-  import { cloneRequestDraft, createDefaultSettings, createRequestDraft } from "$lib/api/types";
+  import {
+    cloneRequestDraft,
+    createDefaultSettings,
+    createEnvironmentVariable,
+    createRequestDraft
+  } from "$lib/api/types";
   import HistoryPanel from "$lib/components/history/HistoryPanel.svelte";
   import RequestEditor from "$lib/components/request/RequestEditor.svelte";
   import RequestTabs from "$lib/components/request/RequestTabs.svelte";
@@ -616,6 +621,143 @@ paths:
     return updated;
   }
 
+  function responseSnippet(value: string) {
+    const normalized = value.trim().replace(/\s+/g, " ");
+    if (!normalized) {
+      return "";
+    }
+
+    return normalized.length > 240 ? `${normalized.slice(0, 240)}...` : normalized;
+  }
+
+  async function handleFetchOAuth2Token(options: { persistToEnvironment: boolean }) {
+    const auth = request.auth;
+    const tokenUrl = auth.oauth2TokenUrl.trim();
+    const clientId = auth.oauth2ClientId.trim();
+    const clientSecret = auth.oauth2ClientSecret.trim();
+    const scope = auth.oauth2Scope.trim();
+
+    if (!tokenUrl || !clientId || !clientSecret) {
+      throw new Error("Token URL, client ID, and client secret are required.");
+    }
+
+    if (options.persistToEnvironment && !activeEnvironmentDetail) {
+      throw new Error("Activate an environment before saving the OAuth2 token.");
+    }
+
+    const tokenRequest: RequestDraft = {
+      ...createRequestDraft(),
+      name: "OAuth2 token refresh",
+      method: "POST",
+      url: tokenUrl,
+      queryParams: [],
+      headers: [
+        {
+          id: "oauth2-accept",
+          key: "Accept",
+          value: "application/json",
+          enabled: true
+        }
+      ],
+      body: {
+        mode: "form-urlencoded",
+        raw: "",
+        form: [
+          { id: "oauth2-grant-type", key: "grant_type", value: "client_credentials", enabled: true },
+          { id: "oauth2-client-id", key: "client_id", value: clientId, enabled: true },
+          { id: "oauth2-client-secret", key: "client_secret", value: clientSecret, enabled: true },
+          { id: "oauth2-scope", key: "scope", value: scope, enabled: Boolean(scope) }
+        ],
+        files: []
+      }
+    };
+
+    const sendResult = await sendRequest(tokenRequest, { persistHistory: false });
+    const { response } = sendResult;
+
+    if (response.errorText) {
+      throw new Error(response.errorText);
+    }
+
+    if (!response.statusCode || response.statusCode < 200 || response.statusCode >= 300) {
+      const details = responseSnippet(response.bodyText);
+      throw new Error(
+        `Token endpoint returned ${response.statusCode ?? "no status"}${details ? `: ${details}` : "."}`
+      );
+    }
+
+    let tokenBody: unknown;
+    try {
+      tokenBody = JSON.parse(response.bodyText);
+    } catch {
+      throw new Error("Token endpoint did not return JSON.");
+    }
+
+    if (!tokenBody || typeof tokenBody !== "object" || !("access_token" in tokenBody)) {
+      throw new Error("Token response did not include access_token.");
+    }
+
+    const accessToken = String((tokenBody as { access_token: unknown }).access_token ?? "");
+    if (!accessToken.trim()) {
+      throw new Error("Token response returned an empty access_token.");
+    }
+
+    const expiresInValue = (tokenBody as { expires_in?: unknown }).expires_in;
+    const expiresIn = typeof expiresInValue === "number" && Number.isFinite(expiresInValue) ? expiresInValue : null;
+    const tokenTypeValue = (tokenBody as { token_type?: unknown }).token_type;
+    const tokenType = typeof tokenTypeValue === "string" ? tokenTypeValue : "Bearer";
+
+    if (options.persistToEnvironment && activeEnvironmentDetail) {
+      const existingIndex = activeEnvironmentDetail.variables.findIndex(
+        (variable) => variable.key.trim() === "oauth_access_token"
+      );
+      const nextVariables =
+        existingIndex >= 0
+          ? activeEnvironmentDetail.variables.map((variable, index) =>
+              index === existingIndex
+                ? {
+                    ...variable,
+                    value: accessToken,
+                    enabled: true,
+                    isSecret: true
+                  }
+                : variable
+            )
+          : [
+              ...activeEnvironmentDetail.variables,
+              {
+                ...createEnvironmentVariable(),
+                key: "oauth_access_token",
+                value: accessToken,
+                enabled: true,
+                isSecret: true
+              }
+            ];
+
+      await persistActiveEnvironmentFromScript({
+        ...activeEnvironmentDetail,
+        variables: nextVariables
+      });
+      notifications.success("Saved as {{oauth_access_token}} in the active environment.", "OAuth2 token fetched");
+
+      return {
+        accessToken,
+        persistedToEnvironment: true,
+        expiresIn,
+        tokenType
+      };
+    }
+
+    notifications.success("The token was placed in this request's OAuth2 access token field.", "OAuth2 token fetched");
+
+    return {
+      accessToken,
+      persistedToEnvironment: false,
+      expiresIn,
+      tokenType
+    };
+  }
+
   function activeCollectionScripts(tab: RequestWorkspaceTab): InheritedRequestScripts | null {
     if (!tab.collectionId) {
       return null;
@@ -1181,6 +1323,8 @@ paths:
     handleSaveRequest={handleSaveRequest}
     showSaveMenu={collections.collections.length > 0}
     handleSaveAsRequest={handleSaveAsNewRequest}
+    activeEnvironmentName={activeEnvironmentDetail?.name ?? ""}
+    handleFetchOAuth2Token={handleFetchOAuth2Token}
   />
 
   {#if activeTabErrorText}

@@ -46,7 +46,7 @@ This section reflects the code currently implemented in the repository, includin
   - URL
   - query parameters
   - headers
-  - auth: none, basic, bearer, API key, OAuth2 bearer
+  - auth: none, basic, bearer, API key, OAuth2 bearer with client-credentials token fetch
   - body: none, JSON, raw, form-urlencoded, multipart with file uploads
 - Native request execution through Rust
 - Response viewer with:
@@ -86,7 +86,7 @@ This section reflects the code currently implemented in the repository, includin
 - Pre-request scripts and test scripts for collections, folders, and saved requests (executed in a short-lived worker-backed frontend sandbox before send and after response)
 - Async scripting helper requests through `await pn.http.send(...)`
 - Active-environment variable reads and writes from scripts, including persisted secret writes through the OS credential store path
-- OAuth2 bearer tokens can be sourced from environment variables, refreshed through the inserted client-credentials pre-request script scaffold, and set at runtime with `pn.request.setOAuth2Token(...)`
+- OAuth2 bearer tokens can be fetched from the request editor through the client-credentials flow, sourced from environment variables, optionally persisted to the active environment as a secret `oauth_access_token`, and set at runtime with `pn.request.setOAuth2Token(...)`
 - Request tabs persist through the existing `app_settings` store, keeping draft state and active tab selection across restarts without persisting response bodies, script output, or transient tab errors
 - URL-driven selection for the main saved request (`savedRequestId`), collections (`collectionId`), and environments (`environmentId`) uses generation guards so overlapping async loads from rapid navigation do not apply stale UI state; clearing `savedRequestId` from the URL resets deep-link tracking so the same request can load again from the query string
 - Save-request, cURL import, collection import, and environment import modals trap focus (initial focus, Tab cycle within the dialog, Escape to close, prior focus restored on close) for keyboard and assistive technology users

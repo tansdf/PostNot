@@ -36,7 +36,7 @@ PostNot is built for working with HTTP APIs on your own machine, with local pers
 - Run inherited collection, folder, and saved-request pre-request and test scripts (worker-backed JavaScript around each send)
 - Call helper HTTP requests from scripts with `await pn.http.send(...)`
 - Read and persist active environment variable updates from scripts, including secret writes
-- Configure OAuth2 bearer auth with environment-backed tokens and insert a client-credentials refresh script scaffold
+- Fetch OAuth2 client-credentials bearer tokens from the request editor and optionally persist them into the active environment
 - Inspect large responses with full body reads and JSON-friendly rendering
 - Use floating notifications, persisted settings, and signed in-app update checks with download progress
 - Autosave environment edits by default, with keyboard saves via `Ctrl+S` / `Cmd+S` on requests and environments

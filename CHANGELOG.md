@@ -6,6 +6,13 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.19.6] - 2026-04-30
+
+### Added
+
+- Added a Requests editor `Fetch token` action for OAuth2 client-credentials auth that uses the configured token URL, client ID, client secret, and scope, then populates the OAuth2 access token.
+- OAuth2 token fetches can save the token into the active environment as a secret `oauth_access_token` variable and leave the request pointing at `{{oauth_access_token}}`.
+
 ## [0.19.5] - 2026-04-30
 
 ### Changed

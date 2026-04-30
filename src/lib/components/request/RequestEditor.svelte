@@ -30,7 +30,9 @@
     handleCancelRequest = () => {},
     handleSaveRequest = () => {},
     showSaveMenu = false,
-    handleSaveAsRequest = () => {}
+    handleSaveAsRequest = () => {},
+    activeEnvironmentName = "",
+    handleFetchOAuth2Token = undefined
   }: {
     request: RequestDraft;
     isSending?: boolean;
@@ -48,6 +50,13 @@
     handleSaveRequest?: () => Promise<void> | void;
     showSaveMenu?: boolean;
     handleSaveAsRequest?: () => Promise<void> | void;
+    activeEnvironmentName?: string;
+    handleFetchOAuth2Token?: (options: { persistToEnvironment: boolean }) => Promise<{
+      accessToken: string;
+      persistedToEnvironment: boolean;
+      expiresIn: number | null;
+      tokenType: string;
+    }>;
   } = $props();
 
   let activePanel: "query" | "headers" | "body" | "auth" | "scripts" = $state("query");
@@ -86,6 +95,10 @@
   let jsonValidationError = $state("");
   let multipartErrorText = $state("");
   let isPickingMultipartFiles = $state(false);
+  let isFetchingOAuth2Token = $state(false);
+  let oauth2FetchErrorText = $state("");
+  let oauth2FetchStatusText = $state("");
+  let shouldPersistOAuth2Token = $state(true);
 
   const panels = [
     { id: "query", label: "Query" },
@@ -102,59 +115,7 @@
   pn.expect(pn.response.code).toBe(200);
 });`;
 
-  const OAUTH2_CLIENT_CREDENTIALS_SCRIPT = `const tokenUrl = pn.variables.get('oauth_token_url');
-const clientId = pn.variables.get('oauth_client_id');
-const clientSecret = pn.variables.get('oauth_client_secret');
-const scope = pn.variables.get('oauth_scope') ?? '';
-
-if (!tokenUrl || !clientId || !clientSecret) {
-  throw new Error('Missing OAuth2 environment variables.');
-}
-
-const tokenResponse = await pn.http.send({
-  name: 'OAuth2 token refresh',
-  method: 'POST',
-  url: tokenUrl,
-  queryParams: [],
-  headers: [
-    { id: 'content-type', key: 'Content-Type', value: 'application/x-www-form-urlencoded', enabled: true }
-  ],
-  body: {
-    mode: 'form-urlencoded',
-    raw: '',
-    form: [
-      { id: 'grant-type', key: 'grant_type', value: 'client_credentials', enabled: true },
-      { id: 'client-id', key: 'client_id', value: clientId, enabled: true },
-      { id: 'client-secret', key: 'client_secret', value: clientSecret, enabled: true },
-      { id: 'scope', key: 'scope', value: scope, enabled: Boolean(scope) }
-    ],
-    files: []
-  },
-  auth: {
-    type: 'none',
-    basicUsername: '',
-    basicPassword: '',
-    bearerToken: '',
-    apiKeyName: '',
-    apiKeyValue: '',
-    apiKeyIn: 'header',
-    oauth2AccessToken: '',
-    oauth2TokenUrl: '',
-    oauth2ClientId: '',
-    oauth2ClientSecret: '',
-    oauth2Scope: ''
-  },
-  preRequestScript: '',
-  testScript: ''
-});
-
-const tokenBody = tokenResponse.json();
-if (!tokenBody.access_token) {
-  throw new Error('OAuth2 token response did not include access_token.');
-}
-
-await pn.variables.set('oauth_access_token', String(tokenBody.access_token), { secret: true });
-pn.request.setOAuth2Token(String(tokenBody.access_token));`;
+  let canPersistOAuth2Token = $derived(Boolean(activeEnvironmentName && handleFetchOAuth2Token));
 
   function splitUrlAndQuery(value: string) {
     const hashIndex = value.indexOf("#");
@@ -612,14 +573,36 @@ pn.request.setOAuth2Token(String(tokenBody.access_token));`;
     };
   }
 
-  function insertOAuth2RefreshScript() {
-    request = {
-      ...request,
-      preRequestScript: request.preRequestScript.trim()
-        ? `${request.preRequestScript.trim()}\n\n${OAUTH2_CLIENT_CREDENTIALS_SCRIPT}`
-        : OAUTH2_CLIENT_CREDENTIALS_SCRIPT
-    };
-    activePanel = "scripts";
+  async function fetchOAuth2Token() {
+    if (!handleFetchOAuth2Token || isFetchingOAuth2Token) {
+      return;
+    }
+
+    isFetchingOAuth2Token = true;
+    oauth2FetchErrorText = "";
+    oauth2FetchStatusText = "";
+
+    try {
+      const result = await handleFetchOAuth2Token({
+        persistToEnvironment: canPersistOAuth2Token && shouldPersistOAuth2Token
+      });
+      request = {
+        ...request,
+        auth: {
+          ...request.auth,
+          type: "oauth2",
+          oauth2AccessToken: result.persistedToEnvironment ? "{{oauth_access_token}}" : result.accessToken
+        }
+      };
+      const expiryText = result.expiresIn ? ` Expires in ${result.expiresIn}s.` : "";
+      oauth2FetchStatusText = result.persistedToEnvironment
+        ? `Token saved to ${activeEnvironmentName} as {{oauth_access_token}}.${expiryText}`
+        : `Token fetched into this request field.${expiryText}`;
+    } catch (error) {
+      oauth2FetchErrorText = error instanceof Error ? error.message : String(error);
+    } finally {
+      isFetchingOAuth2Token = false;
+    }
   }
 </script>
 
@@ -1178,7 +1161,35 @@ pn.request.setOAuth2Token(String(tokenBody.access_token));`;
             />
           </label>
           <div class="auth-action-row">
-            <button class="ghost-button" type="button" onclick={insertOAuth2RefreshScript}>Insert refresh script</button>
+            <div class="oauth2-actions">
+              <button
+                class="send-button"
+                type="button"
+                onclick={fetchOAuth2Token}
+                disabled={!handleFetchOAuth2Token || isFetchingOAuth2Token}
+              >
+                {isFetchingOAuth2Token ? "Fetching..." : "Fetch token"}
+              </button>
+              <label class={["inline-checkbox", !canPersistOAuth2Token && "inline-checkbox-disabled"]}>
+                <input
+                  type="checkbox"
+                  checked={shouldPersistOAuth2Token && canPersistOAuth2Token}
+                  disabled={!canPersistOAuth2Token || isFetchingOAuth2Token}
+                  onchange={(event) => (shouldPersistOAuth2Token = event.currentTarget.checked)}
+                />
+                <span>
+                  {canPersistOAuth2Token
+                    ? `Save to ${activeEnvironmentName} as {{oauth_access_token}}`
+                    : "Activate an environment to save the token as {{oauth_access_token}}"}
+                </span>
+              </label>
+            </div>
+            {#if oauth2FetchStatusText}
+              <p class="auth-status-text">{oauth2FetchStatusText}</p>
+            {/if}
+            {#if oauth2FetchErrorText}
+              <p class="auth-error-text">{oauth2FetchErrorText}</p>
+            {/if}
           </div>
         </div>
       {/if}
