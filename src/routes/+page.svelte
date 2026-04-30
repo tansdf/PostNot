@@ -755,8 +755,6 @@ paths:
           bodyBase64: "",
           bodyContentType: "",
           bodyIsBinary: false,
-          bodyIsTruncated: false,
-          bodyTruncatedAtBytes: null,
           bodyEncoding: "utf-8",
           errorText: "",
           executedAt: new Date().toISOString()
@@ -810,8 +808,6 @@ paths:
         bodyBase64: "",
         bodyContentType: "",
         bodyIsBinary: false,
-        bodyIsTruncated: false,
-        bodyTruncatedAtBytes: null,
         bodyEncoding: "utf-8",
         errorText,
         executedAt: new Date().toISOString()

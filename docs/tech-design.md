@@ -33,7 +33,7 @@ Why this stack:
 
 ## 3. Current Application State
 
-This section reflects the code currently implemented in the repository, including the shipped `0.15.0` scripting update, the `0.15.1` route/modal polish work, the `0.16.0` OpenAPI 3 import release, the `0.17.0` multitab request workspace release, the `0.17.1` history-restore patch, the `0.17.2` requests/environments workflow follow-up, the `0.17.3` hydration-flash polish release, the `0.17.4` follow-up that unifies hydration-flash handling through a shared synchronous paint cache, the `0.18.0` sidebar collection search release, the `0.18.1` scripting/workspace hardening patch, the `0.18.2` response body safety patch, and the `0.19.0` cURL/OAuth2 import-auth and request-export polish (see [CHANGELOG.md](../CHANGELOG.md)).
+This section reflects the code currently implemented in the repository, including the shipped `0.15.0` scripting update, the `0.15.1` route/modal polish work, the `0.16.0` OpenAPI 3 import release, the `0.17.0` multitab request workspace release, the `0.17.1` history-restore patch, the `0.17.2` requests/environments workflow follow-up, the `0.17.3` hydration-flash polish release, the `0.17.4` follow-up that unifies hydration-flash handling through a shared synchronous paint cache, the `0.18.0` sidebar collection search release, the `0.18.1` scripting/workspace hardening patch, the `0.18.2` response body safety patch, the `0.19.0` cURL/OAuth2 import-auth and request-export polish, and the `0.19.2` full response body follow-up (see [CHANGELOG.md](../CHANGELOG.md)).
 
 ### Implemented
 
@@ -55,8 +55,8 @@ This section reflects the code currently implemented in the repository, includin
   - size
   - headers
   - body text / JSON pretty rendering
-  - capped body previews for oversized responses
-  - binary response metadata and manual binary-preview text decoding
+  - full response body reads
+  - binary response metadata and manual binary text decoding
 - Persisted application settings in SQLite
 - Persisted request history in SQLite, including a collapsible Requests-page history panel state stored in app settings
 - Cancel in-flight request
@@ -138,8 +138,8 @@ Responsibilities:
 5. Rust loads persisted request settings from SQLite
 6. Rust resolves environment variables and built-in dynamic variables
 7. Rust executes the request with `reqwest`
-8. Rust returns response metadata plus a capped response body preview to the UI, including binary/truncation metadata
-9. Rust writes a history entry to SQLite, redacting secret-derived environment substitutions back to their original `{{variable}}` form and avoiding full body-file persistence for binary or truncated responses
+8. Rust returns response metadata plus the response body to the UI, including binary metadata
+9. Rust writes a history entry to SQLite, redacting secret-derived environment substitutions back to their original `{{variable}}` form and persisting decoded response text when available
 10. Frontend runs inherited collection, folder, and saved-request test scripts (if any) against the returned response for assertion output
 11. Frontend reloads history, updates the originating tab, and persists the refreshed workspace state
 
@@ -387,8 +387,8 @@ CREATE TABLE history_entries (
 Implementation notes:
 
 - successful requests are persisted with a response preview
-- successful text responses below the response body cap also persist the full response body to a file path referenced by `response_body_path`
-- binary or truncated responses persist explanatory previews instead of full response body files
+- successful responses with decoded text also persist the full response body to a file path referenced by `response_body_path`
+- binary responses that are not decoded persist explanatory previews instead of response body files
 - failed requests are also persisted with `error_text`
 - history is pruned based on the persisted `history_limit` setting
 
@@ -613,7 +613,7 @@ Current state:
 - requests are executed in Rust, not the browser
 - secret environment values are stored in the OS credential store, while SQLite keeps only non-secret environment metadata
 - history snapshots redact resolved values that came from secret environment variables
-- binary and oversized response bodies are not persisted as full text history body files
+- decoded response bodies are persisted as full text history body files
 - if an environment update or delete fails after partially changing the credential store, rollback of secrets is attempted; failure to roll back is logged with `log::warn` for diagnostics (the primary error still returns to the UI)
 
 This is the current security posture for environment variables; broader secret handling beyond environment-backed values remains future work.

@@ -6,6 +6,17 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.19.2] - 2026-04-30
+
+### Changed
+
+- Response execution now reads the full response body instead of truncating the native body preview at 5 MB.
+- History now persists decoded response bodies normally again instead of skipping oversized text responses because of preview truncation.
+
+### Fixed
+
+- Large responses no longer fail or surface as truncated previews because of PostNot's response body cap.
+
 ## [0.19.1] - 2026-04-28
 
 ### Fixed

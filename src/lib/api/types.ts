@@ -69,8 +69,6 @@ export type ResponsePayload = {
   bodyBase64: string;
   bodyContentType: string;
   bodyIsBinary: boolean;
-  bodyIsTruncated: boolean;
-  bodyTruncatedAtBytes: number | null;
   bodyEncoding: "utf-8" | "lossy-utf8" | "not-decoded" | string;
   errorText: string;
   executedAt: string;

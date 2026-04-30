@@ -12,7 +12,7 @@ PostNot is a local-first desktop API client built with:
 - TypeScript
 - SQLite
 
-The app already supports request execution, capped response body previews with binary response handling, history, collections with nested folders and drag-and-drop request moves, sidebar collection search, environments, secret environment storage, import/export flows including OpenAPI 3 import, broader cURL flag coverage, and single-request cURL/JSON export, OAuth2 bearer auth helpers, notifications, settings, signed in-app update checks, inherited collection/folder/saved-request pre-request and test scripts (worker-backed frontend JavaScript execution around the native send), async script helper requests through `pn.http.send(...)`, and script-driven active-environment variable writes.
+The app already supports request execution, full response body reads with binary response handling, history, collections with nested folders and drag-and-drop request moves, sidebar collection search, environments, secret environment storage, import/export flows including OpenAPI 3 import, broader cURL flag coverage, and single-request cURL/JSON export, OAuth2 bearer auth helpers, notifications, settings, signed in-app update checks, inherited collection/folder/saved-request pre-request and test scripts (worker-backed frontend JavaScript execution around the native send), async script helper requests through `pn.http.send(...)`, and script-driven active-environment variable writes.
 
 ## Canonical Working Directory
 
@@ -65,7 +65,7 @@ Implemented now:
 - pre-request and test scripts on collections, folders, and saved requests (`request-scripts.ts`, `request-script-worker.ts`, `ScriptEditor.svelte`)
 - async script helper requests through `await pn.http.send(...)`
 - script-driven active-environment variable writes, including persisted secret writes
-- capped response body previews with binary metadata, manual binary-preview text decoding, and an opt-in setting for automatic binary preview decoding
+- full response body reads with binary metadata, manual binary text decoding, and an opt-in setting for automatic binary response decoding
 - floating notifications
 - signed in-app update checks with silent startup refresh
 - window size and position restore

@@ -27,7 +27,6 @@ struct ClientCacheKey {
 }
 
 const HTTP_CLIENT_CACHE_MAX: usize = 32;
-const RESPONSE_BODY_PREVIEW_LIMIT_BYTES: usize = 5 * 1024 * 1024;
 
 struct ClientCache {
     clients: HashMap<ClientCacheKey, Client>,
@@ -242,30 +241,29 @@ pub async fn send_request(
         })
         .collect();
 
-    let body_read = read_limited_body(&mut response, &mut cancel_rx).await?;
+    let body_bytes = read_full_body(&mut response, &mut cancel_rx).await?;
     let body_size = content_length
         .and_then(|value| usize::try_from(value).ok())
-        .unwrap_or_else(|| body_read.bytes.len() + usize::from(body_read.is_truncated));
-    let utf8_body = std::str::from_utf8(&body_read.bytes);
-    let body_is_binary = is_binary_response_body(&body_read.bytes, &content_type);
+        .unwrap_or(body_bytes.len());
+    let utf8_body = std::str::from_utf8(&body_bytes);
+    let body_is_binary = is_binary_response_body(&body_bytes, &content_type);
     let should_decode_body = !body_is_binary || settings.always_decode_binary_response_bodies;
     let (body_text, body_encoding) = if should_decode_body {
         match utf8_body {
             Ok(text) => (text.to_string(), "utf-8".to_string()),
             Err(_) => (
-                String::from_utf8_lossy(&body_read.bytes).to_string(),
+                String::from_utf8_lossy(&body_bytes).to_string(),
                 "lossy-utf8".to_string(),
             ),
         }
     } else {
         (String::new(), "not-decoded".to_string())
     };
-    let body_base64 = if body_is_binary && !body_read.bytes.is_empty() {
-        general_purpose::STANDARD.encode(&body_read.bytes)
+    let body_base64 = if body_is_binary && !body_bytes.is_empty() {
+        general_purpose::STANDARD.encode(&body_bytes)
     } else {
         String::new()
     };
-
     Ok(ResponsePayload {
         status_code: Some(status.as_u16()),
         status_text: status.canonical_reason().unwrap_or_default().to_string(),
@@ -276,63 +274,30 @@ pub async fn send_request(
         body_base64,
         body_content_type: content_type,
         body_is_binary,
-        body_is_truncated: body_read.is_truncated,
-        body_truncated_at_bytes: body_read
-            .is_truncated
-            .then_some(RESPONSE_BODY_PREVIEW_LIMIT_BYTES),
         body_encoding,
         error_text: String::new(),
         executed_at: Utc::now().to_rfc3339(),
     })
 }
 
-struct LimitedBody {
-    bytes: Vec<u8>,
-    is_truncated: bool,
-}
-
-async fn read_limited_body(
+async fn read_full_body(
     response: &mut Response,
     cancel_rx: &mut watch::Receiver<bool>,
-) -> AppResult<LimitedBody> {
+) -> AppResult<Vec<u8>> {
     let mut bytes = Vec::new();
-    let mut is_truncated = false;
 
-    while bytes.len() < RESPONSE_BODY_PREVIEW_LIMIT_BYTES {
+    loop {
         let chunk = tokio::select! {
             chunk = response.chunk() => chunk?,
             _ = wait_for_cancellation(cancel_rx) => return Err(AppError::Cancelled),
         };
 
         let Some(chunk) = chunk else {
-            return Ok(LimitedBody {
-                bytes,
-                is_truncated,
-            });
+            return Ok(bytes);
         };
-
-        let remaining = RESPONSE_BODY_PREVIEW_LIMIT_BYTES - bytes.len();
-        if chunk.len() > remaining {
-            bytes.extend_from_slice(&chunk[..remaining]);
-            is_truncated = true;
-            break;
-        }
 
         bytes.extend_from_slice(&chunk);
     }
-
-    if !is_truncated {
-        let next_chunk = tokio::select! {
-            chunk = response.chunk() => chunk?,
-            _ = wait_for_cancellation(cancel_rx) => return Err(AppError::Cancelled),
-        };
-        is_truncated = next_chunk.is_some();
-    }
-
-    Ok(LimitedBody {
-        bytes,
-        is_truncated,
-    })
 }
 
 fn is_text_content_type(content_type: &str) -> bool {

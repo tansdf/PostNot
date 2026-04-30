@@ -54,21 +54,6 @@
     }
   }
 
-  function formatBytes(value: number | null | undefined) {
-    if (!value || value < 0) {
-      return "0 bytes";
-    }
-
-    if (value < 1024) {
-      return `${value} bytes`;
-    }
-
-    if (value < 1024 * 1024) {
-      return `${(value / 1024).toFixed(1)} KB`;
-    }
-
-    return `${(value / (1024 * 1024)).toFixed(1)} MB`;
-  }
 </script>
 
 <section class="panel response-panel">
@@ -98,18 +83,6 @@
 
     {#if scriptExecution?.testScriptErrorText}
       <div class="response-error">{scriptExecution.testScriptErrorText}</div>
-    {/if}
-
-    {#if response.bodyIsTruncated}
-      <div class="settings-update-feedback">
-        <strong>Body preview truncated</strong>
-        <p>
-          PostNot kept the first {formatBytes(response.bodyTruncatedAtBytes)} of this response body.
-          {#if response.sizeBytes > (response.bodyTruncatedAtBytes ?? 0)}
-            The reported response size is {formatBytes(response.sizeBytes)}.
-          {/if}
-        </p>
-      </div>
     {/if}
 
     {#if response.bodyIsBinary}
