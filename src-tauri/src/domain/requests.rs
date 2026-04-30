@@ -82,10 +82,6 @@ pub struct ResponsePayload {
     pub size_bytes: usize,
     pub headers: Vec<KeyValueRow>,
     pub body_text: String,
-    pub body_base64: String,
-    pub body_content_type: String,
-    pub body_is_binary: bool,
-    pub body_encoding: String,
     pub error_text: String,
     pub executed_at: String,
 }

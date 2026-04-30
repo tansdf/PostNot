@@ -13,7 +13,6 @@ const UI_SCALE_KEY: &str = "ui_scale";
 const REQUEST_TIMEOUT_MS_KEY: &str = "request_timeout_ms";
 const FOLLOW_REDIRECTS_KEY: &str = "follow_redirects";
 const VALIDATE_TLS_KEY: &str = "validate_tls";
-const ALWAYS_DECODE_BINARY_RESPONSE_BODIES_KEY: &str = "always_decode_binary_response_bodies";
 const HISTORY_LIMIT_KEY: &str = "history_limit";
 const IS_HISTORY_COLLAPSED_KEY: &str = "is_history_collapsed";
 const ENVIRONMENT_AUTOSAVE_KEY: &str = "environment_autosave";
@@ -34,7 +33,6 @@ pub fn default_settings() -> AppSettings {
         request_timeout_ms: 30_000,
         follow_redirects: true,
         validate_tls: true,
-        always_decode_binary_response_bodies: false,
         history_limit: 200,
         is_history_collapsed: false,
         environment_autosave: true,
@@ -76,9 +74,6 @@ pub async fn get_settings(pool: &SqlitePool) -> AppResult<AppSettings> {
             }
             FOLLOW_REDIRECTS_KEY => settings.follow_redirects = serde_json::from_str(&value_json)?,
             VALIDATE_TLS_KEY => settings.validate_tls = serde_json::from_str(&value_json)?,
-            ALWAYS_DECODE_BINARY_RESPONSE_BODIES_KEY => {
-                settings.always_decode_binary_response_bodies = serde_json::from_str(&value_json)?
-            }
             HISTORY_LIMIT_KEY => settings.history_limit = serde_json::from_str(&value_json)?,
             IS_HISTORY_COLLAPSED_KEY => {
                 settings.is_history_collapsed = serde_json::from_str(&value_json)?
@@ -194,10 +189,6 @@ fn serialize_settings(settings: &AppSettings) -> AppResult<Vec<(&'static str, St
         (
             VALIDATE_TLS_KEY,
             serde_json::to_string(&settings.validate_tls)?,
-        ),
-        (
-            ALWAYS_DECODE_BINARY_RESPONSE_BODIES_KEY,
-            serde_json::to_string(&settings.always_decode_binary_response_bodies)?,
         ),
         (
             HISTORY_LIMIT_KEY,

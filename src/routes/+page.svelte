@@ -752,10 +752,6 @@ paths:
           sizeBytes: 0,
           headers: [],
           bodyText: "",
-          bodyBase64: "",
-          bodyContentType: "",
-          bodyIsBinary: false,
-          bodyEncoding: "utf-8",
           errorText: "",
           executedAt: new Date().toISOString()
         }, execution);
@@ -805,10 +801,6 @@ paths:
         sizeBytes: 0,
         headers: [],
         bodyText: "",
-        bodyBase64: "",
-        bodyContentType: "",
-        bodyIsBinary: false,
-        bodyEncoding: "utf-8",
         errorText,
         executedAt: new Date().toISOString()
       });
@@ -1125,7 +1117,6 @@ paths:
       <span class="profile-fact">Redirects <strong>{settings.followRedirects ? "Follow" : "Off"}</strong></span>
       <span class="profile-fact">TLS <strong>{settings.validateTls ? "Validated" : "Relaxed"}</strong></span>
       <span class="profile-fact">History <strong>{settings.historyLimit}</strong></span>
-      <span class="profile-fact">Binary <strong>{settings.alwaysDecodeBinaryResponseBodies ? "Decode" : "Preview"}</strong></span>
     </div>
 
     <span class="profile-divider"></span>

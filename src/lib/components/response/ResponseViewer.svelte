@@ -9,51 +9,6 @@
     response?: ResponsePayload | null;
     scriptExecution?: RequestScriptExecution | null;
   } = $props();
-
-  let decodedBinaryText = $state("");
-  let decodeErrorText = $state("");
-  let decodedResponseKey = $state("");
-
-  let responseKey = $derived(
-    response ? `${response.executedAt}-${response.sizeBytes}-${response.bodyEncoding}` : ""
-  );
-  let visibleBodyText = $derived(decodedBinaryText || response?.bodyText || "");
-  let canDecodeBinaryPreview = $derived(Boolean(response?.bodyIsBinary && response.bodyBase64));
-
-  $effect(() => {
-    if (responseKey === decodedResponseKey) {
-      return;
-    }
-
-    decodedBinaryText = "";
-    decodeErrorText = "";
-    decodedResponseKey = responseKey;
-  });
-
-  function decodeBase64ToBytes(value: string) {
-    const binary = atob(value);
-    const bytes = new Uint8Array(binary.length);
-    for (let index = 0; index < binary.length; index += 1) {
-      bytes[index] = binary.charCodeAt(index);
-    }
-    return bytes;
-  }
-
-  function decodeBinaryPreview() {
-    if (!response?.bodyBase64) {
-      return;
-    }
-
-    try {
-      decodedBinaryText = new TextDecoder("utf-8", { fatal: false }).decode(
-        decodeBase64ToBytes(response.bodyBase64)
-      );
-      decodeErrorText = "";
-    } catch (error) {
-      decodeErrorText = error instanceof Error ? error.message : String(error);
-    }
-  }
-
 </script>
 
 <section class="panel response-panel">
@@ -65,9 +20,6 @@
         <span>Status: {response.statusCode ?? "-"} {response.statusText}</span>
         <span>Time: {response.durationMs} ms</span>
         <span>Size: {response.sizeBytes} bytes</span>
-        {#if response.bodyContentType}
-          <span>{response.bodyContentType}</span>
-        {/if}
       </div>
     {/if}
   </div>
@@ -83,32 +35,6 @@
 
     {#if scriptExecution?.testScriptErrorText}
       <div class="response-error">{scriptExecution.testScriptErrorText}</div>
-    {/if}
-
-    {#if response.bodyIsBinary}
-      <div class="settings-update-feedback">
-        <strong>Binary response</strong>
-        <p>
-          {#if response.bodyText}
-            This binary-looking body was decoded as {response.bodyEncoding}.
-          {:else}
-            Body text was not decoded automatically.
-          {/if}
-          {#if response.bodyContentType}
-            Content type: {response.bodyContentType}.
-          {/if}
-        </p>
-
-        {#if canDecodeBinaryPreview && !decodedBinaryText && !response.bodyText}
-          <button class="system-button" type="button" onclick={decodeBinaryPreview}>
-            Decode preview as text
-          </button>
-        {/if}
-
-        {#if decodeErrorText}
-          <p>{decodeErrorText}</p>
-        {/if}
-      </div>
     {/if}
 
     {#if scriptExecution && scriptExecution.tests.length > 0}
@@ -154,7 +80,7 @@
 
       <div class="response-column response-body-column">
         <h3>Body</h3>
-        <JsonViewer source={visibleBodyText} />
+        <JsonViewer source={response.bodyText} />
       </div>
     </div>
   {:else}

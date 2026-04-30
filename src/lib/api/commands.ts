@@ -63,10 +63,6 @@ function createMockResponse(payload: RequestDraft): ResponsePayload {
       null,
       2
     ),
-    bodyBase64: "",
-    bodyContentType: "application/json",
-    bodyIsBinary: false,
-    bodyEncoding: "utf-8",
     errorText: "",
     executedAt: new Date().toISOString()
   };

@@ -27,11 +27,7 @@ pub async fn record_success(
     let request_snapshot_json = serde_json::to_string(request)?;
     let response_headers_json = serde_json::to_string(&response.headers)?;
     let response_body_path = write_response_body(app, &history_id, &response.body_text).await?;
-    let response_body_preview = if response.body_is_binary && response.body_text.is_empty() {
-        format_binary_preview(response)
-    } else {
-        preview(&response.body_text)
-    };
+    let response_body_preview = preview(&response.body_text);
 
     sqlx::query(
         "INSERT INTO history_entries (id, request_name, method, url, request_snapshot_json, status_code, duration_ms, response_headers_json, response_body_path, response_body_preview, error_text, executed_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
@@ -183,20 +179,6 @@ async fn prune(pool: &SqlitePool) -> AppResult<()> {
 
 fn preview(body: &str) -> String {
     body.chars().take(PREVIEW_LIMIT).collect()
-}
-
-fn format_binary_preview(response: &ResponsePayload) -> String {
-    let content_type = response.body_content_type.trim();
-    let content_type_label = if content_type.is_empty() {
-        "unknown content type"
-    } else {
-        content_type
-    };
-
-    format!(
-        "Binary response preview omitted ({content_type_label}, {} bytes).",
-        response.size_bytes
-    )
 }
 
 async fn write_response_body(

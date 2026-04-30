@@ -8,7 +8,6 @@ pub struct AppSettings {
     pub request_timeout_ms: u64,
     pub follow_redirects: bool,
     pub validate_tls: bool,
-    pub always_decode_binary_response_bodies: bool,
     pub history_limit: u32,
     pub is_history_collapsed: bool,
     pub environment_autosave: bool,

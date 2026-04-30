@@ -367,11 +367,6 @@
                 <span>Validate TLS certificates</span>
               </label>
 
-              <label class="settings-toggle">
-                <input class="row-toggle settings-checkbox" type="checkbox" bind:checked={settings.alwaysDecodeBinaryResponseBodies} />
-                <span>Decode binary response previews automatically</span>
-              </label>
-
             </section>
 
             <section class="settings-section-card">

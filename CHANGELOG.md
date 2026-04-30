@@ -6,6 +6,16 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.19.4] - 2026-04-30
+
+### Changed
+
+- Reverted the 0.18.2 binary response preview and decoding layer so request execution always reads the full response body and decodes it directly for the response viewer and history again.
+
+### Removed
+
+- Removed the binary response decode setting, binary response panel, base64 preview payload, and binary placeholder history behavior that could hide large JSON responses behind binary-detection heuristics.
+
 ## [0.19.3] - 2026-04-30
 
 ### Added
