@@ -407,10 +407,64 @@ mod tests {
         assert!(response.body_text.ends_with("\"}"));
     }
 
+    #[tokio::test]
+    async fn send_request_decodes_gzip_response_when_accept_encoding_is_forwarded() {
+        let compressed_body = [
+            31, 139, 8, 0, 28, 81, 243, 105, 2, 255, 171, 86, 74, 206, 207, 45, 40, 74, 45, 46, 78,
+            77, 81, 178, 42, 41, 42, 77, 213, 81, 74, 73, 44, 73, 84, 178, 82, 170, 24, 96, 160,
+            84, 11, 0, 103, 137, 26, 254, 157, 0, 0, 0,
+        ];
+        let response_message = http_response_bytes(
+            "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-encoding: gzip\r\ncontent-length: 52\r\n\r\n",
+            &compressed_body,
+        );
+        let (url, captured_rx) = spawn_test_server_bytes(response_message);
+        let (_cancel_tx, cancel_rx) = watch::channel(false);
+
+        let response = send_request(
+            &SendRequestPayload {
+                name: "Compressed JSON".to_string(),
+                method: "GET".to_string(),
+                url: format!("{url}/compressed-json"),
+                query_params: Vec::new(),
+                headers: vec![row("header-1", "Accept-Encoding", "gzip, deflate, br")],
+                body: RequestBody {
+                    mode: "none".to_string(),
+                    raw: String::new(),
+                    form: Vec::new(),
+                    files: Vec::new(),
+                },
+                auth: empty_auth(),
+                pre_request_script: String::new(),
+                test_script: String::new(),
+            },
+            &default_settings(),
+            cancel_rx,
+        )
+        .await
+        .expect("compressed response should decode");
+
+        let captured = captured_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("server captured request");
+
+        assert!(captured
+            .head
+            .contains("\r\naccept-encoding: gzip, deflate, br\r\n"));
+        assert_eq!(
+            response.body_text,
+            format!("{{\"compressed\":true,\"data\":\"{}\"}}", "x".repeat(128))
+        );
+        assert_eq!(response.size_bytes, response.body_text.len());
+    }
+
     fn spawn_test_server(response: &str) -> (String, mpsc::Receiver<CapturedRequest>) {
+        spawn_test_server_bytes(response.as_bytes().to_vec())
+    }
+
+    fn spawn_test_server_bytes(response: Vec<u8>) -> (String, mpsc::Receiver<CapturedRequest>) {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind test server");
         let address = listener.local_addr().expect("read test server address");
-        let response = response.as_bytes().to_vec();
         let (captured_tx, captured_rx) = mpsc::channel();
 
         thread::spawn(move || {
@@ -422,6 +476,12 @@ mod tests {
         });
 
         (format!("http://{address}"), captured_rx)
+    }
+
+    fn http_response_bytes(head: &str, body: &[u8]) -> Vec<u8> {
+        let mut response = head.as_bytes().to_vec();
+        response.extend_from_slice(body);
+        response
     }
 
     fn read_http_request(stream: &mut TcpStream) -> CapturedRequest {

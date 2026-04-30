@@ -6,6 +6,17 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.19.5] - 2026-04-30
+
+### Changed
+
+- Enabled gzip, Brotli, deflate, and zstd response decoding in the native HTTP client so imported or manual `Accept-Encoding` headers can receive compressed JSON responses without failing during body reads.
+- Native request errors now preserve source-chain details so response body decode failures include the underlying transport or compression cause when available.
+
+### Added
+
+- Failed requests now show the exact backend error inside a collapsed Details block in the response panel.
+
 ## [0.19.4] - 2026-04-30
 
 ### Changed

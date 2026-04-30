@@ -1,3 +1,5 @@
+use std::error::Error;
+
 use serde::ser::{Serialize, Serializer};
 use thiserror::Error;
 
@@ -22,7 +24,7 @@ impl Serialize for AppError {
 
 impl From<reqwest::Error> for AppError {
     fn from(value: reqwest::Error) -> Self {
-        Self::Message(value.to_string())
+        Self::Message(error_with_sources(&value))
     }
 }
 
@@ -78,4 +80,20 @@ impl AppError {
     pub fn is_cancelled(&self) -> bool {
         matches!(self, Self::Cancelled)
     }
+}
+
+fn error_with_sources(error: &dyn Error) -> String {
+    let mut message = error.to_string();
+    let mut source = error.source();
+
+    while let Some(error) = source {
+        let source_message = error.to_string();
+        if !source_message.is_empty() && !message.contains(&source_message) {
+            message.push_str(": ");
+            message.push_str(&source_message);
+        }
+        source = error.source();
+    }
+
+    message
 }

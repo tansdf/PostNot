@@ -9,6 +9,14 @@
     response?: ResponsePayload | null;
     scriptExecution?: RequestScriptExecution | null;
   } = $props();
+
+  let responseErrorSummary = $derived.by(() => {
+    if (!response?.errorText) {
+      return "";
+    }
+
+    return response.statusText || "Request failed";
+  });
 </script>
 
 <section class="panel response-panel">
@@ -26,7 +34,13 @@
 
   {#if response}
     {#if response.errorText}
-      <div class="response-error">{response.errorText}</div>
+      <div class="response-error">
+        <strong>{responseErrorSummary}</strong>
+        <details class="response-error-details">
+          <summary>Details</summary>
+          <pre>{response.errorText}</pre>
+        </details>
+      </div>
     {/if}
 
     {#if scriptExecution?.preRequestErrorText}
