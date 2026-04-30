@@ -99,13 +99,13 @@ impl AppState {
         Ok(())
     }
 
-    pub fn take_pending_update(&self) -> AppResult<Option<Update>> {
-        let mut pending_update = self
+    pub fn pending_update(&self) -> AppResult<Option<Update>> {
+        let pending_update = self
             .pending_update
             .lock()
             .map_err(|_| AppError::Message("Failed to access updater state.".to_string()))?;
 
-        Ok(pending_update.take())
+        Ok(pending_update.clone())
     }
 
     pub fn clear_pending_update(&self) -> AppResult<()> {

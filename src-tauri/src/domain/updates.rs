@@ -15,3 +15,11 @@ pub struct UpdateCheckResult {
     pub configured: bool,
     pub update: Option<AvailableUpdate>,
 }
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateDownloadProgress {
+    pub downloaded_bytes: u64,
+    pub content_length: Option<u64>,
+    pub finished: bool,
+}

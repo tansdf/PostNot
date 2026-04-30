@@ -1,11 +1,15 @@
 #[cfg(target_os = "linux")]
 use std::path::Path;
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc,
+};
 #[cfg(target_os = "linux")]
 use std::time::Duration;
 
 #[cfg(target_os = "linux")]
 use tauri::utils::{config::BundleType, platform::bundle_type};
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 #[cfg(target_os = "linux")]
 use tauri_plugin_updater::Update;
 use tauri_plugin_updater::UpdaterExt;
@@ -13,7 +17,7 @@ use url::Url;
 
 use crate::{
     app_state::AppState,
-    domain::updates::{AvailableUpdate, UpdateCheckResult},
+    domain::updates::{AvailableUpdate, UpdateCheckResult, UpdateDownloadProgress},
     error::{AppError, AppResult},
     services::settings_service,
 };
@@ -92,33 +96,69 @@ pub async fn check_for_updates(app: &AppHandle, state: &AppState) -> AppResult<U
     })
 }
 
-pub async fn install_update(_app: &AppHandle, state: &AppState) -> AppResult<()> {
-    let Some(update) = state.take_pending_update()? else {
+pub async fn install_update(app: &AppHandle, state: &AppState) -> AppResult<()> {
+    let Some(update) = state.pending_update()? else {
         return Err(AppError::Message(
             "Check for updates first so PostNot knows what to install.".to_string(),
         ));
     };
 
+    emit_update_download_progress(app, 0, None, false);
+
     #[cfg(target_os = "linux")]
     match bundle_type() {
         Some(BundleType::Deb) => {
-            install_linux_package_update(update, DEB_INSTALLER).await?;
-            _app.restart();
+            install_linux_package_update(app, update, DEB_INSTALLER).await?;
+            state.clear_pending_update()?;
+            app.restart();
         }
         Some(BundleType::Rpm) => {
-            install_linux_package_update(update, RPM_INSTALLER).await?;
-            _app.restart();
+            install_linux_package_update(app, update, RPM_INSTALLER).await?;
+            state.clear_pending_update()?;
+            app.restart();
         }
         _ => {}
     }
 
+    let downloaded_bytes = Arc::new(AtomicU64::new(0));
+    let download_app = app.clone();
+    let finish_app = app.clone();
+    let download_counter = Arc::clone(&downloaded_bytes);
+    let finish_counter = Arc::clone(&downloaded_bytes);
+
     update
-        .download_and_install(|_, _| {}, || {})
+        .download_and_install(
+            move |chunk_length, content_length| {
+                let downloaded = download_counter
+                    .fetch_add(chunk_length as u64, Ordering::Relaxed)
+                    .saturating_add(chunk_length as u64);
+                emit_update_download_progress(
+                    &download_app,
+                    downloaded,
+                    content_length,
+                    false,
+                );
+            },
+            move || {
+                emit_update_download_progress(
+                    &finish_app,
+                    finish_counter.load(Ordering::Relaxed),
+                    None,
+                    true,
+                );
+            },
+        )
         .await
-        .map_err(map_updater_error)?;
+        .map_err(|error| {
+            AppError::Message(format!(
+                "Failed to download or apply the update: {error}. Please check your connection and try again."
+            ))
+        })?;
+
+    state.clear_pending_update()?;
 
     #[cfg(not(target_os = "windows"))]
-    _app.restart();
+    app.restart();
 
     #[cfg(target_os = "windows")]
     Ok(())
@@ -132,25 +172,69 @@ fn map_updater_error(error: impl std::fmt::Display) -> AppError {
     AppError::Message(error.to_string())
 }
 
+fn emit_update_download_progress(
+    app: &AppHandle,
+    downloaded_bytes: u64,
+    content_length: Option<u64>,
+    finished: bool,
+) {
+    if let Err(error) = app.emit(
+        "update-download-progress",
+        UpdateDownloadProgress {
+            downloaded_bytes,
+            content_length,
+            finished,
+        },
+    ) {
+        log::warn!("failed to emit update download progress: {error}");
+    }
+}
+
 #[cfg(target_os = "linux")]
 async fn install_linux_package_update(
+    app: &AppHandle,
     update: Update,
     installer: LinuxPackageInstaller,
 ) -> AppResult<()> {
+    let downloaded_bytes = Arc::new(AtomicU64::new(0));
+    let download_app = app.clone();
+    let finish_app = app.clone();
+    let download_counter = Arc::clone(&downloaded_bytes);
+    let finish_counter = Arc::clone(&downloaded_bytes);
+
     let bytes = update
         .download(
-            |chunk_length, content_length| {
+            move |chunk_length, content_length| {
+                let downloaded = download_counter
+                    .fetch_add(chunk_length as u64, Ordering::Relaxed)
+                    .saturating_add(chunk_length as u64);
+                emit_update_download_progress(
+                    &download_app,
+                    downloaded,
+                    content_length,
+                    false,
+                );
                 log::debug!(
                     "downloaded update chunk: {chunk_length} bytes of {:?}",
                     content_length
                 );
             },
-            || {
+            move || {
+                emit_update_download_progress(
+                    &finish_app,
+                    finish_counter.load(Ordering::Relaxed),
+                    None,
+                    true,
+                );
                 log::debug!("update download finished");
             },
         )
         .await
-        .map_err(map_updater_error)?;
+        .map_err(|error| {
+            AppError::Message(format!(
+                "Failed to download the update package: {error}. Please check your connection and try again."
+            ))
+        })?;
 
     if !bytes.starts_with(installer.magic_bytes) {
         return Err(AppError::Message(format!(

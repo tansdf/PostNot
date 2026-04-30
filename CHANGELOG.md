@@ -6,6 +6,16 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.19.3] - 2026-04-30
+
+### Added
+
+- Settings now shows live progress while a signed app update is downloading, including byte counts when the server provides a content length.
+
+### Fixed
+
+- Failed update downloads and installer handoffs now keep the available update ready for retry and surface clearer recovery messages instead of dropping back to an ambiguous installing state.
+
 ## [0.19.2] - 2026-04-30
 
 ### Changed

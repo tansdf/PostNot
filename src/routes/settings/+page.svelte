@@ -87,7 +87,11 @@
   const currentVersion = __APP_VERSION__;
   const updatesStatusText = $derived.by(() => {
     if (updater.phase === "installing") {
-      return "Downloading and applying the available update...";
+      if (updater.installProgress?.finished) {
+        return "Download complete. Handing the update to the installer...";
+      }
+
+      return "Downloading the available update...";
     }
 
     if (updater.availableUpdate) {
@@ -123,6 +127,20 @@
     return formatDateTime(updater.lastCheckedAt);
   });
   const parsedUpdateNotes = $derived.by(() => parseUpdateNotes(updater.availableUpdate?.body));
+  const installProgressText = $derived.by(() => {
+    if (!updater.installProgress) {
+      return "";
+    }
+
+    const percent = updater.installProgressPercent;
+    const sizeLabel = updater.installProgressLabel;
+
+    if (typeof percent === "number") {
+      return `${percent}% · ${sizeLabel}`;
+    }
+
+    return sizeLabel;
+  });
 
   onMount(loadSettings);
 
@@ -265,6 +283,27 @@
                     </div>
                   {/if}
 
+                  {#if updater.isInstalling && updater.installProgress}
+                    <div class="settings-update-progress" aria-live="polite">
+                      <div class="settings-update-progress-header">
+                        <span>Download progress</span>
+                        <strong>{installProgressText}</strong>
+                      </div>
+
+                      {#if typeof updater.installProgressPercent === "number"}
+                        <progress
+                          max="100"
+                          value={updater.installProgressPercent}
+                          aria-label="Update download progress"
+                        >
+                          {updater.installProgressPercent}%
+                        </progress>
+                      {:else}
+                        <progress aria-label="Update download progress"></progress>
+                      {/if}
+                    </div>
+                  {/if}
+
                   {#if updater.availableUpdate.body}
                     <div class="history-preview settings-update-notes settings-update-markdown">
                       {#each parsedUpdateNotes as line, lineIndex (lineIndex)}
@@ -295,7 +334,7 @@
                     disabled={updater.isChecking || updater.isInstalling}
                     onclick={() => updater.installAvailableUpdate()}
                   >
-                    {updater.isInstalling ? "Installing..." : "Install update"}
+                    {updater.isInstalling ? "Downloading..." : "Install update"}
                   </button>
                 </div>
               {/if}

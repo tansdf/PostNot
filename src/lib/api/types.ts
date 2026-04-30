@@ -105,6 +105,12 @@ export type UpdateCheckResult = {
   update: AvailableUpdate | null;
 };
 
+export type UpdateDownloadProgress = {
+  downloadedBytes: number;
+  contentLength: number | null;
+  finished: boolean;
+};
+
 export type HistoryEntrySummary = {
   id: string;
   requestName: string;

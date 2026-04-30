@@ -33,7 +33,7 @@ Why this stack:
 
 ## 3. Current Application State
 
-This section reflects the code currently implemented in the repository, including the shipped `0.15.0` scripting update, the `0.15.1` route/modal polish work, the `0.16.0` OpenAPI 3 import release, the `0.17.0` multitab request workspace release, the `0.17.1` history-restore patch, the `0.17.2` requests/environments workflow follow-up, the `0.17.3` hydration-flash polish release, the `0.17.4` follow-up that unifies hydration-flash handling through a shared synchronous paint cache, the `0.18.0` sidebar collection search release, the `0.18.1` scripting/workspace hardening patch, the `0.18.2` response body safety patch, the `0.19.0` cURL/OAuth2 import-auth and request-export polish, and the `0.19.2` full response body follow-up (see [CHANGELOG.md](../CHANGELOG.md)).
+This section reflects the code currently implemented in the repository, including the shipped `0.15.0` scripting update, the `0.15.1` route/modal polish work, the `0.16.0` OpenAPI 3 import release, the `0.17.0` multitab request workspace release, the `0.17.1` history-restore patch, the `0.17.2` requests/environments workflow follow-up, the `0.17.3` hydration-flash polish release, the `0.17.4` follow-up that unifies hydration-flash handling through a shared synchronous paint cache, the `0.18.0` sidebar collection search release, the `0.18.1` scripting/workspace hardening patch, the `0.18.2` response body safety patch, the `0.19.0` cURL/OAuth2 import-auth and request-export polish, the `0.19.2` full response body follow-up, and the `0.19.3` updater download progress patch (see [CHANGELOG.md](../CHANGELOG.md)).
 
 ### Implemented
 
@@ -79,7 +79,7 @@ This section reflects the code currently implemented in the repository, includin
 - App-level floating notification system for action feedback
 - Settings page wired to backend persistence
 - Environment autosave preference stored in persisted settings and enabled by default
-- Signed in-app update checks, startup refresh, and install handoff
+- Signed in-app update checks, startup refresh, download progress reporting, and install handoff
 - History panel wired to backend persistence
 - History detail inspection from persisted snapshots
 - Restore action that opens a stored history request snapshot as a new standalone tab
@@ -125,7 +125,7 @@ Responsibilities:
 - Persist request history
 - Persist request workspace state through `app_settings`
 - Load environment metadata from SQLite while storing secret environment values in the OS credential store
-- Coordinate signed release checks and install handoff for the Settings updater flow
+- Coordinate signed release checks, download progress events, retryable failure handling, and install handoff for the Settings updater flow
 - Resolve app data paths
 - Expose a stable Tauri command surface to the UI
 

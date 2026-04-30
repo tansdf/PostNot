@@ -1,7 +1,8 @@
 import { browser } from "$app/environment";
+import { listen } from "@tauri-apps/api/event";
 
 import { checkForUpdates, getSettings, hasTauriRuntime, installUpdate } from "$lib/api/commands";
-import type { AvailableUpdate } from "$lib/api/types";
+import type { AvailableUpdate, UpdateDownloadProgress } from "$lib/api/types";
 import { notifications } from "$lib/stores/notifications.svelte";
 
 type UpdateCheckMode = "silent" | "manual";
@@ -14,6 +15,8 @@ class UpdaterStore {
   availableUpdate = $state<AvailableUpdate | null>(null);
   lastCheckedAt = $state<string | null>(null);
   errorText = $state("");
+  installProgress = $state<UpdateDownloadProgress | null>(null);
+  private unlistenDownloadProgress: (() => void) | null = null;
 
   get isChecking() {
     return this.phase === "checking";
@@ -21,6 +24,37 @@ class UpdaterStore {
 
   get isInstalling() {
     return this.phase === "installing";
+  }
+
+  get installProgressPercent() {
+    const progress = this.installProgress;
+
+    if (!progress?.contentLength) {
+      return progress?.finished ? 100 : null;
+    }
+
+    return Math.min(
+      100,
+      Math.max(0, Math.round((progress.downloadedBytes / progress.contentLength) * 100))
+    );
+  }
+
+  get installProgressLabel() {
+    const progress = this.installProgress;
+
+    if (!progress) {
+      return "";
+    }
+
+    if (progress.contentLength) {
+      return `${formatBytes(progress.downloadedBytes)} of ${formatBytes(progress.contentLength)}`;
+    }
+
+    if (progress.downloadedBytes > 0) {
+      return `${formatBytes(progress.downloadedBytes)} downloaded`;
+    }
+
+    return "Preparing download...";
   }
 
   get isRefreshInFlight() {
@@ -47,6 +81,7 @@ class UpdaterStore {
       this.lastCheckedAt = settings.lastUpdateCheckedAt;
       this.errorText = "";
       this.initialized = true;
+      await this.listenForDownloadProgress();
     } catch {
       this.initialized = true;
     } finally {
@@ -80,22 +115,32 @@ class UpdaterStore {
     const targetVersion = this.availableUpdate.version;
     this.phase = "installing";
     this.errorText = "";
+    this.installProgress = {
+      downloadedBytes: 0,
+      contentLength: null,
+      finished: false
+    };
 
     try {
       notifications.info(
-        `Installing v${targetVersion}. PostNot should close when the installer takes over.`,
-        "Applying update"
+        `Downloading v${targetVersion}. PostNot will close when the installer takes over.`,
+        "Downloading update"
       );
       await installUpdate();
 
       this.availableUpdate = null;
+      this.installProgress = null;
       notifications.success(
         `The update installer for v${targetVersion} has been handed off. If PostNot is still open, you can close it and let the installer finish.`,
         "Installer started"
       );
     } catch (error) {
       this.errorText = error instanceof Error ? error.message : String(error);
-      notifications.error(this.errorText, "Update install failed");
+      this.installProgress = null;
+      notifications.error(
+        `${this.errorText} The update is still available, so you can retry without checking again.`,
+        "Update install failed"
+      );
     } finally {
       this.phase = "idle";
     }
@@ -121,6 +166,7 @@ class UpdaterStore {
       this.configured = result.configured;
       this.availableUpdate = result.update;
       this.lastCheckedAt = new Date().toISOString();
+      this.installProgress = null;
       this.phase = "idle";
 
       if (mode === "manual") {
@@ -160,6 +206,37 @@ class UpdaterStore {
       );
     });
   }
+
+  private async listenForDownloadProgress() {
+    if (!hasTauriRuntime() || this.unlistenDownloadProgress) {
+      return;
+    }
+
+    this.unlistenDownloadProgress = await listen<UpdateDownloadProgress>(
+      "update-download-progress",
+      (event) => {
+        this.installProgress = event.payload;
+      }
+    );
+  }
 }
 
 export const updater = new UpdaterStore();
+
+function formatBytes(bytes: number) {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return "0 B";
+  }
+
+  const units = ["B", "KB", "MB", "GB"];
+  let value = bytes;
+  let unitIndex = 0;
+
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+
+  const precision = value >= 10 || unitIndex === 0 ? 0 : 1;
+  return `${value.toFixed(precision)} ${units[unitIndex]}`;
+}

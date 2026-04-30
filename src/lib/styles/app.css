@@ -1993,6 +1993,54 @@ select option {
   max-height: 10.5rem;
 }
 
+.settings-update-progress {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--surface-subtle) 72%, var(--bg-panel));
+}
+
+.settings-update-progress-header {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--text-secondary);
+  font-size: 0.86rem;
+}
+
+.settings-update-progress-header strong {
+  color: var(--text-primary);
+  font-size: 0.86rem;
+  white-space: nowrap;
+}
+
+.settings-update-progress progress {
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  background: var(--border-soft);
+}
+
+.settings-update-progress progress::-webkit-progress-bar {
+  border-radius: 999px;
+  background: var(--border-soft);
+}
+
+.settings-update-progress progress::-webkit-progress-value {
+  border-radius: 999px;
+  background: var(--bg-accent);
+}
+
+.settings-update-progress progress::-moz-progress-bar {
+  border-radius: 999px;
+  background: var(--bg-accent);
+}
+
 .settings-update-markdown {
   font-family: var(--font-sans);
   line-height: 1.5;

@@ -12,7 +12,7 @@ PostNot is a local-first desktop API client built with:
 - TypeScript
 - SQLite
 
-The app already supports request execution, full response body reads with binary response handling, history, collections with nested folders and drag-and-drop request moves, sidebar collection search, environments, secret environment storage, import/export flows including OpenAPI 3 import, broader cURL flag coverage, and single-request cURL/JSON export, OAuth2 bearer auth helpers, notifications, settings, signed in-app update checks, inherited collection/folder/saved-request pre-request and test scripts (worker-backed frontend JavaScript execution around the native send), async script helper requests through `pn.http.send(...)`, and script-driven active-environment variable writes.
+The app already supports request execution, full response body reads with binary response handling, history, collections with nested folders and drag-and-drop request moves, sidebar collection search, environments, secret environment storage, import/export flows including OpenAPI 3 import, broader cURL flag coverage, and single-request cURL/JSON export, OAuth2 bearer auth helpers, notifications, settings, signed in-app update checks with download progress, inherited collection/folder/saved-request pre-request and test scripts (worker-backed frontend JavaScript execution around the native send), async script helper requests through `pn.http.send(...)`, and script-driven active-environment variable writes.
 
 ## Canonical Working Directory
 
@@ -67,7 +67,7 @@ Implemented now:
 - script-driven active-environment variable writes, including persisted secret writes
 - full response body reads with binary metadata, manual binary text decoding, and an opt-in setting for automatic binary response decoding
 - floating notifications
-- signed in-app update checks with silent startup refresh
+- signed in-app update checks with silent startup refresh and download progress
 - window size and position restore
 - collections sidebar and collections panel share folder tree guides and `FolderGlyph` / `folderPaths` icons
 
