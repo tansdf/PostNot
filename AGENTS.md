@@ -12,7 +12,7 @@ PostNot is a local-first desktop API client built with:
 - TypeScript
 - SQLite
 
-The app already supports request execution, full response body reads, history, collections with nested folders and drag-and-drop request moves, sidebar collection search, environments, secret environment storage, import/export flows including OpenAPI 3 import, broader cURL flag coverage, and single-request cURL/JSON export, OAuth2 bearer auth helpers with client-credentials token fetch, notifications, settings, signed in-app update checks with download progress, inherited collection/folder/saved-request pre-request and test scripts (worker-backed frontend JavaScript execution around the native send), async script helper requests through `pn.http.send(...)`, and script-driven active-environment variable writes.
+The app already supports request execution, full response body reads, history, collections with nested folders and drag-and-drop request moves, sidebar collection search, environments, secret environment storage, import/export flows including OpenAPI 3 import, broader cURL flag coverage, redacted-by-default single-request cURL/JSON export with explicit full export, OAuth2 bearer auth helpers with client-credentials token fetch, notifications, settings, signed in-app update checks with download progress, inherited collection/folder/saved-request pre-request and test scripts (worker-backed frontend JavaScript execution around the native send), async script helper requests through `pn.http.send(...)`, and script-driven active-environment variable writes.
 
 ## Canonical Working Directory
 
@@ -58,7 +58,7 @@ Implemented now:
 - OpenAPI 3 collection import and single-request draft import
 - cURL import
 - broader cURL import coverage for common flags such as `--url`, `--get`, repeated `--data`, `--form`, cookies, compression, redirects, and shell continuations
-- single-request export from the Requests page as cURL or PostNot request JSON
+- single-request export from the Requests page as cURL or PostNot request JSON, redacted by default with an explicit full-export toggle
 - OAuth2 bearer auth fields and a request-editor client-credentials token fetch action
 - multipart request composition with local file uploads
 - built-in dynamic request variables
@@ -116,6 +116,7 @@ This approach is mainly for native Windows verification such as drag-and-drop, w
 - SQLite data lives under the Tauri app data directory.
 - Secret environment values are stored in the OS credential store, not SQLite.
 - History persists requests that use secret environment variables, but stores unresolved `{{variable}}` text instead of resolved secret values.
+- Single-request exports redact credential-looking values by default, including bearer tokens, OAuth2 access tokens, client secrets, API keys, cookies, and basic-auth passwords; the export dialog has an explicit full-export toggle.
 - Collections are managed on `/collections`.
 - Environments are managed on `/environments`.
 - Settings are managed on `/settings`.

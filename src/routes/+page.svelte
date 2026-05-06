@@ -97,6 +97,7 @@
   let openApiImportSource = $state("");
   let isRequestExportDialogOpen = $state(false);
   let requestExportFormat = $state<"curl" | "json">("curl");
+  let requestExportSafety = $state<"redacted" | "full">("redacted");
   let isImportingRequest = $state(false);
   let isHistoryCollapseSaving = $state(false);
   let requestImportErrorText = $state("");
@@ -135,7 +136,21 @@ paths:
     get:
       summary: List items`;
 
-  let requestExportSource = $derived(buildRequestExportSource(request, requestExportFormat));
+  type RedactionDetail = {
+    field: string;
+    reason: string;
+  };
+
+  type RequestExportBuild = {
+    source: string;
+    redactions: RedactionDetail[];
+  };
+
+  const REDACTED_EXPORT_VALUE = "{{redacted}}";
+
+  let requestExportBuild = $derived(buildRequestExportSource(request, requestExportFormat, requestExportSafety));
+  let requestExportSource = $derived(requestExportBuild.source);
+  let requestExportRedactions = $derived(requestExportBuild.redactions);
 
   function shellQuote(value: string) {
     if (value.length === 0) {
@@ -151,7 +166,8 @@ paths:
     );
   }
 
-  function buildUrlWithQueryParams(requestDraft: RequestDraft) {
+  function buildUrlWithQueryParams(requestDraft: RequestDraft, redactions?: RedactionDetail[]) {
+    const baseUrl = redactions ? redactUrlQueryString(requestDraft.url, redactions) : requestDraft.url;
     const activeQueryRows = requestDraft.queryParams.filter((row) => row.enabled && row.key.trim());
     const apiKeyQueryRows =
       requestDraft.auth.type === "api-key" &&
@@ -160,22 +176,29 @@ paths:
         ? [
             {
               key: requestDraft.auth.apiKeyName,
-              value: requestDraft.auth.apiKeyValue
+              value: redactions
+                ? redactValue(requestDraft.auth.apiKeyValue, "API key query parameter", "API key values are credentials.", redactions)
+                : requestDraft.auth.apiKeyValue
             }
           ]
         : [];
     const queryRows = [
-      ...activeQueryRows.map((row) => ({ key: row.key, value: row.value })),
+      ...activeQueryRows.map((row) => ({
+        key: row.key,
+        value: redactions && isSensitiveKey(row.key)
+          ? redactValue(row.value, `Query parameter "${row.key.trim()}"`, "The parameter name looks like a token, key, secret, or password.", redactions)
+          : row.value
+      })),
       ...apiKeyQueryRows
     ];
 
     if (queryRows.length === 0) {
-      return requestDraft.url;
+      return baseUrl;
     }
 
-    const hashIndex = requestDraft.url.indexOf("#");
-    const hash = hashIndex >= 0 ? requestDraft.url.slice(hashIndex) : "";
-    const beforeHash = hashIndex >= 0 ? requestDraft.url.slice(0, hashIndex) : requestDraft.url;
+    const hashIndex = baseUrl.indexOf("#");
+    const hash = hashIndex >= 0 ? baseUrl.slice(hashIndex) : "";
+    const beforeHash = hashIndex >= 0 ? baseUrl.slice(0, hashIndex) : baseUrl;
     const separator = beforeHash.includes("?") ? "&" : "?";
     const queryString = queryRows
       .map((row) => `${row.key}${row.value.length > 0 ? `=${row.value}` : ""}`)
@@ -184,31 +207,240 @@ paths:
     return `${beforeHash}${separator}${queryString}${hash}`;
   }
 
-  function buildCurlExport(requestDraft: RequestDraft) {
+  function addRedaction(redactions: RedactionDetail[], field: string, reason: string) {
+    if (!redactions.some((item) => item.field === field && item.reason === reason)) {
+      redactions.push({ field, reason });
+    }
+  }
+
+  function redactValue(value: string, field: string, reason: string, redactions: RedactionDetail[]) {
+    if (value.length === 0) {
+      return value;
+    }
+
+    addRedaction(redactions, field, reason);
+    return REDACTED_EXPORT_VALUE;
+  }
+
+  function normalizedSecretName(value: string) {
+    return value.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  }
+
+  function isSensitiveKey(value: string) {
+    const normalized = normalizedSecretName(value);
+    if (!normalized) {
+      return false;
+    }
+
+    return (
+      normalized === "authorization" ||
+      normalized === "proxyauthorization" ||
+      normalized === "cookie" ||
+      normalized === "setcookie" ||
+      normalized === "apikey" ||
+      normalized === "xapikey" ||
+      normalized === "clientsecret" ||
+      normalized === "access_token" ||
+      normalized.includes("accesstoken") ||
+      normalized.includes("apikey") ||
+      normalized.includes("secret") ||
+      normalized.includes("token") ||
+      normalized.includes("password") ||
+      normalized.includes("passwd")
+    );
+  }
+
+  function decodeKeyForRedaction(value: string) {
+    try {
+      return decodeURIComponent(value.replace(/\+/g, " "));
+    } catch {
+      return value;
+    }
+  }
+
+  function redactUrlQueryString(url: string, redactions: RedactionDetail[]) {
+    const hashIndex = url.indexOf("#");
+    const hash = hashIndex >= 0 ? url.slice(hashIndex) : "";
+    const beforeHash = hashIndex >= 0 ? url.slice(0, hashIndex) : url;
+    const queryIndex = beforeHash.indexOf("?");
+    if (queryIndex < 0) {
+      return url;
+    }
+
+    const base = beforeHash.slice(0, queryIndex);
+    const query = beforeHash.slice(queryIndex + 1);
+    const redactedQuery = query
+      .split("&")
+      .map((part) => {
+        const separatorIndex = part.indexOf("=");
+        const key = separatorIndex >= 0 ? part.slice(0, separatorIndex) : part;
+        const value = separatorIndex >= 0 ? part.slice(separatorIndex + 1) : "";
+        if (!isSensitiveKey(decodeKeyForRedaction(key)) || value.length === 0) {
+          return part;
+        }
+
+        addRedaction(redactions, `URL query parameter "${decodeKeyForRedaction(key)}"`, "The URL parameter name looks like a token, key, secret, or password.");
+        return `${key}=${encodeURIComponent(REDACTED_EXPORT_VALUE)}`;
+      })
+      .join("&");
+
+    return `${base}?${redactedQuery}${hash}`;
+  }
+
+  function redactHeaderValue(headerName: string, value: string, redactions: RedactionDetail[]) {
+    const normalized = normalizedSecretName(headerName);
+    if (normalized === "authorization" || normalized === "proxyauthorization") {
+      return redactValue(value, `Header "${headerName.trim()}"`, "Authorization headers often contain bearer tokens or basic credentials.", redactions);
+    }
+    if (normalized === "cookie" || normalized === "setcookie") {
+      return redactValue(value, `Header "${headerName.trim()}"`, "Cookies can carry session secrets.", redactions);
+    }
+    if (isSensitiveKey(headerName)) {
+      return redactValue(value, `Header "${headerName.trim()}"`, "The header name looks like a token, key, secret, or password.", redactions);
+    }
+    return value;
+  }
+
+  function redactJsonSecrets(value: unknown, redactions: RedactionDetail[], path = "Body JSON"): unknown {
+    if (Array.isArray(value)) {
+      return value.map((item, index) => redactJsonSecrets(item, redactions, `${path}[${index}]`));
+    }
+
+    if (value && typeof value === "object") {
+      return Object.fromEntries(
+        Object.entries(value).map(([key, item]) => {
+          if (isSensitiveKey(key) && item !== null && item !== undefined && String(item).length > 0) {
+            addRedaction(redactions, `${path}.${key}`, "The JSON property name looks like a token, key, secret, or password.");
+            return [key, REDACTED_EXPORT_VALUE];
+          }
+          return [key, redactJsonSecrets(item, redactions, `${path}.${key}`)];
+        })
+      );
+    }
+
+    return value;
+  }
+
+  function redactRawBody(raw: string, redactions: RedactionDetail[]) {
+    if (!raw.trim()) {
+      return raw;
+    }
+
+    try {
+      return JSON.stringify(redactJsonSecrets(JSON.parse(raw), redactions), null, 2);
+    } catch {
+      return redactUrlEncodedRawBody(raw, redactions);
+    }
+  }
+
+  function redactUrlEncodedRawBody(raw: string, redactions: RedactionDetail[]) {
+    const trimmed = raw.trim();
+    if (!trimmed.includes("=") || /[\r\n{}]/.test(trimmed)) {
+      return raw;
+    }
+
+    return raw
+      .split("&")
+      .map((part) => {
+        const separatorIndex = part.indexOf("=");
+        if (separatorIndex < 0) {
+          return part;
+        }
+
+        const key = part.slice(0, separatorIndex);
+        const value = part.slice(separatorIndex + 1);
+        if (!isSensitiveKey(decodeKeyForRedaction(key)) || value.length === 0) {
+          return part;
+        }
+
+        addRedaction(redactions, `Raw body field "${decodeKeyForRedaction(key)}"`, "The field name looks like a token, key, secret, or password.");
+        return `${key}=${encodeURIComponent(REDACTED_EXPORT_VALUE)}`;
+      })
+      .join("&");
+  }
+
+  function buildRedactedRequestDraft(requestDraft: RequestDraft) {
+    const redactions: RedactionDetail[] = [];
+    const redacted = cloneRequestDraft(requestDraft);
+    redacted.url = redactUrlQueryString(redacted.url, redactions);
+
+    redacted.headers = redacted.headers.map((header) =>
+      header.enabled && header.key.trim()
+        ? { ...header, value: redactHeaderValue(header.key, header.value, redactions) }
+        : header
+    );
+
+    redacted.queryParams = redacted.queryParams.map((row) =>
+      row.enabled && row.key.trim() && isSensitiveKey(row.key)
+        ? {
+            ...row,
+            value: redactValue(row.value, `Query parameter "${row.key.trim()}"`, "The parameter name looks like a token, key, secret, or password.", redactions)
+          }
+        : row
+    );
+
+    redacted.auth = {
+      ...redacted.auth,
+      basicPassword: redactValue(redacted.auth.basicPassword, "Basic auth password", "Basic-auth passwords are credentials.", redactions),
+      bearerToken: redactValue(redacted.auth.bearerToken, "Bearer token", "Bearer tokens grant API access.", redactions),
+      apiKeyValue: redactValue(redacted.auth.apiKeyValue, "API key value", "API key values are credentials.", redactions),
+      oauth2AccessToken: redactValue(redacted.auth.oauth2AccessToken, "OAuth2 access token", "OAuth2 access tokens grant API access.", redactions),
+      oauth2ClientSecret: redactValue(redacted.auth.oauth2ClientSecret, "OAuth2 client secret", "OAuth2 client secrets are credentials.", redactions)
+    };
+
+    redacted.body = {
+      ...redacted.body,
+      raw: redacted.body.mode === "json" || redacted.body.mode === "raw"
+        ? redactRawBody(redacted.body.raw, redactions)
+        : redacted.body.raw,
+      form: redacted.body.form.map((row) =>
+        row.enabled && row.key.trim() && isSensitiveKey(row.key)
+          ? {
+              ...row,
+              value: redactValue(row.value, `Body field "${row.key.trim()}"`, "The field name looks like a token, key, secret, or password.", redactions)
+            }
+          : row
+      )
+    };
+
+    return { request: redacted, redactions };
+  }
+
+  function buildCurlExport(requestDraft: RequestDraft, safety: "redacted" | "full", redactions: RedactionDetail[]) {
     const lines = ["curl"];
     lines.push(`  --request ${shellQuote(requestDraft.method)}`);
-    lines.push(`  --url ${shellQuote(buildUrlWithQueryParams(requestDraft))}`);
+    lines.push(`  --url ${shellQuote(buildUrlWithQueryParams(requestDraft, safety === "redacted" ? redactions : undefined))}`);
 
     for (const header of requestDraft.headers.filter((row) => row.enabled && row.key.trim())) {
-      lines.push(`  --header ${shellQuote(`${header.key.trim()}: ${header.value}`)}`);
+      const headerValue = safety === "redacted" ? redactHeaderValue(header.key, header.value, redactions) : header.value;
+      lines.push(`  --header ${shellQuote(`${header.key.trim()}: ${headerValue}`)}`);
     }
 
     switch (requestDraft.auth.type) {
       case "basic":
         if (requestDraft.auth.basicUsername.trim() || requestDraft.auth.basicPassword.length > 0) {
+          const password = safety === "redacted"
+            ? redactValue(requestDraft.auth.basicPassword, "Basic auth password", "Basic-auth passwords are credentials.", redactions)
+            : requestDraft.auth.basicPassword;
           lines.push(
-            `  --user ${shellQuote(`${requestDraft.auth.basicUsername}:${requestDraft.auth.basicPassword}`)}`
+            `  --user ${shellQuote(`${requestDraft.auth.basicUsername}:${password}`)}`
           );
         }
         break;
       case "bearer":
         if (requestDraft.auth.bearerToken.trim()) {
-          lines.push(`  --header ${shellQuote(`Authorization: Bearer ${requestDraft.auth.bearerToken}`)}`);
+          const token = safety === "redacted"
+            ? redactValue(requestDraft.auth.bearerToken, "Bearer token", "Bearer tokens grant API access.", redactions)
+            : requestDraft.auth.bearerToken;
+          lines.push(`  --header ${shellQuote(`Authorization: Bearer ${token}`)}`);
         }
         break;
       case "oauth2":
         if (requestDraft.auth.oauth2AccessToken.trim()) {
-          lines.push(`  --header ${shellQuote(`Authorization: Bearer ${requestDraft.auth.oauth2AccessToken}`)}`);
+          const token = safety === "redacted"
+            ? redactValue(requestDraft.auth.oauth2AccessToken, "OAuth2 access token", "OAuth2 access tokens grant API access.", redactions)
+            : requestDraft.auth.oauth2AccessToken;
+          lines.push(`  --header ${shellQuote(`Authorization: Bearer ${token}`)}`);
         }
         break;
       case "api-key":
@@ -216,8 +448,11 @@ paths:
           requestDraft.auth.apiKeyIn === "header" &&
           requestDraft.auth.apiKeyName.trim()
         ) {
+          const keyValue = safety === "redacted"
+            ? redactValue(requestDraft.auth.apiKeyValue, "API key header", "API key values are credentials.", redactions)
+            : requestDraft.auth.apiKeyValue;
           lines.push(
-            `  --header ${shellQuote(`${requestDraft.auth.apiKeyName.trim()}: ${requestDraft.auth.apiKeyValue}`)}`
+            `  --header ${shellQuote(`${requestDraft.auth.apiKeyName.trim()}: ${keyValue}`)}`
           );
         }
         break;
@@ -229,22 +464,28 @@ paths:
           lines.push(`  --header ${shellQuote("Content-Type: application/json")}`);
         }
         if (requestDraft.body.raw.length > 0) {
-          lines.push(`  --data-raw ${shellQuote(requestDraft.body.raw)}`);
+          lines.push(`  --data-raw ${shellQuote(safety === "redacted" ? redactRawBody(requestDraft.body.raw, redactions) : requestDraft.body.raw)}`);
         }
         break;
       case "raw":
         if (requestDraft.body.raw.length > 0) {
-          lines.push(`  --data-raw ${shellQuote(requestDraft.body.raw)}`);
+          lines.push(`  --data-raw ${shellQuote(safety === "redacted" ? redactRawBody(requestDraft.body.raw, redactions) : requestDraft.body.raw)}`);
         }
         break;
       case "form-urlencoded":
         for (const field of requestDraft.body.form.filter((row) => row.enabled && row.key.trim())) {
-          lines.push(`  --data-urlencode ${shellQuote(`${field.key}=${field.value}`)}`);
+          const value = safety === "redacted" && isSensitiveKey(field.key)
+            ? redactValue(field.value, `Body field "${field.key.trim()}"`, "The field name looks like a token, key, secret, or password.", redactions)
+            : field.value;
+          lines.push(`  --data-urlencode ${shellQuote(`${field.key}=${value}`)}`);
         }
         break;
       case "multipart":
         for (const field of requestDraft.body.form.filter((row) => row.enabled && row.key.trim())) {
-          lines.push(`  --form ${shellQuote(`${field.key}=${field.value}`)}`);
+          const value = safety === "redacted" && isSensitiveKey(field.key)
+            ? redactValue(field.value, `Body field "${field.key.trim()}"`, "The field name looks like a token, key, secret, or password.", redactions)
+            : field.value;
+          lines.push(`  --form ${shellQuote(`${field.key}=${value}`)}`);
         }
         for (const file of requestDraft.body.files.filter((row) => row.enabled && row.name.trim() && row.path.trim())) {
           lines.push(`  --form ${shellQuote(`${file.name}=@${file.path}`)}`);
@@ -255,12 +496,21 @@ paths:
     return lines.map((line, index) => (index === lines.length - 1 ? line : `${line} \\`)).join("\n");
   }
 
-  function buildRequestExportSource(requestDraft: RequestDraft, format: "curl" | "json") {
+  function buildRequestExportSource(requestDraft: RequestDraft, format: "curl" | "json", safety: "redacted" | "full"): RequestExportBuild {
+    const redactedExport = safety === "redacted" ? buildRedactedRequestDraft(requestDraft) : { request: cloneRequestDraft(requestDraft), redactions: [] };
+
     if (format === "json") {
-      return JSON.stringify(cloneRequestDraft(requestDraft), null, 2);
+      return {
+        source: JSON.stringify(redactedExport.request, null, 2),
+        redactions: redactedExport.redactions
+      };
     }
 
-    return buildCurlExport(requestDraft);
+    const redactions: RedactionDetail[] = [];
+    return {
+      source: buildCurlExport(requestDraft, safety, redactions),
+      redactions
+    };
   }
 
   onMount(() => {
@@ -1169,6 +1419,7 @@ paths:
 
   function openRequestExportDialog() {
     requestExportFormat = "curl";
+    requestExportSafety = "redacted";
     isRequestExportDialogOpen = true;
   }
 
@@ -1179,7 +1430,12 @@ paths:
   async function handleCopyRequestExport() {
     try {
       await navigator.clipboard.writeText(requestExportSource);
-      notifications.success("The exported request text is on your clipboard.", "Export copied");
+      notifications.success(
+        requestExportSafety === "redacted" && requestExportRedactions.length > 0
+          ? "The redacted export is on your clipboard."
+          : "The exported request text is on your clipboard.",
+        "Export copied"
+      );
     } catch (error) {
       notifications.error(error instanceof Error ? error.message : String(error), "Copy failed");
     }
@@ -1464,6 +1720,7 @@ paths:
         <h2 id="request-export-title">Export Request</h2>
         <span class="history-meta">
           {requestExportFormat === "curl" ? "cURL command" : "PostNot request JSON"}
+          {requestExportSafety === "redacted" ? " · secrets redacted" : " · full values included"}
         </span>
       </div>
 
@@ -1489,8 +1746,39 @@ paths:
           </button>
         </div>
 
+        <label class="inline-checkbox">
+          <input
+            type="checkbox"
+            checked={requestExportSafety === "full"}
+            onchange={(event) => (requestExportSafety = event.currentTarget.checked ? "full" : "redacted")}
+          />
+          <span>Include secrets in this export</span>
+        </label>
+
+        {#if requestExportSafety === "full"}
+          <p class="auth-error-text">
+            Full export includes bearer tokens, OAuth2 access tokens, client secrets, API keys, cookies, and basic-auth passwords.
+          </p>
+        {:else if requestExportRedactions.length > 0}
+          <div class="request-export-redactions" aria-live="polite">
+            <p class="field-help">
+              PostNot redacted credential-looking values so this export is safer to paste into chat, tickets, or docs.
+            </p>
+            <ul>
+              {#each requestExportRedactions as redaction}
+                <li><strong>{redaction.field}</strong>: {redaction.reason}</li>
+              {/each}
+            </ul>
+          </div>
+        {:else}
+          <p class="field-help">No credential-looking values were found in this request export.</p>
+        {/if}
+
         <label>
-          <span class="field-label">{requestExportFormat === "curl" ? "cURL command" : "Request JSON"}</span>
+          <span class="field-label">
+            {requestExportFormat === "curl" ? "cURL command" : "Request JSON"}
+            {requestExportSafety === "redacted" ? " (redacted)" : " (full)"}
+          </span>
           <textarea
             class="text-input collections-import-source"
             value={requestExportSource}

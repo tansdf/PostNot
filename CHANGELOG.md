@@ -6,6 +6,12 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.19.7] - 2026-05-06
+
+### Changed
+
+- Single-request cURL and PostNot JSON exports now redact credential-looking values by default, with an explicit full-export toggle and a clear list of redacted fields.
+
 ## [0.19.6] - 2026-04-30
 
 ### Added

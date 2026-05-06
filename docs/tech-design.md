@@ -33,7 +33,7 @@ Why this stack:
 
 ## 3. Current Application State
 
-This section reflects the code currently implemented in the repository, including the shipped `0.15.0` scripting update, the `0.15.1` route/modal polish work, the `0.16.0` OpenAPI 3 import release, the `0.17.0` multitab request workspace release, the `0.17.1` history-restore patch, the `0.17.2` requests/environments workflow follow-up, the `0.17.3` hydration-flash polish release, the `0.17.4` follow-up that unifies hydration-flash handling through a shared synchronous paint cache, the `0.18.0` sidebar collection search release, the `0.18.1` scripting/workspace hardening patch, the `0.19.0` cURL/OAuth2 import-auth and request-export polish, the `0.19.2` full response body follow-up, the `0.19.3` updater download progress patch, the `0.19.4` revert of the 0.18.2 binary response preview layer, and the `0.19.5` compressed-response decoding and error-details patch (see [CHANGELOG.md](../CHANGELOG.md)).
+This section reflects the code currently implemented in the repository, including the shipped `0.15.0` scripting update, the `0.15.1` route/modal polish work, the `0.16.0` OpenAPI 3 import release, the `0.17.0` multitab request workspace release, the `0.17.1` history-restore patch, the `0.17.2` requests/environments workflow follow-up, the `0.17.3` hydration-flash polish release, the `0.17.4` follow-up that unifies hydration-flash handling through a shared synchronous paint cache, the `0.18.0` sidebar collection search release, the `0.18.1` scripting/workspace hardening patch, the `0.19.0` cURL/OAuth2 import-auth and request-export polish, the `0.19.2` full response body follow-up, the `0.19.3` updater download progress patch, the `0.19.4` revert of the 0.18.2 binary response preview layer, the `0.19.5` compressed-response decoding and error-details patch, the `0.19.6` OAuth2 token-fetch helper release, and the `0.19.7` redacted single-request export patch (see [CHANGELOG.md](../CHANGELOG.md)).
 
 ### Implemented
 
@@ -72,7 +72,7 @@ This section reflects the code currently implemented in the repository, includin
 - Postman collection JSON export
 - Postman environment JSON export
 - cURL command import, including `--url`, `--get`, repeated `--data`, multipart `--form`, cookies, compression, redirect flags, and shell continuation cleanup
-- Single-request cURL and PostNot request JSON export from the Requests page
+- Single-request cURL and PostNot request JSON export from the Requests page, with credential-looking values redacted by default and an explicit full-export toggle
 - Multipart request composition with native file selection
 - Built-in dynamic variables at request runtime
 - App-level floating notification system for action feedback
@@ -611,10 +611,11 @@ Current state:
 - requests are executed in Rust, not the browser
 - secret environment values are stored in the OS credential store, while SQLite keeps only non-secret environment metadata
 - history snapshots redact resolved values that came from secret environment variables
+- single-request cURL and PostNot JSON exports redact credential-looking values by default, including bearer tokens, OAuth2 access tokens, client secrets, API keys, cookies, and basic-auth passwords; full-value export requires an explicit toggle and shows a warning
 - decoded response bodies are persisted as full text history body files
 - if an environment update or delete fails after partially changing the credential store, rollback of secrets is attempted; failure to roll back is logged with `log::warn` for diagnostics (the primary error still returns to the UI)
 
-This is the current security posture for environment variables; broader secret handling beyond environment-backed values remains future work.
+This is the current security posture: environment-backed secrets are protected in storage and history, while single-request export uses local pattern-based redaction for credential-looking values before users copy cURL or PostNot JSON.
 
 ## 12. Release Progress
 
@@ -735,13 +736,13 @@ These decisions remain relevant as the app approaches `1.0.0`:
 
 - whether large response bodies should spill to files instead of SQLite preview-only storage
 - exact import/export format for PostNot bundles
-- how far secret redaction should extend beyond environment-backed variables
+- how far pattern-based export redaction should extend beyond the current credential-looking request fields
 - whether updater discovery should remain stable-only on GitHub's `/latest` endpoint or later grow an opt-in prerelease channel
 
 ## 16. Recommendation
 
 Treat the repository as being on the path from active Milestone 1 delivery to a deliberate `v1.0.0`, not as a project that still needs a broad product rethink.
 
-The current design is already grounded in a real desktop workflow: persisted settings influence request execution, history is stored in SQLite with secret-derived environment values redacted, secret environment values live in the OS credential store, environments resolve variables at send time, collections support nested folders in the working UI with consistent sidebar and collections-panel tree affordances, saved requests can be reordered or moved across folders and collections through a shared drag-and-drop model, collections, folders, and saved requests can run inherited pre-request and test scripts in the frontend before and after native execution, scripts can await helper HTTP requests through `pn.http.send(...)` without polluting history and can persist active-environment variable updates during script execution, import can pull requests in from Postman collections, OpenAPI 3 documents, and cURL, multipart requests can attach local files, built-in dynamic variables resolve at runtime, and the desktop shell can check GitHub Releases for signed updater builds both on launch and from Settings.
+The current design is already grounded in a real desktop workflow: persisted settings influence request execution, history is stored in SQLite with secret-derived environment values redacted, secret environment values live in the OS credential store, environments resolve variables at send time, collections support nested folders in the working UI with consistent sidebar and collections-panel tree affordances, saved requests can be reordered or moved across folders and collections through a shared drag-and-drop model, collections, folders, and saved requests can run inherited pre-request and test scripts in the frontend before and after native execution, scripts can await helper HTTP requests through `pn.http.send(...)` without polluting history and can persist active-environment variable updates during script execution, import can pull requests in from Postman collections, OpenAPI 3 documents, and cURL, single-request exports can produce redacted-by-default cURL or PostNot JSON with explicit full export, multipart requests can attach local files, built-in dynamic variables resolve at runtime, and the desktop shell can check GitHub Releases for signed updater builds both on launch and from Settings.
 
 The remaining `v1` work should stay focused on release-quality steps that close the last day-to-day gaps: strong hardening of correctness, UX, and performance, plus any small workflow fixes that surface during validation.
