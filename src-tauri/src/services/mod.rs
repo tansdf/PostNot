@@ -4,6 +4,7 @@ pub mod exports_service;
 pub mod history_service;
 pub mod http_client;
 pub mod imports_service;
+pub mod playbooks_service;
 pub mod secret_store_service;
 pub mod settings_service;
 pub mod updates_service;

@@ -248,6 +248,157 @@ export type SavedRequestDetail = {
   request: RequestDraft;
 };
 
+export type PlaybookSummary = {
+  id: string;
+  name: string;
+  description: string;
+  defaultDelayMs: number;
+  stopOnFailure: boolean;
+  failOnHttpError: boolean;
+  stepCount: number;
+  updatedAt: string;
+};
+
+export type PlaybookDetail = {
+  id: string;
+  name: string;
+  description: string;
+  defaultDelayMs: number;
+  stopOnFailure: boolean;
+  failOnHttpError: boolean;
+  steps: PlaybookStep[];
+  updatedAt: string;
+};
+
+export type PlaybookInput = {
+  name: string;
+  description: string;
+  defaultDelayMs: number;
+  stopOnFailure: boolean;
+  failOnHttpError: boolean;
+};
+
+export type AddPlaybookStepInput = {
+  savedRequestId: string;
+  nameOverride: string;
+  notes: string;
+  enabled: boolean;
+  delayAfterMs?: number | null;
+};
+
+export type UpdatePlaybookStepInput = {
+  nameOverride: string;
+  notes: string;
+  enabled: boolean;
+  delayAfterMs?: number | null;
+};
+
+export type ReorderPlaybookStepsInput = {
+  stepIds: string[];
+};
+
+export type PlaybookStep = {
+  id: string;
+  playbookId: string;
+  savedRequestId?: string | null;
+  savedRequestName: string;
+  collectionName?: string | null;
+  method?: HttpMethod | null;
+  url?: string | null;
+  nameOverride: string;
+  notes: string;
+  enabled: boolean;
+  sortOrder: number;
+  delayAfterMs?: number | null;
+  missingSavedRequest: boolean;
+  updatedAt: string;
+};
+
+export type PlaybookFolderScripts = {
+  name: string;
+  preRequestScript: string;
+  testScript: string;
+};
+
+export type PlaybookInheritedScripts = {
+  preRequestScript: string;
+  testScript: string;
+  folderScripts: PlaybookFolderScripts[];
+};
+
+export type PlaybookExecutionContext = {
+  stepId: string;
+  savedRequest: SavedRequestDetail;
+  inheritedScripts: PlaybookInheritedScripts;
+};
+
+export type PlaybookRunStatus = "running" | "passed" | "failed" | "canceled";
+export type PlaybookRunStepStatus = "passed" | "failed" | "skipped" | "canceled";
+
+export type CreatePlaybookRunInput = {
+  playbookId: string;
+  totalSteps: number;
+};
+
+export type FinishPlaybookRunInput = {
+  status: PlaybookRunStatus;
+  stoppedReason: string;
+  totalDurationMs: number;
+};
+
+export type RecordPlaybookRunStepInput = {
+  stepId?: string | null;
+  savedRequestId?: string | null;
+  savedRequestName: string;
+  method: string;
+  url: string;
+  status: PlaybookRunStepStatus;
+  statusCode?: number | null;
+  durationMs: number;
+  responseSizeBytes: number;
+  testPassedCount: number;
+  testFailedCount: number;
+  testErrorText: string;
+  errorText: string;
+};
+
+export type PlaybookRunSummary = {
+  id: string;
+  playbookId: string;
+  status: PlaybookRunStatus;
+  startedAt: string;
+  finishedAt?: string | null;
+  totalSteps: number;
+  passedSteps: number;
+  failedSteps: number;
+  skippedSteps: number;
+  totalDurationMs: number;
+  stoppedReason: string;
+};
+
+export type PlaybookRunStep = {
+  id: string;
+  runId: string;
+  stepId?: string | null;
+  savedRequestId?: string | null;
+  savedRequestName: string;
+  method: string;
+  url: string;
+  status: PlaybookRunStepStatus;
+  statusCode?: number | null;
+  durationMs: number;
+  responseSizeBytes: number;
+  testPassedCount: number;
+  testFailedCount: number;
+  testErrorText: string;
+  errorText: string;
+  executedAt: string;
+};
+
+export type PlaybookRunDetail = PlaybookRunSummary & {
+  steps: PlaybookRunStep[];
+};
+
 export type EnvironmentSummary = {
   id: string;
   name: string;

@@ -39,6 +39,12 @@
           Environments
         </a>
         <a
+          class={["sidebar-link", page.url.pathname.startsWith("/playbooks") && "sidebar-link-active"]}
+          href={resolve("/playbooks")}
+        >
+          Playbooks
+        </a>
+        <a
           class={["sidebar-link", page.url.pathname.startsWith("/settings") && "sidebar-link-active"]}
           href={resolve("/settings")}
         >

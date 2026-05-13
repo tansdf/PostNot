@@ -6,6 +6,16 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-05-13
+
+### Added
+
+- Added Playbooks, a new `/playbooks` workspace for ordering saved requests, configuring delays and failure behavior, running them sequentially with existing scripts/environments/history, and reviewing grouped run logs.
+
+### Fixed
+
+- Removed the hidden scrollbar gutter from the sidebar collections list on Windows and browser builds so collection cards align flush with the sidebar.
+
 ## [0.19.7] - 2026-05-06
 
 ### Changed

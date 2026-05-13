@@ -7,15 +7,20 @@ import {
   type CreateCollectionFolderInput,
   type CreateCollectionInput,
   type MoveCollectionItemInput,
+  type AddPlaybookStepInput,
   type UpdateCollectionFolderInput,
+  type UpdatePlaybookStepInput,
+  type ReorderPlaybookStepsInput,
   type CurlImportInput,
   type OpenApiRequestImportInput,
   createDefaultSettings,
   type AppSettings,
+  type CreatePlaybookRunInput,
   type UpdateCheckResult,
   type EnvironmentDetail,
   type EnvironmentInput,
   type EnvironmentVariable,
+  type FinishPlaybookRunInput,
   type ExportResult,
   type ImportEnvironmentInput,
   type ImportEnvironmentResult,
@@ -25,8 +30,17 @@ import {
   type ImportRequestInput,
   type ImportResult,
   type ImportedRequestDraft,
+  type PlaybookDetail,
+  type PlaybookExecutionContext,
+  type PlaybookInput,
+  type PlaybookRunDetail,
+  type PlaybookRunStep,
+  type PlaybookRunSummary,
+  type PlaybookStep,
+  type PlaybookSummary,
   type RequestWorkspaceState,
   type RequestDraft,
+  type RecordPlaybookRunStepInput,
   type ResponsePayload,
   type SendRequestResult,
   type SavedRequestDetail,
@@ -276,6 +290,93 @@ function createMockSavedRequestDetail(id: string): SavedRequestDetail {
       preRequestScript: "",
       testScript: ""
     }
+  };
+}
+
+function createMockPlaybooks(): PlaybookSummary[] {
+  return [
+    {
+      id: "mock-playbook-1",
+      name: "Smoke check",
+      description: "Sample sequential workflow",
+      defaultDelayMs: 250,
+      stopOnFailure: true,
+      failOnHttpError: true,
+      stepCount: 1,
+      updatedAt: new Date().toISOString()
+    }
+  ];
+}
+
+function createMockPlaybookStep(playbookId = "mock-playbook-1"): PlaybookStep {
+  const request = createMockSavedRequests()[0];
+  return {
+    id: "mock-playbook-step-1",
+    playbookId,
+    savedRequestId: request.id,
+    savedRequestName: request.name,
+    collectionName: "Examples",
+    method: request.method,
+    url: request.url,
+    nameOverride: "",
+    notes: "",
+    enabled: true,
+    sortOrder: 0,
+    delayAfterMs: null,
+    missingSavedRequest: false,
+    updatedAt: new Date().toISOString()
+  };
+}
+
+function createMockPlaybookDetail(id = "mock-playbook-1"): PlaybookDetail {
+  const summary = createMockPlaybooks()[0];
+  return {
+    id,
+    name: summary.name,
+    description: summary.description,
+    defaultDelayMs: summary.defaultDelayMs,
+    stopOnFailure: summary.stopOnFailure,
+    failOnHttpError: summary.failOnHttpError,
+    steps: [createMockPlaybookStep(id)],
+    updatedAt: summary.updatedAt
+  };
+}
+
+function createMockPlaybookRun(playbookId = "mock-playbook-1"): PlaybookRunSummary {
+  return {
+    id: `mock-playbook-run-${Date.now()}`,
+    playbookId,
+    status: "passed",
+    startedAt: new Date().toISOString(),
+    finishedAt: new Date().toISOString(),
+    totalSteps: 1,
+    passedSteps: 1,
+    failedSteps: 0,
+    skippedSteps: 0,
+    totalDurationMs: 42,
+    stoppedReason: ""
+  };
+}
+
+function createMockPlaybookRunStep(runId: string): PlaybookRunStep {
+  const request = createMockSavedRequests()[0];
+  return {
+    id: `mock-playbook-run-step-${Date.now()}`,
+    runId,
+    stepId: "mock-playbook-step-1",
+    savedRequestId: request.id,
+    savedRequestName: request.name,
+    method: request.method,
+    url: request.url,
+    status: "passed",
+    statusCode: 200,
+    durationMs: 42,
+    responseSizeBytes: 256,
+    testPassedCount: 1,
+    testFailedCount: 0,
+    testErrorText: "",
+    errorText: "",
+    executedAt: new Date().toISOString()
   };
 }
 
@@ -655,6 +756,212 @@ export async function exportCollection(collectionId: string): Promise<ExportResu
   }
 
   return invoke<ExportResult | null>("export_collection", { collectionId });
+}
+
+export async function listPlaybooks(): Promise<PlaybookSummary[]> {
+  if (!hasTauriRuntime()) {
+    return createMockPlaybooks();
+  }
+
+  return invoke<PlaybookSummary[]>("list_playbooks");
+}
+
+export async function createPlaybook(input: PlaybookInput): Promise<PlaybookDetail> {
+  if (!hasTauriRuntime()) {
+    return {
+      ...createMockPlaybookDetail(`mock-playbook-${Date.now()}`),
+      ...input,
+      steps: []
+    };
+  }
+
+  return invoke<PlaybookDetail>("create_playbook", { input });
+}
+
+export async function getPlaybook(playbookId: string): Promise<PlaybookDetail> {
+  if (!hasTauriRuntime()) {
+    return createMockPlaybookDetail(playbookId);
+  }
+
+  return invoke<PlaybookDetail>("get_playbook", { playbookId });
+}
+
+export async function updatePlaybook(playbookId: string, input: PlaybookInput): Promise<PlaybookDetail> {
+  if (!hasTauriRuntime()) {
+    return {
+      ...createMockPlaybookDetail(playbookId),
+      ...input
+    };
+  }
+
+  return invoke<PlaybookDetail>("update_playbook", { playbookId, input });
+}
+
+export async function duplicatePlaybook(playbookId: string): Promise<PlaybookDetail> {
+  if (!hasTauriRuntime()) {
+    return {
+      ...createMockPlaybookDetail(`mock-playbook-copy-${Date.now()}`),
+      name: "Smoke check copy"
+    };
+  }
+
+  return invoke<PlaybookDetail>("duplicate_playbook", { playbookId });
+}
+
+export async function deletePlaybook(playbookId: string): Promise<void> {
+  if (!hasTauriRuntime()) {
+    return;
+  }
+
+  await invoke("delete_playbook", { playbookId });
+}
+
+export async function addPlaybookStep(
+  playbookId: string,
+  input: AddPlaybookStepInput
+): Promise<PlaybookStep> {
+  if (!hasTauriRuntime()) {
+    return {
+      ...createMockPlaybookStep(playbookId),
+      id: `mock-playbook-step-${Date.now()}`,
+      savedRequestId: input.savedRequestId,
+      nameOverride: input.nameOverride,
+      notes: input.notes,
+      enabled: input.enabled,
+      delayAfterMs: input.delayAfterMs ?? null
+    };
+  }
+
+  return invoke<PlaybookStep>("add_playbook_step", { playbookId, input });
+}
+
+export async function updatePlaybookStep(
+  stepId: string,
+  input: UpdatePlaybookStepInput
+): Promise<PlaybookStep> {
+  if (!hasTauriRuntime()) {
+    return {
+      ...createMockPlaybookStep(),
+      id: stepId,
+      nameOverride: input.nameOverride,
+      notes: input.notes,
+      enabled: input.enabled,
+      delayAfterMs: input.delayAfterMs ?? null
+    };
+  }
+
+  return invoke<PlaybookStep>("update_playbook_step", { stepId, input });
+}
+
+export async function reorderPlaybookSteps(
+  playbookId: string,
+  input: ReorderPlaybookStepsInput
+): Promise<PlaybookStep[]> {
+  if (!hasTauriRuntime()) {
+    return input.stepIds.map((id, index) => ({
+      ...createMockPlaybookStep(playbookId),
+      id,
+      sortOrder: index
+    }));
+  }
+
+  return invoke<PlaybookStep[]>("reorder_playbook_steps", { playbookId, input });
+}
+
+export async function deletePlaybookStep(stepId: string): Promise<void> {
+  if (!hasTauriRuntime()) {
+    return;
+  }
+
+  await invoke("delete_playbook_step", { stepId });
+}
+
+export async function getPlaybookExecutionContext(stepId: string): Promise<PlaybookExecutionContext> {
+  if (!hasTauriRuntime()) {
+    return {
+      stepId,
+      savedRequest: createMockSavedRequestDetail("mock-saved-request-1"),
+      inheritedScripts: {
+        preRequestScript: "",
+        testScript: "",
+        folderScripts: []
+      }
+    };
+  }
+
+  return invoke<PlaybookExecutionContext>("get_playbook_execution_context", { stepId });
+}
+
+export async function createPlaybookRun(input: CreatePlaybookRunInput): Promise<PlaybookRunSummary> {
+  if (!hasTauriRuntime()) {
+    return {
+      ...createMockPlaybookRun(input.playbookId),
+      status: "running",
+      finishedAt: null,
+      totalSteps: input.totalSteps,
+      passedSteps: 0,
+      failedSteps: 0,
+      skippedSteps: 0,
+      totalDurationMs: 0
+    };
+  }
+
+  return invoke<PlaybookRunSummary>("create_playbook_run", { input });
+}
+
+export async function finishPlaybookRun(
+  runId: string,
+  input: FinishPlaybookRunInput
+): Promise<PlaybookRunSummary> {
+  if (!hasTauriRuntime()) {
+    return {
+      ...createMockPlaybookRun(),
+      id: runId,
+      status: input.status,
+      stoppedReason: input.stoppedReason,
+      totalDurationMs: input.totalDurationMs
+    };
+  }
+
+  return invoke<PlaybookRunSummary>("finish_playbook_run", { runId, input });
+}
+
+export async function recordPlaybookRunStep(
+  runId: string,
+  input: RecordPlaybookRunStepInput
+): Promise<PlaybookRunStep> {
+  if (!hasTauriRuntime()) {
+    return {
+      ...createMockPlaybookRunStep(runId),
+      ...input,
+      id: `mock-playbook-run-step-${Date.now()}`,
+      runId,
+      executedAt: new Date().toISOString()
+    };
+  }
+
+  return invoke<PlaybookRunStep>("record_playbook_run_step", { runId, input });
+}
+
+export async function listPlaybookRuns(playbookId: string, limit = 20): Promise<PlaybookRunSummary[]> {
+  if (!hasTauriRuntime()) {
+    return [createMockPlaybookRun(playbookId)];
+  }
+
+  return invoke<PlaybookRunSummary[]>("list_playbook_runs", { playbookId, limit });
+}
+
+export async function getPlaybookRun(runId: string): Promise<PlaybookRunDetail> {
+  if (!hasTauriRuntime()) {
+    const summary = createMockPlaybookRun();
+    return {
+      ...summary,
+      id: runId,
+      steps: [createMockPlaybookRunStep(runId)]
+    };
+  }
+
+  return invoke<PlaybookRunDetail>("get_playbook_run", { runId });
 }
 
 export async function importRequests(input: ImportRequestInput): Promise<ImportResult> {

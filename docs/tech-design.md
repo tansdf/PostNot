@@ -33,7 +33,7 @@ Why this stack:
 
 ## 3. Current Application State
 
-This section reflects the code currently implemented in the repository, including the shipped `0.15.0` scripting update, the `0.15.1` route/modal polish work, the `0.16.0` OpenAPI 3 import release, the `0.17.0` multitab request workspace release, the `0.17.1` history-restore patch, the `0.17.2` requests/environments workflow follow-up, the `0.17.3` hydration-flash polish release, the `0.17.4` follow-up that unifies hydration-flash handling through a shared synchronous paint cache, the `0.18.0` sidebar collection search release, the `0.18.1` scripting/workspace hardening patch, the `0.19.0` cURL/OAuth2 import-auth and request-export polish, the `0.19.2` full response body follow-up, the `0.19.3` updater download progress patch, the `0.19.4` revert of the 0.18.2 binary response preview layer, the `0.19.5` compressed-response decoding and error-details patch, the `0.19.6` OAuth2 token-fetch helper release, and the `0.19.7` redacted single-request export patch (see [CHANGELOG.md](../CHANGELOG.md)).
+This section reflects the code currently implemented in the repository, including the shipped `0.15.0` scripting update, the `0.15.1` route/modal polish work, the `0.16.0` OpenAPI 3 import release, the `0.17.0` multitab request workspace release, the `0.17.1` history-restore patch, the `0.17.2` requests/environments workflow follow-up, the `0.17.3` hydration-flash polish release, the `0.17.4` follow-up that unifies hydration-flash handling through a shared synchronous paint cache, the `0.18.0` sidebar collection search release, the `0.18.1` scripting/workspace hardening patch, the `0.19.0` cURL/OAuth2 import-auth and request-export polish, the `0.19.2` full response body follow-up, the `0.19.3` updater download progress patch, the `0.19.4` revert of the 0.18.2 binary response preview layer, the `0.19.5` compressed-response decoding and error-details patch, the `0.19.6` OAuth2 token-fetch helper release, the `0.19.7` redacted single-request export patch, and the `0.20.0` Playbooks release (see [CHANGELOG.md](../CHANGELOG.md)).
 
 ### Implemented
 
@@ -64,6 +64,7 @@ This section reflects the code currently implemented in the repository, includin
 - Collection folders with nested request organization
 - Sidebar collection search across collections, folders, and saved requests
 - Drag-and-drop saved-request moves across collection trees, including reorder, folder moves, and cross-collection placement
+- Playbooks for sequential saved-request execution with ordered steps, per-step/default delays, stop-on-failure policy, grouped run logs, and normal per-step request history
 - Environments and variable resolution
 - OS-backed secret storage for secret environment variables
 - Postman collection JSON import
@@ -107,6 +108,7 @@ Responsibilities:
 - Render global floating notifications for cross-screen action feedback
 - Coordinate shared pointer-driven collection drag-and-drop interactions across the sidebar and Collections page
 - Provide sidebar collection search that navigates directly to matching collections, folders, or saved requests
+- Render and execute playbooks in the frontend so sequential runs reuse worker-backed request scripting, active environment writes, cancellation, notifications, and normal request-history behavior
 - Keep URL query parameters for saved requests, collections, and environments in sync with the visible editor or browser, including canceling stale async work when the user navigates quickly
 - Run inherited collection, folder, and saved-request pre-request and test scripts in a worker-backed JavaScript sandbox before and after invoking `send_request`
 - Invoke typed Tauri commands for persistence and request execution
@@ -141,6 +143,16 @@ Responsibilities:
 9. Rust writes a history entry to SQLite, redacting secret-derived environment substitutions back to their original `{{variable}}` form and persisting decoded response text when available
 10. Frontend runs inherited collection, folder, and saved-request test scripts (if any) against the returned response for assertion output
 11. Frontend reloads history, updates the originating tab, and persists the refreshed workspace state
+
+### Playbook Data Flow
+
+1. User creates a playbook on `/playbooks` and adds existing saved requests as ordered live references
+2. The frontend loads each enabled step immediately before execution through `get_playbook_execution_context`
+3. The context returns the latest saved request plus inherited collection and folder scripts
+4. The frontend runs pre-request scripts, sends through the existing `send_request` command, then runs test scripts
+5. Each step still writes normal request history through the existing send path
+6. The frontend records grouped playbook run and step summaries in SQLite
+7. Stop-on-failure and non-2xx/3xx failure policy are enforced by the playbook runner, with remaining enabled steps recorded as skipped
 
 ## 5. Actual Folder Structure
 
@@ -199,6 +211,8 @@ PostNot/
         +page.svelte
       environments/
         +page.svelte
+      playbooks/
+        +page.svelte
       settings/
         +page.svelte
   src-tauri/
@@ -221,6 +235,7 @@ PostNot/
         collections.rs
         environments.rs
         imports.rs
+        playbooks.rs
         requests.rs
         settings.rs
         history.rs
@@ -233,6 +248,7 @@ PostNot/
         environments.rs
         exports.rs
         imports.rs
+        playbooks.rs
         updates.rs
         mod.rs
         requests.rs
@@ -245,6 +261,7 @@ PostNot/
         imports_service.rs
         mod.rs
         http_client.rs
+        playbooks_service.rs
         secret_store_service.rs
         settings_service.rs
         history_service.rs
@@ -725,8 +742,9 @@ This means the project does not need to hold all remaining `v1` features for one
 One reasonable path from the current state is:
 
 1. `0.19.0`: cURL/OAuth2 import-auth and request-export polish
-2. `0.20.0`: hardening, optimization, and UX/error-handling improvements
-3. `1.0.0`: release-signoff build after the `v1` scope is complete and verified
+2. `0.20.0`: Playbooks for sequential saved-request execution
+3. `0.21.0`: hardening, optimization, and UX/error-handling improvements
+4. `1.0.0`: release-signoff build after the `v1` scope is complete and verified
 
 The exact version numbers are less important than the policy: `1.0.0` is allowed to be a smaller visible release than earlier `0.x` milestones if it represents a meaningful jump in confidence and support commitment.
 

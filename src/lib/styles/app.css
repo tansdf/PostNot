@@ -58,7 +58,6 @@ body {
 .sidebar,
 .header-list,
 .response-body,
-.sidebar-section-scroll,
 .history-list-column .history-list,
 .history-content-detail-open .history-detail-filled,
 .history-preview,
@@ -1517,12 +1516,13 @@ select option {
 .sidebar-section-scroll {
   display: grid;
   gap: 12px;
-  width: calc(100% + 16px);
+  width: 100%;
   min-height: 0;
-  margin-right: -16px;
+  margin-right: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding-right: 16px;
+  padding-right: 0;
+  scrollbar-gutter: auto;
 }
 
 .sidebar-plus-button {

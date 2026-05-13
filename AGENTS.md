@@ -12,7 +12,7 @@ PostNot is a local-first desktop API client built with:
 - TypeScript
 - SQLite
 
-The app already supports request execution, full response body reads, history, collections with nested folders and drag-and-drop request moves, sidebar collection search, environments, secret environment storage, import/export flows including OpenAPI 3 import, broader cURL flag coverage, redacted-by-default single-request cURL/JSON export with explicit full export, OAuth2 bearer auth helpers with client-credentials token fetch, notifications, settings, signed in-app update checks with download progress, inherited collection/folder/saved-request pre-request and test scripts (worker-backed frontend JavaScript execution around the native send), async script helper requests through `pn.http.send(...)`, and script-driven active-environment variable writes.
+The app already supports request execution, full response body reads, history, collections with nested folders and drag-and-drop request moves, sidebar collection search, playbooks for sequential saved-request execution, environments, secret environment storage, import/export flows including OpenAPI 3 import, broader cURL flag coverage, redacted-by-default single-request cURL/JSON export with explicit full export, OAuth2 bearer auth helpers with client-credentials token fetch, notifications, settings, signed in-app update checks with download progress, inherited collection/folder/saved-request pre-request and test scripts (worker-backed frontend JavaScript execution around the native send), async script helper requests through `pn.http.send(...)`, and script-driven active-environment variable writes.
 
 ## Canonical Working Directory
 
@@ -51,6 +51,7 @@ Implemented now:
 - request cancellation
 - collections and saved requests with nested folders and drag-and-drop request moves across the sidebar and Collections page
 - sidebar collection search across collections, folders, and saved requests
+- playbooks with ordered saved-request steps, delays, stop-on-failure execution, and grouped run logs
 - environments with variable resolution
 - OS-backed secret storage for secret environment variables
 - Postman collection import/export
@@ -118,6 +119,7 @@ This approach is mainly for native Windows verification such as drag-and-drop, w
 - History persists requests that use secret environment variables, but stores unresolved `{{variable}}` text instead of resolved secret values.
 - Single-request exports redact credential-looking values by default, including bearer tokens, OAuth2 access tokens, client secrets, API keys, cookies, and basic-auth passwords; the export dialog has an explicit full-export toggle.
 - Collections are managed on `/collections`.
+- Playbooks are managed on `/playbooks`.
 - Environments are managed on `/environments`.
 - Settings are managed on `/settings`.
 - The updater is wired to GitHub Releases at `https://github.com/tansdf/PostNot/releases/latest/download/latest.json`.
