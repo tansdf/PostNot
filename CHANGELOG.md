@@ -6,6 +6,13 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.20.1] - 2026-05-13
+
+### Fixed
+
+- Linux updater manifests now advertise Debian, RPM, and AppImage artifacts separately so package installs download the matching package instead of falling back to the AppImage.
+- Linux update checks now request the target that matches the detected installation type, preventing Debian and RPM installs from silently selecting an AppImage update.
+
 ## [0.20.0] - 2026-05-13
 
 ### Added

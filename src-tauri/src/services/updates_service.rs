@@ -58,11 +58,18 @@ const RPM_INSTALLER: LinuxPackageInstaller = LinuxPackageInstaller {
 };
 
 pub async fn check_for_updates(app: &AppHandle, state: &AppState) -> AppResult<UpdateCheckResult> {
-    let update = app
+    let mut updater_builder = app
         .updater_builder()
         .pubkey(UPDATER_PUBLIC_KEY)
         .endpoints(vec![default_update_endpoint()?])
-        .map_err(map_updater_error)?
+        .map_err(map_updater_error)?;
+
+    #[cfg(target_os = "linux")]
+    if let Some(target) = linux_update_target_for_current_install() {
+        updater_builder = updater_builder.target(target);
+    }
+
+    let update = updater_builder
         .build()
         .map_err(map_updater_error)?
         .check()
@@ -191,6 +198,40 @@ fn emit_update_download_progress(
 }
 
 #[cfg(target_os = "linux")]
+fn linux_update_target_for_current_install() -> Option<String> {
+    linux_update_target_for_bundle(bundle_type()?, linux_updater_arch()?)
+}
+
+#[cfg(target_os = "linux")]
+fn linux_update_target_for_bundle(bundle: BundleType, arch: &str) -> Option<String> {
+    let installer = match bundle {
+        BundleType::Deb => "deb",
+        BundleType::Rpm => "rpm",
+        BundleType::AppImage => "appimage",
+        _ => return None,
+    };
+
+    Some(format!("linux-{arch}-{installer}"))
+}
+
+#[cfg(target_os = "linux")]
+fn linux_updater_arch() -> Option<&'static str> {
+    if cfg!(target_arch = "x86") {
+        Some("i686")
+    } else if cfg!(target_arch = "x86_64") {
+        Some("x86_64")
+    } else if cfg!(target_arch = "arm") {
+        Some("armv7")
+    } else if cfg!(target_arch = "aarch64") {
+        Some("aarch64")
+    } else if cfg!(target_arch = "riscv64") {
+        Some("riscv64")
+    } else {
+        None
+    }
+}
+
+#[cfg(target_os = "linux")]
 async fn install_linux_package_update(
     app: &AppHandle,
     update: Update,
@@ -302,4 +343,33 @@ async fn install_linux_package_with_pkexec(
         "The {} package install failed: {details}",
         installer.format_name
     )))
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn linux_package_targets_include_detected_installer() {
+        assert_eq!(
+            linux_update_target_for_bundle(BundleType::Deb, "x86_64"),
+            Some("linux-x86_64-deb".to_string())
+        );
+        assert_eq!(
+            linux_update_target_for_bundle(BundleType::Rpm, "aarch64"),
+            Some("linux-aarch64-rpm".to_string())
+        );
+        assert_eq!(
+            linux_update_target_for_bundle(BundleType::AppImage, "x86_64"),
+            Some("linux-x86_64-appimage".to_string())
+        );
+    }
+
+    #[test]
+    fn linux_update_target_ignores_non_linux_installers() {
+        assert_eq!(
+            linux_update_target_for_bundle(BundleType::Msi, "x86_64"),
+            None
+        );
+    }
 }

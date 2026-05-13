@@ -148,6 +148,8 @@ jobs:
           const nsisAsset = assets.find((entry) => entry.name.endsWith("-setup.exe"));
           const msiAsset = assets.find((entry) => entry.name.endsWith(".msi"));
           const appImageAsset = assets.find((entry) => entry.name.endsWith(".AppImage"));
+          const debAsset = assets.find((entry) => entry.name.endsWith(".deb"));
+          const rpmAsset = assets.find((entry) => entry.name.endsWith(".rpm"));
           const macIntelAsset = assets.find((entry) => entry.name.endsWith("_x64.app.tar.gz"));
           const macArmAsset = assets.find((entry) => entry.name.endsWith("_aarch64.app.tar.gz"));
 
@@ -162,7 +164,16 @@ jobs:
           }
 
           if (appImageAsset) {
+            addPlatform("linux-x86_64-appimage", appImageAsset.name, `${appImageAsset.name}.sig`);
             addPlatform("linux-x86_64", appImageAsset.name, `${appImageAsset.name}.sig`);
+          }
+
+          if (debAsset) {
+            addPlatform("linux-x86_64-deb", debAsset.name, `${debAsset.name}.sig`);
+          }
+
+          if (rpmAsset) {
+            addPlatform("linux-x86_64-rpm", rpmAsset.name, `${rpmAsset.name}.sig`);
           }
 
           if (macIntelAsset) {

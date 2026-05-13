@@ -534,7 +534,7 @@ Commands currently exposed to the frontend:
 - `get_settings`: loads current settings from SQLite
 - `update_settings`: persists settings and returns the saved values
 - `check_for_updates`: checks the configured signed updater feed for a newer release
-- `install_update`: hands the available signed update off to the native installer
+- `install_update`: hands the available signed update off to the native installer, using the detected Debian/RPM/AppImage install type on Linux
 - `list_history`: returns recent history entries ordered by execution time descending
 - `get_history_entry`: returns a stored request snapshot and response metadata for one history entry
 - `clear_history`: deletes all stored history entries
@@ -666,7 +666,7 @@ Ship a usable desktop app that can compose and execute HTTP requests locally, pe
 - history panel
 - history detail inspection
 - clear history action
-- signed updater checks with startup refresh and install flow
+- signed updater checks with startup refresh, Linux package-target matching, and install flow
 - pre-request and test scripts on collections, folders, and saved requests (frontend execution around the native send)
 - shipped async scripting helper requests and active-environment variable writes in `0.15.0`
 - collections sidebar and collections panel folder trees with shared `FolderGlyph` styling
