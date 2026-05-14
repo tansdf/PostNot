@@ -55,6 +55,19 @@ body {
   background: transparent;
 }
 
+.scrollbar-invisible {
+  scrollbar-color: auto;
+  scrollbar-gutter: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-invisible::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 .sidebar,
 .header-list,
 .response-body,
@@ -648,13 +661,6 @@ select option {
   overflow-x: auto;
   overflow-y: hidden;
   padding-bottom: 2px;
-  /* Hide horizontal scrollbar (same idea as sidebar gutter: no visible bar; still scroll via wheel/trackpad). */
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-.request-tabs-strip::-webkit-scrollbar {
-  display: none;
 }
 
 .request-tab-chip {
@@ -1522,7 +1528,6 @@ select option {
   overflow-y: auto;
   overflow-x: hidden;
   padding-right: 0;
-  scrollbar-gutter: auto;
 }
 
 .sidebar-plus-button {

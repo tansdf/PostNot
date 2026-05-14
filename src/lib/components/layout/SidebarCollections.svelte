@@ -589,7 +589,7 @@
     {/if}
   </div>
 
-  <div class="sidebar-section-scroll">
+  <div class="sidebar-section-scroll scrollbar-invisible">
     {#if collections.errorText}
       <div class="sidebar-inline-error">{collections.errorText}</div>
     {/if}

@@ -92,7 +92,7 @@
 </script>
 
 <section class="panel request-tabs-panel" aria-label="Request tabs">
-  <div class="request-tabs-strip" role="tablist" aria-label="Open requests" {@attach attachTabsStrip}>
+  <div class="request-tabs-strip scrollbar-invisible" role="tablist" aria-label="Open requests" {@attach attachTabsStrip}>
     {#each tabs as tab (tab.id)}
       <div
         class={["request-tab-chip", activeTabId === tab.id && "request-tab-chip-active"]}

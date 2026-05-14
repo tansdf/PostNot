@@ -6,6 +6,12 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.20.2] - 2026-05-14
+
+### Fixed
+
+- Added a reusable invisible scrollbar utility and applied it to the collections sidebar so Windows and browser builds keep scroll behavior without showing a scrollbar or reserving a visible gutter.
+
 ## [0.20.1] - 2026-05-13
 
 ### Fixed
