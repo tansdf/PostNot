@@ -1,13 +1,16 @@
 name: Release
 
 on:
-  workflow_dispatch:
   push:
     tags:
       - "v*"
 
 permissions:
   contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build-and-release:
@@ -61,6 +64,38 @@ jobs:
       - name: Validate frontend types
         run: npm run check
 
+      - name: Extract release notes
+        id: release_notes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          node <<'EOF' >> "$GITHUB_OUTPUT"
+          const fs = require("fs");
+
+          const version = JSON.parse(fs.readFileSync("package.json", "utf8")).version;
+          const changelog = fs.readFileSync("CHANGELOG.md", "utf8");
+          const lines = changelog.split(/\r?\n/);
+          const headingIndex = lines.findIndex((line) => line.startsWith(`## [${version}]`));
+          const nextHeadingIndex = lines.findIndex(
+            (line, index) => index > headingIndex && line.startsWith("## [")
+          );
+
+          if (headingIndex < 0) {
+            throw new Error(`Could not find CHANGELOG.md notes for version ${version}.`);
+          }
+
+          const releaseNotes = lines
+            .slice(headingIndex + 1, nextHeadingIndex < 0 ? undefined : nextHeadingIndex)
+            .join("\n")
+            .trim();
+          const delimiter = `RELEASE_NOTES_${Date.now()}`;
+
+          console.log(`body<<${delimiter}`);
+          console.log(releaseNotes || `PostNot v${version}`);
+          console.log(delimiter);
+          EOF
+
       - name: Build and publish Tauri release
         uses: tauri-apps/tauri-action@v0
         env:
@@ -83,9 +118,9 @@ jobs:
         with:
           tagName: v__VERSION__
           releaseName: "PostNot v__VERSION__"
-          releaseBody: "See CHANGELOG.md for details and the assets below for platform builds."
+          releaseBody: ${{ steps.release_notes.outputs.body }}
           releaseDraft: true
-          prerelease: true
+          prerelease: false
           retryAttempts: 2
           uploadUpdaterJson: false
           args: ${{ matrix.args }}
@@ -124,6 +159,7 @@ jobs:
           const assets = release.assets ?? [];
           const sigDir = ".release-sigs";
           const sigByName = new Map();
+          const missing = [];
 
           for (const fileName of fs.readdirSync(sigDir)) {
             sigByName.set(fileName, fs.readFileSync(path.join(sigDir, fileName), "utf8").trim());
@@ -131,57 +167,73 @@ jobs:
 
           const platforms = {};
 
-          function addPlatform(key, assetName, signatureName) {
-            const asset = assets.find((entry) => entry.name === assetName);
+          function findAsset(description, predicate) {
+            const asset = assets.find(predicate);
+
+            if (!asset) {
+              missing.push(description);
+            }
+
+            return asset;
+          }
+
+          function addPlatform(key, asset, signatureName) {
             const signature = sigByName.get(signatureName);
 
-            if (!asset || !signature) {
+            if (!signature) {
+              missing.push(`${signatureName} signature`);
               return;
             }
 
             platforms[key] = {
               signature,
-              url: `${assetBaseUrl}/${asset.name}`
+              url: `${assetBaseUrl}/${encodeURIComponent(asset.name)}`
             };
           }
 
           const nsisAsset = assets.find((entry) => entry.name.endsWith("-setup.exe"));
           const msiAsset = assets.find((entry) => entry.name.endsWith(".msi"));
-          const appImageAsset = assets.find((entry) => entry.name.endsWith(".AppImage"));
-          const debAsset = assets.find((entry) => entry.name.endsWith(".deb"));
-          const rpmAsset = assets.find((entry) => entry.name.endsWith(".rpm"));
-          const macIntelAsset = assets.find((entry) => entry.name.endsWith("_x64.app.tar.gz"));
-          const macArmAsset = assets.find((entry) => entry.name.endsWith("_aarch64.app.tar.gz"));
+          const appImageAsset = findAsset("Linux AppImage", (entry) => entry.name.endsWith(".AppImage"));
+          const debAsset = findAsset("Linux Debian package", (entry) => entry.name.endsWith(".deb"));
+          const rpmAsset = findAsset("Linux RPM package", (entry) => entry.name.endsWith(".rpm"));
+          const macIntelAsset = findAsset("macOS x64 app archive", (entry) => entry.name.endsWith("_x64.app.tar.gz"));
+          const macArmAsset = findAsset("macOS aarch64 app archive", (entry) => entry.name.endsWith("_aarch64.app.tar.gz"));
 
           if (nsisAsset) {
-            addPlatform("windows-x86_64-nsis", nsisAsset.name, `${nsisAsset.name}.sig`);
+            addPlatform("windows-x86_64-nsis", nsisAsset, `${nsisAsset.name}.sig`);
           }
 
           if (msiAsset) {
-            addPlatform("windows-x86_64", msiAsset.name, `${msiAsset.name}.sig`);
+            addPlatform("windows-x86_64", msiAsset, `${msiAsset.name}.sig`);
           } else if (nsisAsset) {
-            addPlatform("windows-x86_64", nsisAsset.name, `${nsisAsset.name}.sig`);
+            addPlatform("windows-x86_64", nsisAsset, `${nsisAsset.name}.sig`);
+          } else {
+            missing.push("Windows MSI or NSIS installer");
           }
 
           if (appImageAsset) {
-            addPlatform("linux-x86_64-appimage", appImageAsset.name, `${appImageAsset.name}.sig`);
-            addPlatform("linux-x86_64", appImageAsset.name, `${appImageAsset.name}.sig`);
+            addPlatform("linux-x86_64-appimage", appImageAsset, `${appImageAsset.name}.sig`);
+            addPlatform("linux-x86_64", appImageAsset, `${appImageAsset.name}.sig`);
           }
 
           if (debAsset) {
-            addPlatform("linux-x86_64-deb", debAsset.name, `${debAsset.name}.sig`);
+            addPlatform("linux-x86_64-deb", debAsset, `${debAsset.name}.sig`);
           }
 
           if (rpmAsset) {
-            addPlatform("linux-x86_64-rpm", rpmAsset.name, `${rpmAsset.name}.sig`);
+            addPlatform("linux-x86_64-rpm", rpmAsset, `${rpmAsset.name}.sig`);
           }
 
           if (macIntelAsset) {
-            addPlatform("darwin-x86_64", macIntelAsset.name, `${macIntelAsset.name}.sig`);
+            addPlatform("darwin-x86_64", macIntelAsset, `${macIntelAsset.name}.sig`);
           }
 
           if (macArmAsset) {
-            addPlatform("darwin-aarch64", macArmAsset.name, `${macArmAsset.name}.sig`);
+            addPlatform("darwin-aarch64", macArmAsset, `${macArmAsset.name}.sig`);
+          }
+
+          if (missing.length > 0) {
+            throw new Error(`Cannot build complete updater manifest. Missing: ${missing.join(", ")}.`);
           }
 
           const latest = {
