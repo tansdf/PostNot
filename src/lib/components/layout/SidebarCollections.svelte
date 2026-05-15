@@ -747,12 +747,13 @@
                 aria-label={expandedCollectionIds.has(collection.id) ? "Collapse collection" : "Expand collection"}
                 title={expandedCollectionIds.has(collection.id) ? "Collapse" : "Expand"}
               >
-                <span
+                <svg
                   class={["sidebar-toggle-icon", expandedCollectionIds.has(collection.id) && "sidebar-toggle-icon-expanded"]}
+                  viewBox="0 0 24 24"
                   aria-hidden="true"
                 >
-                  &gt;
-                </span>
+                  <path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
               </button>
             </div>
 

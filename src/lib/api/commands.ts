@@ -40,6 +40,7 @@ import {
   type PlaybookSummary,
   type RequestWorkspaceState,
   type RequestDraft,
+  type RequestPreview,
   type RecordPlaybookRunStepInput,
   type ResponsePayload,
   type SendRequestResult,
@@ -395,6 +396,37 @@ export async function sendRequest(
     payload,
     persistHistory: options.persistHistory ?? true
   });
+}
+
+export async function previewRequest(payload: RequestDraft): Promise<RequestPreview> {
+  if (!hasTauriRuntime()) {
+    return {
+      name: payload.name,
+      method: payload.method,
+      finalUrl: payload.url,
+      queryParams: payload.queryParams.filter((row) => row.enabled && row.key.trim()),
+      headers: payload.headers.filter((row) => row.enabled && row.key.trim()),
+      body: payload.body,
+      auth: {
+        ...payload.auth,
+        basicPassword: payload.auth.basicPassword ? "{{redacted}}" : "",
+        bearerToken: payload.auth.bearerToken ? "{{redacted}}" : "",
+        apiKeyValue: payload.auth.apiKeyValue ? "{{redacted}}" : "",
+        oauth2AccessToken: payload.auth.oauth2AccessToken ? "{{redacted}}" : "",
+        oauth2ClientSecret: payload.auth.oauth2ClientSecret ? "{{redacted}}" : ""
+      },
+      settings: {
+        requestTimeoutMs: 30_000,
+        followRedirects: true,
+        validateTls: true,
+        activeEnvironmentName: null
+      },
+      warnings: [],
+      notes: ["Preview is read-only and does not execute pre-request scripts."]
+    };
+  }
+
+  return invoke<RequestPreview>("preview_request", { payload });
 }
 
 export async function cancelActiveRequest(): Promise<boolean> {

@@ -75,6 +75,26 @@ export type SendRequestResult = {
   historyPersistenceError: string | null;
 };
 
+export type RequestPreviewSettings = {
+  requestTimeoutMs: number;
+  followRedirects: boolean;
+  validateTls: boolean;
+  activeEnvironmentName: string | null;
+};
+
+export type RequestPreview = {
+  name: string;
+  method: HttpMethod;
+  finalUrl: string;
+  queryParams: KeyValueRow[];
+  headers: KeyValueRow[];
+  body: RequestBody;
+  auth: RequestAuth;
+  settings: RequestPreviewSettings;
+  warnings: string[];
+  notes: string[];
+};
+
 export type AppSettings = {
   theme: string;
   uiScale: number;

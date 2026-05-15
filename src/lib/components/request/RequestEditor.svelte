@@ -26,6 +26,7 @@
     handleNewRequest = () => {},
     handleOpenImport = () => {},
     handleOpenExport = () => {},
+    handleOpenPreview = () => {},
     handleSendRequest = () => {},
     handleCancelRequest = () => {},
     handleSaveRequest = () => {},
@@ -45,6 +46,7 @@
     handleNewRequest?: () => Promise<void> | void;
     handleOpenImport?: () => Promise<void> | void;
     handleOpenExport?: () => Promise<void> | void;
+    handleOpenPreview?: () => Promise<void> | void;
     handleSendRequest?: () => Promise<void> | void;
     handleCancelRequest?: () => Promise<void> | void;
     handleSaveRequest?: () => Promise<void> | void;
@@ -710,18 +712,34 @@
       />
     </div>
 
-    <button
-      class={["send-button request-send-control", isSending && "cancel-button"]}
-      type="button"
-      onclick={() => (isSending ? handleCancelRequest() : handleSendRequest())}
-      disabled={isCanceling || sendDisabled}
-    >
-      {#if isSending}
-        {isCanceling ? "Canceling..." : "Cancel"}
-      {:else}
-        Send
-      {/if}
-    </button>
+    <div class={["request-send-actions", isSending && "request-send-actions-cancel"]}>
+      <button
+        class="request-send-preview-control"
+        type="button"
+        onclick={handleOpenPreview}
+        aria-label="Preview resolved request"
+        title="Preview resolved request"
+        disabled={isSending || isCanceling}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
+          <circle cx="12" cy="12" r="3" />
+        </svg>
+      </button>
+
+      <button
+        class="request-send-main-control"
+        type="button"
+        onclick={() => (isSending ? handleCancelRequest() : handleSendRequest())}
+        disabled={isCanceling || sendDisabled}
+      >
+        {#if isSending}
+          {isCanceling ? "Canceling..." : "Cancel"}
+        {:else}
+          Send
+        {/if}
+      </button>
+    </div>
   </div>
 
   <div class="panel-tabs">

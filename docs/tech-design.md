@@ -48,6 +48,7 @@ This section reflects the code currently implemented in the repository, includin
   - headers
   - auth: none, basic, bearer, API key, OAuth2 bearer with client-credentials token fetch
   - body: none, JSON, raw, form-urlencoded, multipart with file uploads
+- Read-only resolved request preview before send, including active settings, environment resolution, outgoing URL/query/header/auth/body data, and masked credential-looking values
 - Native request execution through Rust
 - Response viewer with:
   - status
@@ -134,15 +135,16 @@ Responsibilities:
 
 1. User edits a request in the UI
 2. The frontend keeps that draft inside the active request tab and persists workspace changes locally through the settings-backed workspace store
-3. On send, the frontend runs inherited collection, folder, and saved-request pre-request scripts (if any) against a draft copy and either stops with a script error surface or proceeds with the mutated draft as the payload
-4. Frontend invokes `send_request` with that payload
-5. Rust loads persisted request settings from SQLite
-6. Rust resolves environment variables and built-in dynamic variables
-7. Rust executes the request with `reqwest`
-8. Rust returns response metadata plus the decoded response body to the UI
-9. Rust writes a history entry to SQLite, redacting secret-derived environment substitutions back to their original `{{variable}}` form and persisting decoded response text when available
-10. Frontend runs inherited collection, folder, and saved-request test scripts (if any) against the returned response for assertion output
-11. Frontend reloads history, updates the originating tab, and persists the refreshed workspace state
+3. Before sending, the user may open a read-only resolved request preview; the frontend invokes the native preview command, which resolves the active environment and settings, assembles outgoing query/auth/header/body data, masks credential-looking values, and returns warnings without executing scripts or network traffic
+4. On send, the frontend runs inherited collection, folder, and saved-request pre-request scripts (if any) against a draft copy and either stops with a script error surface or proceeds with the mutated draft as the payload
+5. Frontend invokes `send_request` with that payload
+6. Rust loads persisted request settings from SQLite
+7. Rust resolves environment variables and built-in dynamic variables
+8. Rust executes the request with `reqwest`
+9. Rust returns response metadata plus the decoded response body to the UI
+10. Rust writes a history entry to SQLite, redacting secret-derived environment substitutions back to their original `{{variable}}` form and persisting decoded response text when available
+11. Frontend runs inherited collection, folder, and saved-request test scripts (if any) against the returned response for assertion output
+12. Frontend reloads history, updates the originating tab, and persists the refreshed workspace state
 
 ### Playbook Data Flow
 
@@ -490,6 +492,7 @@ On canceled request execution:
 Commands currently exposed to the frontend:
 
 - `send_request`
+- `preview_request`
 - `cancel_active_request`
 - `pick_multipart_files`
 - `get_settings`
@@ -529,6 +532,7 @@ Commands currently exposed to the frontend:
 ### Command Roles
 
 - `send_request`: executes the request using persisted settings and records history
+- `preview_request`: resolves the current draft against the active environment and persisted settings, then returns a read-only masked outgoing request preview without executing scripts, helper requests, environment writes, or network traffic
 - `cancel_active_request`: aborts the currently active native request, if one exists
 - `pick_multipart_files`: opens a native file picker and returns selected local file paths for multipart requests
 - `get_settings`: loads current settings from SQLite
@@ -577,6 +581,7 @@ Current UI sections:
 - save flow with collection and folder target selection
 - request import modal for cURL and OpenAPI 3 single-request drafts
 - request export modal for cURL and PostNot request JSON
+- resolved request preview modal opened from a compact icon beside Send
 - request-level save/update action
 - response viewer
 - history panel
@@ -629,6 +634,7 @@ Current state:
 - secret environment values are stored in the OS credential store, while SQLite keeps only non-secret environment metadata
 - history snapshots redact resolved values that came from secret environment variables
 - single-request cURL and PostNot JSON exports redact credential-looking values by default, including bearer tokens, OAuth2 access tokens, client secrets, API keys, cookies, and basic-auth passwords; full-value export requires an explicit toggle and shows a warning
+- resolved request preview masks credential-looking values and secret-derived environment substitutions before showing outgoing request data
 - decoded response bodies are persisted as full text history body files
 - if an environment update or delete fails after partially changing the credential store, rollback of secrets is attempted; failure to roll back is logged with `log::warn` for diagnostics (the primary error still returns to the UI)
 

@@ -12,7 +12,7 @@ PostNot is a local-first desktop API client built with:
 - TypeScript
 - SQLite
 
-The app already supports request execution, full response body reads, history, collections with nested folders and drag-and-drop request moves, sidebar collection search, playbooks for sequential saved-request execution, environments, secret environment storage, import/export flows including OpenAPI 3 import, broader cURL flag coverage, redacted-by-default single-request cURL/JSON export with explicit full export, OAuth2 bearer auth helpers with client-credentials token fetch, notifications, settings, signed in-app update checks with download progress, inherited collection/folder/saved-request pre-request and test scripts (worker-backed frontend JavaScript execution around the native send), async script helper requests through `pn.http.send(...)`, and script-driven active-environment variable writes.
+The app already supports request execution, resolved request preview before send, full response body reads, history, collections with nested folders and drag-and-drop request moves, sidebar collection search, playbooks for sequential saved-request execution, environments, secret environment storage, import/export flows including OpenAPI 3 import, broader cURL flag coverage, redacted-by-default single-request cURL/JSON export with explicit full export, OAuth2 bearer auth helpers with client-credentials token fetch, notifications, settings, signed in-app update checks with download progress, inherited collection/folder/saved-request pre-request and test scripts (worker-backed frontend JavaScript execution around the native send), async script helper requests through `pn.http.send(...)`, and script-driven active-environment variable writes.
 
 ## Canonical Working Directory
 
@@ -49,6 +49,7 @@ Implemented now:
 - persisted history with detail inspection
 - restoring stored requests from history into new request tabs
 - request cancellation
+- resolved outgoing request preview before send, with private values masked
 - collections and saved requests with nested folders and drag-and-drop request moves across the sidebar and Collections page
 - sidebar collection search across collections, folders, and saved requests
 - playbooks with ordered saved-request steps, delays, stop-on-failure execution, and grouped run logs

@@ -93,6 +93,30 @@ pub struct SendRequestResult {
     pub history_persistence_error: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RequestPreviewSettings {
+    pub request_timeout_ms: u64,
+    pub follow_redirects: bool,
+    pub validate_tls: bool,
+    pub active_environment_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RequestPreview {
+    pub name: String,
+    pub method: String,
+    pub final_url: String,
+    pub query_params: Vec<KeyValueRow>,
+    pub headers: Vec<KeyValueRow>,
+    pub body: RequestBody,
+    pub auth: RequestAuth,
+    pub settings: RequestPreviewSettings,
+    pub warnings: Vec<String>,
+    pub notes: Vec<String>,
+}
+
 fn default_true() -> bool {
     true
 }

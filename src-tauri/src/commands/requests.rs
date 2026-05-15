@@ -3,9 +3,12 @@ use tauri::{AppHandle, Emitter, State};
 
 use crate::{
     app_state::AppState,
-    domain::requests::{SendRequestPayload, SendRequestResult},
+    domain::requests::{RequestPreview, SendRequestPayload, SendRequestResult},
     error::AppResult,
-    services::{environments_service, history_service, http_client, settings_service},
+    services::{
+        environments_service, history_service, http_client, request_preview_service,
+        settings_service,
+    },
 };
 
 const HISTORY_PERSISTENCE_EVENT: &str = "history-persistence-error";
@@ -84,6 +87,26 @@ pub async fn send_request(
 
     state.finish_request(&request_id);
     result
+}
+
+#[tauri::command]
+pub async fn preview_request(
+    state: State<'_, AppState>,
+    payload: SendRequestPayload,
+) -> AppResult<RequestPreview> {
+    let settings = settings_service::get_settings(state.db()).await?;
+    let active_environment =
+        environments_service::get_active_environment(state.db(), state.secret_store()).await?;
+    let resolved_request =
+        environments_service::resolve_request(&payload, active_environment.as_ref());
+
+    Ok(request_preview_service::build_request_preview(
+        &payload,
+        &resolved_request.payload,
+        &resolved_request.secret_usage,
+        &settings,
+        active_environment.as_ref(),
+    ))
 }
 
 #[tauri::command]

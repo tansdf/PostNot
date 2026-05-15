@@ -6,6 +6,12 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.20.3] - 2026-05-15
+
+### Added
+
+- Added a read-only Requests page preview that resolves the active draft through the native environment/settings pipeline, shows the outgoing URL, headers, query params, auth, and body before sending, and masks credential-looking values by default.
+
 ## [0.20.2] - 2026-05-14
 
 ### Fixed

@@ -15,6 +15,7 @@
     importOpenApiRequestToDraft,
     listEnvironments,
     listHistory,
+    previewRequest,
     setActiveEnvironment,
     sendRequest,
     updateSettings,
@@ -27,7 +28,9 @@
     EnvironmentSummary,
     HistoryEntryDetail,
     HistoryEntrySummary,
+    KeyValueRow,
     RequestDraft,
+    RequestPreview,
     RequestWorkspaceTab,
     RequestScriptExecution
   } from "$lib/api/types";
@@ -40,6 +43,7 @@
   import HistoryPanel from "$lib/components/history/HistoryPanel.svelte";
   import RequestEditor from "$lib/components/request/RequestEditor.svelte";
   import RequestTabs from "$lib/components/request/RequestTabs.svelte";
+  import JsonViewer from "$lib/components/response/JsonViewer.svelte";
   import ResponseViewer from "$lib/components/response/ResponseViewer.svelte";
   import { createStaleGuard } from "$lib/async-stale-guard";
   import { modalFocusTrap } from "$lib/modal-focus-trap";
@@ -95,6 +99,10 @@
   let requestImportFormat = $state<"curl" | "openapi">("curl");
   let curlImportSource = $state("");
   let openApiImportSource = $state("");
+  let isRequestPreviewDialogOpen = $state(false);
+  let isRequestPreviewLoading = $state(false);
+  let requestPreview: RequestPreview | null = $state(null);
+  let requestPreviewErrorText = $state("");
   let isRequestExportDialogOpen = $state(false);
   let requestExportFormat = $state<"curl" | "json">("curl");
   let requestExportSafety = $state<"redacted" | "full">("redacted");
@@ -1417,6 +1425,35 @@ paths:
     requestImportErrorText = "";
   }
 
+  async function openRequestPreviewDialog() {
+    isRequestPreviewDialogOpen = true;
+    isRequestPreviewLoading = true;
+    requestPreview = null;
+    requestPreviewErrorText = "";
+
+    try {
+      requestPreview = await previewRequest(cloneRequestDraft(request));
+    } catch (error) {
+      requestPreviewErrorText = error instanceof Error ? error.message : String(error);
+    } finally {
+      isRequestPreviewLoading = false;
+    }
+  }
+
+  function closeRequestPreviewDialog() {
+    isRequestPreviewDialogOpen = false;
+    isRequestPreviewLoading = false;
+    requestPreview = null;
+    requestPreviewErrorText = "";
+  }
+
+  function handleModalBackdropKeydown(event: KeyboardEvent, close: () => void) {
+    if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+      event.preventDefault();
+      close();
+    }
+  }
+
   function openRequestExportDialog() {
     requestExportFormat = "curl";
     requestExportSafety = "redacted";
@@ -1438,6 +1475,50 @@ paths:
       );
     } catch (error) {
       notifications.error(error instanceof Error ? error.message : String(error), "Copy failed");
+    }
+  }
+
+  function filterPreviewRows(rows: KeyValueRow[]) {
+    return rows.filter((row) => row.enabled && (row.key.trim() || row.value.trim()));
+  }
+
+  function filterPreviewFiles(rows: RequestPreview["body"]["files"]) {
+    return rows.filter((row) => row.enabled && (row.name.trim() || row.path.trim()));
+  }
+
+  function previewDisplayValue(value: string) {
+    return value || "(empty value)";
+  }
+
+  function previewAuthRows(preview: RequestPreview): KeyValueRow[] {
+    const auth = preview.auth;
+
+    switch (auth.type) {
+      case "basic":
+        return [
+          { id: "preview-auth-username", key: "Username", value: auth.basicUsername, enabled: Boolean(auth.basicUsername) },
+          { id: "preview-auth-password", key: "Password", value: auth.basicPassword, enabled: Boolean(auth.basicPassword) }
+        ];
+      case "bearer":
+        return [
+          { id: "preview-auth-bearer", key: "Bearer token", value: auth.bearerToken, enabled: Boolean(auth.bearerToken) }
+        ];
+      case "api-key":
+        return [
+          { id: "preview-auth-api-key-name", key: "Key", value: auth.apiKeyName, enabled: Boolean(auth.apiKeyName) },
+          { id: "preview-auth-api-key-value", key: "Value", value: auth.apiKeyValue, enabled: Boolean(auth.apiKeyValue) },
+          { id: "preview-auth-api-key-placement", key: "Send in", value: auth.apiKeyIn, enabled: true }
+        ];
+      case "oauth2":
+        return [
+          { id: "preview-auth-oauth-token", key: "Access token", value: auth.oauth2AccessToken, enabled: Boolean(auth.oauth2AccessToken) },
+          { id: "preview-auth-oauth-token-url", key: "Token URL", value: auth.oauth2TokenUrl, enabled: Boolean(auth.oauth2TokenUrl) },
+          { id: "preview-auth-oauth-client-id", key: "Client ID", value: auth.oauth2ClientId, enabled: Boolean(auth.oauth2ClientId) },
+          { id: "preview-auth-oauth-client-secret", key: "Client secret", value: auth.oauth2ClientSecret, enabled: Boolean(auth.oauth2ClientSecret) },
+          { id: "preview-auth-oauth-scope", key: "Scope", value: auth.oauth2Scope, enabled: Boolean(auth.oauth2Scope) }
+        ];
+      default:
+        return [];
     }
   }
 
@@ -1488,7 +1569,7 @@ paths:
       return;
     }
 
-    if (isRequestImportDialogOpen || isRequestExportDialogOpen) {
+    if (isRequestImportDialogOpen || isRequestExportDialogOpen || isRequestPreviewDialogOpen) {
       event.preventDefault();
       return;
     }
@@ -1574,6 +1655,7 @@ paths:
     handleNewRequest={handleNewRequest}
     handleOpenImport={openRequestImportDialog}
     handleOpenExport={openRequestExportDialog}
+    handleOpenPreview={openRequestPreviewDialog}
     handleSendRequest={handleSend}
     handleCancelRequest={handleCancelRequest}
     handleSaveRequest={handleSaveRequest}
@@ -1696,6 +1778,220 @@ paths:
   </div>
 {/if}
 
+{#if isRequestPreviewDialogOpen}
+  <div
+    class="modal-backdrop"
+    role="button"
+    tabindex="0"
+    aria-label="Close request preview dialog"
+    use:modalFocusTrap={{ onEscape: closeRequestPreviewDialog }}
+    onclick={(event) => {
+      if (event.target === event.currentTarget) {
+        closeRequestPreviewDialog();
+      }
+    }}
+    onkeydown={(event) => handleModalBackdropKeydown(event, closeRequestPreviewDialog)}
+  >
+    <div class="panel request-preview-dialog" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="request-preview-title">
+      <div class="editor-header import-dialog-header">
+        <div>
+          <h2 id="request-preview-title">Resolved Request Preview</h2>
+          <span class="history-meta">Read-only · secrets masked · no network call</span>
+        </div>
+        <button class="ghost-button" type="button" onclick={closeRequestPreviewDialog}>
+          Close
+        </button>
+      </div>
+
+      {#if isRequestPreviewLoading}
+        <div class="empty-state">Calculating the resolved request...</div>
+      {:else if requestPreviewErrorText}
+        <div class="response-error">{requestPreviewErrorText}</div>
+      {:else if requestPreview}
+        {#if requestPreview.warnings.length}
+          <div class="request-preview-callouts">
+            {#each requestPreview.warnings as warning}
+              <div class="response-error request-preview-callout">{warning}</div>
+            {/each}
+          </div>
+        {/if}
+
+        {#if requestPreview.notes.length}
+          <details class="request-preview-notes">
+            <summary>
+              <span>Preview notes</span>
+              <svg class="request-preview-notes-chevron" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </summary>
+            {#each requestPreview.notes as note}
+              <p class="field-help request-preview-note">{note}</p>
+            {/each}
+          </details>
+        {/if}
+
+        <div class="detail-grid request-preview-grid">
+          <section class="detail-card detail-card-span">
+            <h4 class="detail-section-title">Overview</h4>
+            <div class="detail-facts request-preview-facts">
+              <div class="status-item">
+                <span class="status-label">Request</span>
+                <strong>{requestPreview.name || requestPreview.finalUrl}</strong>
+              </div>
+              <div class="status-item">
+                <span class="status-label">Method</span>
+                <strong class={`method-badge method-${requestPreview.method.toLowerCase()}`}>{requestPreview.method}</strong>
+              </div>
+              <div class="status-item">
+                <span class="status-label">Environment</span>
+                <strong>{requestPreview.settings.activeEnvironmentName ?? "No environment"}</strong>
+              </div>
+              <div class="status-item">
+                <span class="status-label">Auth</span>
+                <strong>{requestPreview.auth.type}</strong>
+              </div>
+              <div class="status-item">
+                <span class="status-label">Timeout</span>
+                <strong>{requestPreview.settings.requestTimeoutMs} ms</strong>
+              </div>
+              <div class="status-item">
+                <span class="status-label">Redirects</span>
+                <strong>{requestPreview.settings.followRedirects ? "Follow" : "Off"}</strong>
+              </div>
+              <div class="status-item">
+                <span class="status-label">TLS</span>
+                <strong>{requestPreview.settings.validateTls ? "Validated" : "Relaxed"}</strong>
+              </div>
+              <div class="status-item">
+                <span class="status-label">Body mode</span>
+                <strong>{requestPreview.body.mode}</strong>
+              </div>
+              <div class="status-item detail-wide request-preview-url-item">
+                <span class="status-label">Final URL</span>
+                <strong class="detail-url-value" title={requestPreview.finalUrl}>{requestPreview.finalUrl}</strong>
+              </div>
+            </div>
+          </section>
+
+          <section class="detail-card detail-card-span">
+            <h4 class="detail-section-title">Outgoing Request</h4>
+            <div class="detail-response-columns">
+              <div class="detail-response-column">
+                <h5 class="detail-subtitle">Headers and Query</h5>
+
+                {#if filterPreviewRows(requestPreview.queryParams).length || filterPreviewRows(requestPreview.headers).length}
+                  <div class="detail-stack">
+                    {#if filterPreviewRows(requestPreview.queryParams).length}
+                      <div class="detail-block">
+                        <h6 class="detail-micro-title">Query Parameters</h6>
+                        <div class="detail-kv-list detail-kv-list-compact">
+                          {#each filterPreviewRows(requestPreview.queryParams) as row (row.id)}
+                            <div class="detail-kv-item">
+                              <strong>{row.key || "(empty key)"}</strong>
+                              <span>{previewDisplayValue(row.value)}</span>
+                            </div>
+                          {/each}
+                        </div>
+                      </div>
+                    {/if}
+
+                    {#if filterPreviewRows(requestPreview.headers).length}
+                      <div class="detail-block">
+                        <h6 class="detail-micro-title">Request Headers</h6>
+                        <div class="detail-kv-list detail-kv-list-compact">
+                          {#each filterPreviewRows(requestPreview.headers) as row (row.id)}
+                            <div class="detail-kv-item">
+                              <strong>{row.key || "(empty key)"}</strong>
+                              <span>{previewDisplayValue(row.value)}</span>
+                            </div>
+                          {/each}
+                        </div>
+                      </div>
+                    {/if}
+                  </div>
+                {:else}
+                  <div class="empty-state">No query parameters or request headers will be sent.</div>
+                {/if}
+              </div>
+
+              <div class="detail-response-column">
+                <h5 class="detail-subtitle">Body</h5>
+
+                {#if requestPreview.body.mode === "multipart"}
+                  {#if filterPreviewRows(requestPreview.body.form).length || filterPreviewFiles(requestPreview.body.files).length}
+                    <div class="detail-stack">
+                      {#if filterPreviewRows(requestPreview.body.form).length}
+                        <div class="detail-block">
+                          <h6 class="detail-micro-title">Text Fields</h6>
+                          <div class="detail-kv-list detail-kv-list-compact">
+                            {#each filterPreviewRows(requestPreview.body.form) as row (row.id)}
+                              <div class="detail-kv-item">
+                                <strong>{row.key || "(empty field)"}</strong>
+                                <span>{previewDisplayValue(row.value)}</span>
+                              </div>
+                            {/each}
+                          </div>
+                        </div>
+                      {/if}
+
+                      {#if filterPreviewFiles(requestPreview.body.files).length}
+                        <div class="detail-block">
+                          <h6 class="detail-micro-title">Files</h6>
+                          <div class="detail-kv-list detail-kv-list-compact">
+                            {#each filterPreviewFiles(requestPreview.body.files) as file (file.id)}
+                              <div class="detail-kv-item">
+                                <strong>{file.name || "(empty field)"}</strong>
+                                <span>{file.path || "(empty path)"}</span>
+                              </div>
+                            {/each}
+                          </div>
+                        </div>
+                      {/if}
+                    </div>
+                  {:else}
+                    <div class="empty-state">No multipart fields or files will be sent.</div>
+                  {/if}
+                {:else if requestPreview.body.mode === "form-urlencoded"}
+                  {#if filterPreviewRows(requestPreview.body.form).length}
+                    <div class="detail-kv-list detail-kv-list-compact">
+                      {#each filterPreviewRows(requestPreview.body.form) as row (row.id)}
+                        <div class="detail-kv-item">
+                          <strong>{row.key || "(empty field)"}</strong>
+                          <span>{previewDisplayValue(row.value)}</span>
+                        </div>
+                      {/each}
+                    </div>
+                  {:else}
+                    <div class="empty-state">No form fields will be sent.</div>
+                  {/if}
+                {:else if requestPreview.body.raw}
+                  <JsonViewer source={requestPreview.body.raw} maxHeight="clamp(12rem, 38vh, 26rem)" />
+                {:else}
+                  <div class="empty-state">This request will be sent without a body.</div>
+                {/if}
+              </div>
+            </div>
+          </section>
+
+          {#if previewAuthRows(requestPreview).length}
+            <section class="detail-card detail-card-span">
+              <h4 class="detail-section-title">Auth Inputs</h4>
+              <div class="detail-kv-list request-preview-auth-list">
+                {#each previewAuthRows(requestPreview) as row (row.id)}
+                  <div class="detail-kv-item">
+                    <strong>{row.key}</strong>
+                    <span>{previewDisplayValue(row.value)}</span>
+                  </div>
+                {/each}
+              </div>
+            </section>
+          {/if}
+        </div>
+      {/if}
+    </div>
+  </div>
+{/if}
+
 {#if isRequestExportDialogOpen}
   <div
     class="modal-backdrop"
@@ -1708,12 +2004,7 @@ paths:
         closeRequestExportDialog();
       }
     }}
-    onkeydown={(event) => {
-      if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
-        event.preventDefault();
-        closeRequestExportDialog();
-      }
-    }}
+    onkeydown={(event) => handleModalBackdropKeydown(event, closeRequestExportDialog)}
   >
     <div class="panel save-dialog" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="request-export-title">
       <div class="editor-header import-dialog-header">

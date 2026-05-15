@@ -28,6 +28,7 @@ PostNot is built for working with HTTP APIs on your own machine, with local pers
 - Inspect request history locally
 - Collapse the Requests page history panel when you want less noise, with that preference restored on the next launch
 - Restore a past request from history into a new request tab
+- Preview the resolved outgoing request before sending, with private values masked
 - Import from Postman collections and environments
 - Import collections or single requests from OpenAPI 3 JSON or YAML
 - Import from cURL, including common flags for URL selection, query/body data, multipart forms, cookies, compression, redirects, and shell continuations
