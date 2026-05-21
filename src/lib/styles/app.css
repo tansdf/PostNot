@@ -76,6 +76,9 @@ body {
 .history-preview,
 .detail-code-block,
 .request-preview-dialog,
+.modal-scroll-body,
+.save-collection-list,
+.save-folder-list,
 .detail-response-column .detail-kv-list,
 .detail-response-column .detail-kv-list-compact {
   scrollbar-gutter: stable;
@@ -3180,13 +3183,67 @@ body.collection-dnd-active {
   display: grid;
   place-items: center;
   padding: 16px;
+  min-width: 0;
+  min-height: 0;
   overflow: hidden;
   background: rgba(7, 11, 11, 0.56);
 }
 
 .save-dialog {
   width: min(32rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
   padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow: hidden;
+}
+
+.save-dialog > .editor-header,
+.save-dialog > .import-dialog-header {
+  flex: 0 0 auto;
+}
+
+.modal-scroll-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+}
+
+.request-save-dialog {
+  height: auto;
+}
+
+.request-save-dialog-body {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.request-save-target-section {
+  min-height: 0;
+  display: block;
+}
+
+.request-save-dialog .collections-page-actions {
+  flex: 0 0 auto;
+}
+
+.save-collection-list,
+.save-folder-list {
+  max-height: min(18rem, 34vh);
+  max-height: min(18rem, 34dvh);
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+  margin-top: 0;
+}
+
+.save-folder-list {
+  max-height: min(12rem, 18vh);
+  max-height: min(12rem, 18dvh);
 }
 
 .notification-host {

@@ -888,7 +888,7 @@
           <span class="history-meta">Postman Environment JSON</span>
         </div>
 
-        <div class="editor-block">
+        <div class="editor-block modal-scroll-body">
           <p class="field-help">Import a Postman environment by opening a JSON file or pasting the environment payload directly.</p>
 
           <label>

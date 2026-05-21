@@ -7,8 +7,8 @@ PostNot is pre-1.0. Security fixes are applied on a best-effort basis to the cur
 | Version | Supported |
 | --- | --- |
 | `master` | Yes |
-| `0.19.x` | Yes |
-| `< 0.19` | No |
+| `0.20.x` | Yes |
+| `< 0.20` | No |
 
 ## Reporting a Vulnerability
 

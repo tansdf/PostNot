@@ -6,6 +6,13 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.20.4] - 2026-05-21
+
+### Fixed
+
+- Capped modal heights to the viewport and added internal scrolling so import/export dialogs stay usable on shorter screens.
+- Kept the request save dialog actions visible while large collection and folder lists scroll inside their chooser sections.
+
 ## [0.20.3] - 2026-05-15
 
 ### Added

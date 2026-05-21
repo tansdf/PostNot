@@ -340,7 +340,7 @@
           </span>
         </div>
 
-        <div class="editor-block">
+        <div class="editor-block modal-scroll-body">
           <div class="import-format-toggle" role="tablist" aria-label="Choose collection import format">
             <button
               class={["system-button", importFormat === "postman" && "toggle-active"]}

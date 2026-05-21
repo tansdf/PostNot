@@ -1707,7 +1707,7 @@ paths:
     onkeydown={handleSaveDialogBackdropKeydown}
   >
     <div
-      class="panel save-dialog"
+      class="panel save-dialog request-save-dialog"
       role="dialog"
       tabindex="-1"
       aria-modal="true"
@@ -1717,10 +1717,10 @@ paths:
         <h2 id="save-request-title">{saveDialogMode === "copy-new-tab" ? "Save copy" : "Save request"}</h2>
       </div>
 
-      <div class="editor-block">
-        <div>
+      <div class="editor-block request-save-dialog-body">
+        <div class="request-save-target-section">
           <span class="field-label">Choose a collection</span>
-          <div class="save-target-list" role="listbox" aria-label="Choose a collection">
+          <div class="save-target-list save-collection-list" role="listbox" aria-label="Choose a collection">
             {#each collections.collections as collection (collection.id)}
               <button
                 class={["save-target-button", saveTargetCollectionId === collection.id && "save-target-active"]}
@@ -1741,9 +1741,9 @@ paths:
         </div>
 
         {#if saveTargetCollectionId}
-          <div>
+          <div class="request-save-target-section">
             <span class="field-label">Choose a folder</span>
-            <div class="save-target-list" role="listbox" aria-label="Choose a folder">
+            <div class="save-target-list save-folder-list" role="listbox" aria-label="Choose a folder">
               {#each collections.folderTargets(saveTargetCollectionId) as folderTarget (`${saveTargetCollectionId}-${folderTarget.id ?? "root"}`)}
                 <button
                   class={[
@@ -2015,7 +2015,7 @@ paths:
         </span>
       </div>
 
-      <div class="editor-block">
+      <div class="editor-block modal-scroll-body">
         <div class="import-format-toggle" role="tablist" aria-label="Choose request export format">
           <button
             class={["system-button", requestExportFormat === "curl" && "toggle-active"]}
@@ -2117,7 +2117,7 @@ paths:
         </span>
       </div>
 
-      <div class="editor-block">
+      <div class="editor-block modal-scroll-body">
         <div class="import-format-toggle" role="tablist" aria-label="Choose request import format">
           <button
             class={["system-button", requestImportFormat === "curl" && "toggle-active"]}
