@@ -804,7 +804,14 @@
           </div>
         {:else}
           {#each selectedPlaybook.steps as step, index}
-            <article class={["step-row", currentStepId === step.id && "step-row-running", step.missingSavedRequest && "step-row-missing"]}>
+            <article
+              class={[
+                "step-row",
+                currentStepId === step.id && "step-row-running",
+                !step.enabled && "step-row-disabled",
+                step.missingSavedRequest && "step-row-missing"
+              ]}
+            >
               <div class="step-order-controls">
                 <button
                   class="step-order-button step-order-button-up"
@@ -823,6 +830,19 @@
                   onclick={() => moveStep(step, 1)}
                   disabled={isRunning || index === selectedPlaybook.steps.length - 1}
                 ></button>
+                <label
+                  class="step-toggle step-toggle-rail"
+                  title={step.enabled ? "Disable this step" : "Enable this step"}
+                  aria-label={step.enabled ? "Disable this step" : "Enable this step"}
+                >
+                  <input
+                    class="playbook-checkbox"
+                    type="checkbox"
+                    checked={step.enabled}
+                    onchange={(event) => handleStepEnabled(step, event.currentTarget.checked)}
+                    disabled={isRunning || step.missingSavedRequest}
+                  />
+                </label>
               </div>
               <div class="step-main">
                 <div class="step-title-row">
@@ -830,16 +850,6 @@
                     <h3>{displayStepName(step)}</h3>
                     <p>{step.method ?? "--"} {step.url ?? "Linked request missing"}</p>
                   </div>
-                  <label class="step-toggle">
-                    <input
-                      class="playbook-checkbox"
-                      type="checkbox"
-                      checked={step.enabled}
-                      onchange={(event) => handleStepEnabled(step, event.currentTarget.checked)}
-                      disabled={isRunning || step.missingSavedRequest}
-                    />
-                    <span>{step.enabled ? "Enabled" : "Disabled"}</span>
-                  </label>
                 </div>
                 <div class="step-fields">
                   <label>
@@ -1201,6 +1211,19 @@
     border-color: var(--bg-accent);
   }
 
+  .step-row-disabled {
+    background: var(--surface-subtle);
+  }
+
+  .step-row-disabled .step-main {
+    opacity: 0.58;
+  }
+
+  .step-row-disabled .step-index {
+    background: var(--surface-subtle);
+    border: 1px dashed var(--border-strong);
+  }
+
   .step-row-missing {
     border-color: var(--danger);
     background: var(--surface-danger-soft);
@@ -1254,6 +1277,14 @@
     opacity: 0.35;
   }
 
+  .step-toggle-rail {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    margin-top: 2px;
+  }
+
   .step-main {
     min-width: 0;
     display: grid;
@@ -1270,10 +1301,15 @@
     align-items: flex-start;
   }
 
+  .step-title-row > div {
+    min-width: 0;
+  }
+
   .step-actions {
     align-self: start;
     flex-wrap: wrap;
     justify-content: flex-end;
+    min-width: 0;
     max-width: 150px;
   }
 
@@ -1415,6 +1451,18 @@
     .playbook-run-panel {
       min-height: 0;
       overflow: hidden;
+    }
+  }
+
+  @media (max-width: 1280px) {
+    .step-row {
+      grid-template-columns: 34px minmax(0, 1fr);
+    }
+
+    .step-actions {
+      grid-column: 2;
+      justify-content: flex-start;
+      max-width: none;
     }
   }
 </style>

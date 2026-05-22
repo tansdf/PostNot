@@ -6,12 +6,12 @@
     <title>PostNot - local-first desktop API client</title>
     <meta
       name="description"
-      content="PostNot is a local-first desktop API client built with Rust and Tauri. Send HTTP requests, manage collections and environments, import from Postman, OpenAPI, and cURL, store secrets in the OS credential store, and script requests on your machine."
+      content="PostNot is a free local-first desktop API client built with Rust and Tauri. Send HTTP requests, manage collections, Playbooks, environments, imports, exports, OAuth2 helpers, OS-backed secrets, and request scripts on your machine."
     />
     <meta property="og:title" content="PostNot - local-first desktop API client" />
     <meta
       property="og:description"
-      content="Fast desktop API work that stays on your machine. Local persistence, imports from Postman, OpenAPI, and cURL, OS-backed secrets, collections, environments, and scriptable helper HTTP requests."
+      content="Post APIs. Not your data. Free desktop API work with local persistence, Playbooks, imports from Postman, OpenAPI, and cURL, OS-backed secrets, environments, and scriptable helper HTTP requests."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -62,11 +62,12 @@
                 alt="Code authorship 100 percent AI generated"
             /></a>
           </div>
-          <h1>Fast desktop API work that stays on your machine</h1>
+          <h1>Post APIs. Not your data.</h1>
           <p class="hero__tagline">
-            PostNot is a local-first API client for focused HTTP workflows: native request execution,
-            local persistence, collections, environments, OS-backed secrets, imports from Postman,
-            OpenAPI, and cURL, export flows, and saved request scripting.
+            PostNot is a free, local-first API client for focused HTTP workflows: native request
+            execution, restored request tabs, resolved previews before send, collections, Playbooks,
+            environments, OS-backed secrets, imports from Postman, OpenAPI, and cURL, redacted export
+            flows, OAuth2 helpers, and saved request scripting.
           </p>
           <div class="hero__highlights" aria-label="Key product highlights">
             <span>Rust-native sending</span>
@@ -88,8 +89,8 @@
             >
           </div>
           <p class="hero__note">
-            PostNot is a fully AI-generated software project. The repository code was produced
-            end-to-end by AI agents.
+            PostNot is fully free and open source. It is also a fully AI-generated software project:
+            the repository code was produced end-to-end by AI agents.
           </p>
         </div>
 
@@ -100,10 +101,10 @@
               <span>Desktop UI</span>
             </div>
             <img
-              src="images/request-workspace.webp"
-              width="1200"
-              height="758"
-              alt="PostNot request workspace showing a request editor, response panel, and history"
+              src="images/requests-page.webp"
+              width="1995"
+              height="1179"
+              alt="PostNot request workspace showing request tabs, a request editor, response panel, and history"
             />
           </div>
           <div class="preview-caption">
@@ -118,26 +119,43 @@
           <h2 id="features-heading">Built for dense desktop API sessions</h2>
         </div>
         <p class="section-lead">
-          PostNot keeps request editing, persistence, history, imports, and secrets close to the
-          machine you are working on.
+          PostNot keeps request editing, multi-tab workspace state, history, imports, automation,
+          and secrets close to the machine you are working on.
         </p>
         <div class="feature-grid">
           <article class="card">
-            <h3>HTTP requests</h3>
-            <p>Compose and send HTTP requests from a desktop-native UI.</p>
+            <h3>HTTP workspace</h3>
+            <p>
+              Compose and send requests from restored local tabs, with native cancellation and full
+              response body reads.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Resolved preview</h3>
+            <p>
+              Inspect the outgoing URL, query, headers, auth, and body before send, with private
+              values masked.
+            </p>
           </article>
           <article class="card">
             <h3>Collections and folders</h3>
             <p>
               Save requests into collections and nested folders, then browse them with aligned tree
-              guides and shared folder glyphs.
+              guides, search, reorder, and drag-and-drop moves.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Playbooks</h3>
+            <p>
+              Run saved requests in order with per-step delays, stop-on-failure behavior, scripts,
+              environments, history, and grouped run logs.
             </p>
           </article>
           <article class="card">
             <h3>Environments</h3>
             <p>
               Use environments and <span class="code-inline">{{variable}}</span> substitution across
-              requests.
+              requests, with autosave and keyboard save support.
             </p>
           </article>
           <article class="card">
@@ -150,11 +168,24 @@
           </article>
           <article class="card">
             <h3>History</h3>
-            <p>Inspect request history locally with sensible redaction for secret-derived values.</p>
+            <p>
+              Inspect request history locally, collapse the Requests history panel, and restore a past
+              request into a new tab.
+            </p>
           </article>
           <article class="card">
             <h3>Import and export</h3>
-            <p>Import from Postman, OpenAPI, or cURL and export collections and environments when needed.</p>
+            <p>
+              Import from Postman, OpenAPI 3, or cURL, export collections and environments, and export
+              the active request as redacted cURL or PostNot JSON.
+            </p>
+          </article>
+          <article class="card">
+            <h3>OAuth2 helpers</h3>
+            <p>
+              Fetch client-credentials bearer tokens from the request editor and optionally store them
+              in the active environment as secrets.
+            </p>
           </article>
           <article class="card">
             <h3>Multipart and files</h3>
@@ -177,35 +208,35 @@
           <h2 id="screenshots-heading">Current product screenshots</h2>
         </div>
         <p class="section-lead">
-          A quick look at the current UI across the request editor, collections, environments, and
-          settings surfaces.
+          A quick look at the current UI across collections, Playbooks, environments, and settings.
+          The request workspace is shown above.
         </p>
         <div class="gallery">
           <figure class="figure-card">
             <img
-              src="images/request-workspace.webp"
-              width="1200"
-              height="758"
-              alt="PostNot request workspace showing method picker, URL field, request editor, and response area"
-              loading="lazy"
-            />
-            <figcaption>Request workspace - compose, send, and inspect responses.</figcaption>
-          </figure>
-          <figure class="figure-card">
-            <img
-              src="images/collections-sidebar.webp"
-              width="1200"
-              height="758"
+              src="images/collections-page.webp"
+              width="1995"
+              height="1179"
               alt="PostNot collections view with sidebar navigation and nested request folders"
               loading="lazy"
             />
-            <figcaption>Collections - nested folders and saved requests in the sidebar.</figcaption>
+            <figcaption>Collections - nested folders, search, and drag-and-drop saved requests.</figcaption>
           </figure>
           <figure class="figure-card">
             <img
-              src="images/environments.webp"
-              width="1200"
-              height="758"
+              src="images/playbooks-page.webp"
+              width="1995"
+              height="1179"
+              alt="PostNot playbooks view with ordered saved-request steps and run logs"
+              loading="lazy"
+            />
+            <figcaption>Playbooks - sequential saved-request runs with delays, scripts, and grouped logs.</figcaption>
+          </figure>
+          <figure class="figure-card">
+            <img
+              src="images/environments-page.webp"
+              width="1995"
+              height="1179"
               alt="PostNot environments editor with variable names, values, and secret handling"
               loading="lazy"
             />
@@ -216,13 +247,13 @@
           </figure>
           <figure class="figure-card">
             <img
-              src="images/settings-about.webp"
-              width="1200"
-              height="758"
+              src="images/settings-page.webp"
+              width="1995"
+              height="1179"
               alt="PostNot settings surface with preferences and update information"
               loading="lazy"
             />
-            <figcaption>Settings and updates - persisted preferences and release checks.</figcaption>
+            <figcaption>Settings and updates - persisted preferences, signed checks, and download progress.</figcaption>
           </figure>
         </div>
       </section>
@@ -243,11 +274,17 @@
           </article>
           <article class="card">
             <h3>Portable when you need it</h3>
-            <p>Bring data in from Postman, OpenAPI, or cURL, keep working locally, and export it back out later.</p>
+            <p>
+              Bring data in from Postman, OpenAPI, or cURL, keep working locally, and export it back
+              out later.
+            </p>
           </article>
           <article class="card">
             <h3>Safer environment handling</h3>
-            <p>Secrets stay out of SQLite and are redacted from stored history snapshots.</p>
+            <p>
+              Secrets stay out of SQLite, request previews mask private values, and request exports
+              redact credential-looking fields by default.
+            </p>
           </article>
         </div>
       </section>
@@ -265,6 +302,10 @@
             <span class="code-inline">{{variable}}</span> references rather than resolved secret
             values.
           </li>
+          <li>
+            Single-request cURL and PostNot JSON exports redact credential-looking values by default,
+            with an explicit full-export toggle.
+          </li>
         </ul>
       </section>
 
@@ -275,10 +316,10 @@
         </div>
         <div class="status-callout">
           <p>
-            The core workflow is already real and usable, including async scripting helpers
-            (helper HTTP requests from scripts, environment writes, inherited pre-request and test scripts).
-            Current work is focused on broader scripting depth, multi-request
-            workflow decisions, additional polish, and updater channel decisions. Follow
+            The core workflow is already real and usable, including restored multi-tab request
+            workspaces, nested collections, Playbooks, OpenAPI 3 import, OAuth2 token fetching,
+            resolved request previews, redacted exports, and async scripting helpers. Current work is
+            focused on broader scripting depth, additional polish, and updater channel decisions. Follow
             <a
               href="https://github.com/tansdf/PostNot/blob/master/CHANGELOG.md"
               rel="noopener noreferrer"

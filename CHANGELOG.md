@@ -6,6 +6,16 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.20.5] - 2026-05-22
+
+### Changed
+
+- Refreshed the GitHub Pages landing page copy to match the current app state, including Playbooks, resolved request previews, OAuth2 token fetching, redacted single-request exports, and the local-first product message.
+
+### Fixed
+
+- Moved Playbook step enable toggles into the step position control rail and added a muted disabled-step treatment so narrow editor layouts no longer overlap the enabled control with the step actions.
+
 ## [0.20.4] - 2026-05-21
 
 ### Fixed

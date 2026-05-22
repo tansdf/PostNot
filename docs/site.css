@@ -340,8 +340,8 @@ main {
   display: block;
   width: 100%;
   height: auto;
-  aspect-ratio: 1200 / 758;
-  object-fit: cover;
+  aspect-ratio: 1995 / 1179;
+  object-fit: contain;
   object-position: top;
 }
 
@@ -433,8 +433,8 @@ section h2 {
   display: block;
   width: 100%;
   height: auto;
-  aspect-ratio: 1200 / 758;
-  object-fit: cover;
+  aspect-ratio: 1995 / 1179;
+  object-fit: contain;
   object-position: top;
   vertical-align: middle;
   background: linear-gradient(180deg, var(--sidebar-deep), var(--sidebar-mid));
