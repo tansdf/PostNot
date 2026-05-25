@@ -6,6 +6,12 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.20.6] - 2026-05-25
+
+### Fixed
+
+- Stacked the General settings selectors only while a new signed update is available, keeping the normal two-column settings layout for the up-to-date state.
+
 ## [0.20.5] - 2026-05-22
 
 ### Changed

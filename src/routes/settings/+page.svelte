@@ -203,7 +203,7 @@
                 </div>
               </div>
 
-              <div class="settings-field-grid">
+              <div class:settings-field-grid-stacked={Boolean(updater.availableUpdate)} class="settings-field-grid">
                 <label>
                   <span class="field-label">Theme</span>
                   <select class="text-input" bind:value={settings.theme}>

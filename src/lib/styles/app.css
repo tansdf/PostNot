@@ -2124,6 +2124,10 @@ select option {
   grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
 }
 
+.settings-field-grid-stacked {
+  grid-template-columns: 1fr;
+}
+
 .settings-status-item,
 .settings-updates-summary,
 .settings-update-meta {
