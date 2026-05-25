@@ -39,6 +39,7 @@
     spellcheck = true,
     multiline = false,
     disabled = false,
+    list = "",
     onExtraKeydown = undefined,
     highlightTokens = [],
     highlightOverlayClassName = ""
@@ -53,6 +54,7 @@
     spellcheck?: boolean;
     multiline?: boolean;
     disabled?: boolean;
+    list?: string;
     onExtraKeydown?: ((event: KeyboardEvent) => void) | undefined;
     highlightTokens?: HighlightToken[];
     highlightOverlayClassName?: string;
@@ -639,6 +641,7 @@
         {spellcheck}
         {disabled}
         {type}
+        {list}
         bind:value={value}
         onblur={handleBlur}
         onclick={handleCursorMovement}

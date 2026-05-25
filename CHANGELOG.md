@@ -6,6 +6,12 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.20.7] - 2026-05-25
+
+### Added
+
+- Added Requests header autocomplete for common header names and name-aware header values, including values already used for matching headers in the current draft.
+
 ## [0.20.6] - 2026-05-25
 
 ### Fixed
