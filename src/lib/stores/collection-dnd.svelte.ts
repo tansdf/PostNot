@@ -1,4 +1,4 @@
-import type { CollectionDropIndicator, DraggedCollectionRequest } from "$lib/collections/drag-and-drop";
+import type { CollectionDropIndicator, DraggedCollectionItem } from "$lib/collections/drag-and-drop";
 
 type PointerPoint = {
   x: number;
@@ -6,17 +6,17 @@ type PointerPoint = {
 };
 
 class CollectionDndStore {
-  draggedRequest = $state.raw<DraggedCollectionRequest | null>(null);
+  draggedRequest = $state.raw<DraggedCollectionItem | null>(null);
   dropIndicator = $state.raw<CollectionDropIndicator | null>(null);
   pointer = $state.raw<PointerPoint | null>(null);
   isDragging = $state(false);
 
-  pendingRequest: DraggedCollectionRequest | null = null;
+  pendingRequest: DraggedCollectionItem | null = null;
   pointerId: number | null = null;
   origin: PointerPoint | null = null;
   suppressClickUntil = 0;
 
-  beginPotentialDrag(request: DraggedCollectionRequest, pointerId: number, point: PointerPoint) {
+  beginPotentialDrag(request: DraggedCollectionItem, pointerId: number, point: PointerPoint) {
     this.pendingRequest = request;
     this.pointerId = pointerId;
     this.origin = point;
@@ -86,6 +86,10 @@ class CollectionDndStore {
   }
 
   isDraggingRequest(itemId: string) {
+    return this.draggedRequest?.itemId === itemId && this.draggedRequest.kind === "request";
+  }
+
+  isDraggingItem(itemId: string) {
     return this.draggedRequest?.itemId === itemId;
   }
 

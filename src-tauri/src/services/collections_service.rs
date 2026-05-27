@@ -220,9 +220,25 @@ pub async fn create_collection_folder(
     ensure_collection_exists(pool, collection_id).await?;
     validate_parent_folder(pool, collection_id, input.parent_id.as_deref()).await?;
 
+    let mut transaction = pool.begin().await?;
     let item_id = Uuid::new_v4().to_string();
     let now = now_iso();
-    let sort_order = next_sort_order(pool, collection_id, input.parent_id.as_deref()).await?;
+
+    sqlx::query(
+        r#"
+        UPDATE collection_items
+        SET sort_order = sort_order + 1
+        WHERE collection_id = ?1
+          AND (
+            (?2 IS NULL AND parent_id IS NULL)
+            OR parent_id = ?2
+          )
+        "#,
+    )
+    .bind(collection_id)
+    .bind(input.parent_id.as_deref())
+    .execute(&mut *transaction)
+    .await?;
 
     sqlx::query(
         r#"
@@ -237,15 +253,16 @@ pub async fn create_collection_folder(
     .bind(collection_id)
     .bind(input.parent_id.as_deref())
     .bind(name)
-    .bind(sort_order)
+    .bind(0_i64)
     .bind(&input.pre_request_script)
     .bind(&input.test_script)
     .bind(&now)
     .bind(&now)
-    .execute(pool)
+    .execute(&mut *transaction)
     .await?;
 
-    touch_collection(pool, collection_id).await?;
+    touch_collection_in_transaction(&mut transaction, collection_id, &now).await?;
+    transaction.commit().await?;
     get_collection_item_summary(pool, &item_id).await
 }
 
@@ -298,7 +315,7 @@ pub async fn move_collection_item(
     pool: &SqlitePool,
     item_id: &str,
     input: &MoveCollectionItemInput,
-) -> AppResult<SavedRequestSummary> {
+) -> AppResult<CollectionItemSummary> {
     let target_collection_id = input.target_collection_id.trim();
     if target_collection_id.is_empty() {
         return Err(AppError::Message(
@@ -326,10 +343,16 @@ pub async fn move_collection_item(
     let source_parent_id: Option<String> = item_row.get("parent_id");
     let kind: String = item_row.get("kind");
 
-    if kind != "request" {
-        return Err(AppError::Message(
-            "Only saved requests can be moved right now.".to_string(),
-        ));
+    if kind == "folder" {
+        if input.target_parent_id.as_deref() == Some(item_id) {
+            return Err(AppError::Message(
+                "A folder cannot be moved inside itself.".to_string(),
+            ));
+        }
+
+        if let Some(target_parent_id) = input.target_parent_id.as_deref() {
+            ensure_folder_not_descendant(&mut transaction, item_id, target_parent_id).await?;
+        }
     }
 
     let source_sibling_ids = list_sibling_ids(
@@ -366,7 +389,7 @@ pub async fn move_collection_item(
         SET collection_id = ?2,
             parent_id = ?3,
             updated_at = ?4
-        WHERE id = ?1 AND kind = 'request'
+        WHERE id = ?1
         "#,
     )
     .bind(item_id)
@@ -375,6 +398,10 @@ pub async fn move_collection_item(
     .bind(&now)
     .execute(&mut *transaction)
     .await?;
+
+    if kind == "folder" && source_collection_id != target_collection_id {
+        update_descendant_collection_ids(&mut transaction, item_id, target_collection_id).await?;
+    }
 
     if same_parent {
         resequence_siblings(
@@ -407,7 +434,7 @@ pub async fn move_collection_item(
     }
 
     transaction.commit().await?;
-    get_saved_request_summary(pool, item_id).await
+    get_collection_item_summary(pool, item_id).await
 }
 
 pub async fn update_collection(
@@ -808,6 +835,71 @@ async fn resequence_siblings(
         .execute(&mut **transaction)
         .await?;
     }
+
+    Ok(())
+}
+
+async fn ensure_folder_not_descendant(
+    transaction: &mut Transaction<'_, Sqlite>,
+    folder_id: &str,
+    target_parent_id: &str,
+) -> AppResult<()> {
+    let descendant_id: Option<String> = sqlx::query_scalar(
+        r#"
+        WITH RECURSIVE descendants(id) AS (
+          SELECT id
+          FROM collection_items
+          WHERE parent_id = ?1
+          UNION ALL
+          SELECT collection_items.id
+          FROM collection_items
+          INNER JOIN descendants ON collection_items.parent_id = descendants.id
+        )
+        SELECT id
+        FROM descendants
+        WHERE id = ?2
+        LIMIT 1
+        "#,
+    )
+    .bind(folder_id)
+    .bind(target_parent_id)
+    .fetch_optional(&mut **transaction)
+    .await?;
+
+    if descendant_id.is_some() {
+        return Err(AppError::Message(
+            "A folder cannot be moved inside one of its subfolders.".to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
+async fn update_descendant_collection_ids(
+    transaction: &mut Transaction<'_, Sqlite>,
+    folder_id: &str,
+    target_collection_id: &str,
+) -> AppResult<()> {
+    sqlx::query(
+        r#"
+        WITH RECURSIVE descendants(id) AS (
+          SELECT id
+          FROM collection_items
+          WHERE parent_id = ?1
+          UNION ALL
+          SELECT collection_items.id
+          FROM collection_items
+          INNER JOIN descendants ON collection_items.parent_id = descendants.id
+        )
+        UPDATE collection_items
+        SET collection_id = ?2
+        WHERE id IN (SELECT id FROM descendants)
+        "#,
+    )
+    .bind(folder_id)
+    .bind(target_collection_id)
+    .execute(&mut **transaction)
+    .await?;
 
     Ok(())
 }

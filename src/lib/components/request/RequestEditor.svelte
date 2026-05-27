@@ -790,7 +790,7 @@
                 void handleSaveAsRequest();
               }}
             >
-              Save copy
+              Save as
             </button>
           </div>
         {/if}

@@ -85,7 +85,7 @@ pub async fn move_collection_item(
     state: State<'_, AppState>,
     item_id: String,
     input: MoveCollectionItemInput,
-) -> AppResult<SavedRequestSummary> {
+) -> AppResult<CollectionItemSummary> {
     collections_service::move_collection_item(state.db(), &item_id, &input).await
 }
 

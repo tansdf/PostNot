@@ -6,7 +6,7 @@ import {
   deleteCollectionItem,
   listCollectionItems,
   listCollections,
-  moveCollectionItem,
+  moveCollectionItem as moveCollectionItemCommand,
   saveRequestToCollection,
   updateCollection as updateCollectionCommand,
   updateCollectionFolder as updateCollectionFolderCommand,
@@ -308,7 +308,7 @@ class CollectionsStore {
     }
   }
 
-  async moveSavedRequest(
+  async moveCollectionItem(
     itemId: string,
     sourceCollectionId: string,
     input: MoveCollectionItemInput
@@ -316,14 +316,17 @@ class CollectionsStore {
     this.isMovingCollectionItem = true;
 
     try {
-      const savedRequest = await moveCollectionItem(itemId, input);
+      const movedItem = await moveCollectionItemCommand(itemId, input);
       await this.loadCollections(this.selectedCollectionId || input.targetCollectionId);
 
       const collectionIds = Array.from(new Set([sourceCollectionId, input.targetCollectionId]));
       await Promise.all(collectionIds.map((collectionId) => this.loadCollectionItems(collectionId)));
 
-      notifications.success(savedRequest.name || "Saved request", "Request moved");
-      return savedRequest;
+      notifications.success(
+        movedItem.name || (movedItem.kind === "folder" ? "Folder" : "Saved request"),
+        movedItem.kind === "folder" ? "Folder moved" : "Request moved"
+      );
+      return movedItem;
     } catch (error) {
       this.errorText = error instanceof Error ? error.message : String(error);
       return null;

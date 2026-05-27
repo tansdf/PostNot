@@ -20,7 +20,7 @@ PostNot is built for working with HTTP APIs on your own machine, with local pers
 - Save requests into collections and nested folders
 - Browse those folders in the sidebar and collections page with aligned tree guides and folder icons
 - Search collections, folders, and saved requests from the sidebar
-- Reorder saved requests and move them across folders or collections with drag-and-drop from the sidebar and collections page
+- Reorder saved requests and folders, and move them across folders or collections with drag-and-drop from the sidebar and collections page
 - Build and run playbooks that execute saved requests in order with per-step delays, stop-on-failure behavior, and grouped run logs
 - Work with environments and `{{variable}}` substitution
 - Use built-in dynamic variables like Postman-style `$guid` and `$timestamp`
@@ -52,7 +52,7 @@ PostNot is built for working with HTTP APIs on your own machine, with local pers
 
 ## Current Status
 
-PostNot is still pre-1.0 and evolving deliberately. The core workflow is already real and usable, including restored multi-tab request workspaces, nested collection organization, drag-and-drop request management, playbooks for sequential saved-request runs, OpenAPI 3 import, and async scripting helpers (`pn.http.send`, environment writes from scripts, inherited pre-request and test scripts), but the product is still growing in areas like broader scripting depth, broader polish, and updater channel decisions.
+PostNot is still pre-1.0 and evolving deliberately. The core workflow is already real and usable, including restored multi-tab request workspaces, nested collection organization, drag-and-drop request and folder management, playbooks for sequential saved-request runs, OpenAPI 3 import, and async scripting helpers (`pn.http.send`, environment writes from scripts, inherited pre-request and test scripts), but the product is still growing in areas like broader scripting depth, broader polish, and updater channel decisions.
 
 ## Privacy And Storage
 

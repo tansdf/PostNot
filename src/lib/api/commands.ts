@@ -673,20 +673,24 @@ export async function updateCollectionFolder(
 export async function moveCollectionItem(
   itemId: string,
   input: MoveCollectionItemInput
-): Promise<SavedRequestSummary> {
+): Promise<CollectionItemSummary> {
   if (!hasTauriRuntime()) {
     return {
       id: itemId,
       collectionId: input.targetCollectionId,
       parentId: input.targetParentId ?? null,
+      kind: "request",
       name: "Moved request",
       method: "GET",
       url: "https://example.com",
-      updatedAt: new Date().toISOString()
+      preRequestScript: "",
+      testScript: "",
+      updatedAt: new Date().toISOString(),
+      children: []
     };
   }
 
-  return invoke<SavedRequestSummary>("move_collection_item", { itemId, input });
+  return invoke<CollectionItemSummary>("move_collection_item", { itemId, input });
 }
 
 export async function updateCollection(collectionId: string, input: CreateCollectionInput): Promise<CollectionSummary> {

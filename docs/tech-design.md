@@ -33,7 +33,7 @@ Why this stack:
 
 ## 3. Current Application State
 
-This section reflects the code currently implemented in the repository, including the shipped `0.15.0` scripting update, the `0.15.1` route/modal polish work, the `0.16.0` OpenAPI 3 import release, the `0.17.0` multitab request workspace release, the `0.17.1` history-restore patch, the `0.17.2` requests/environments workflow follow-up, the `0.17.3` hydration-flash polish release, the `0.17.4` follow-up that unifies hydration-flash handling through a shared synchronous paint cache, the `0.18.0` sidebar collection search release, the `0.18.1` scripting/workspace hardening patch, the `0.19.0` cURL/OAuth2 import-auth and request-export polish, the `0.19.2` full response body follow-up, the `0.19.3` updater download progress patch, the `0.19.4` revert of the 0.18.2 binary response preview layer, the `0.19.5` compressed-response decoding and error-details patch, the `0.19.6` OAuth2 token-fetch helper release, the `0.19.7` redacted single-request export patch, the `0.20.0` Playbooks release, and the `0.20.2` invisible scrollbar polish patch (see [CHANGELOG.md](../CHANGELOG.md)).
+This section reflects the code currently implemented in the repository, including the shipped `0.15.0` scripting update, the `0.15.1` route/modal polish work, the `0.16.0` OpenAPI 3 import release, the `0.17.0` multitab request workspace release, the `0.17.1` history-restore patch, the `0.17.2` requests/environments workflow follow-up, the `0.17.3` hydration-flash polish release, the `0.17.4` follow-up that unifies hydration-flash handling through a shared synchronous paint cache, the `0.18.0` sidebar collection search release, the `0.18.1` scripting/workspace hardening patch, the `0.19.0` cURL/OAuth2 import-auth and request-export polish, the `0.19.2` full response body follow-up, the `0.19.3` updater download progress patch, the `0.19.4` revert of the 0.18.2 binary response preview layer, the `0.19.5` compressed-response decoding and error-details patch, the `0.19.6` OAuth2 token-fetch helper release, the `0.19.7` redacted single-request export patch, the `0.20.0` Playbooks release, the `0.20.1` Linux updater target patch, the `0.20.2` invisible scrollbar polish patch, the `0.20.3` resolved request preview release, the `0.20.5` landing-page copy refresh, the `0.20.7` Requests header autocomplete patch, and the current `0.20.8` collection folder ordering and drag-reorder patch (see [CHANGELOG.md](../CHANGELOG.md)).
 
 ### Implemented
 
@@ -45,10 +45,10 @@ This section reflects the code currently implemented in the repository, includin
 - Request editing for:
   - URL
   - query parameters
-  - headers
+  - headers with common-name autocomplete and name-aware value suggestions
   - auth: none, basic, bearer, API key, OAuth2 bearer with client-credentials token fetch
   - body: none, JSON, raw, form-urlencoded, multipart with file uploads
-- Read-only resolved request preview before send, including active settings, environment resolution, outgoing URL/query/header/auth/body data, and masked credential-looking values
+- Read-only resolved request preview before send, built by the native environment/settings pipeline, including outgoing URL/query/header/auth/body data, active settings, validation warnings, dynamic-variable notes, and masked credential-looking values
 - Native request execution through Rust
 - Response viewer with:
   - status
@@ -81,6 +81,7 @@ This section reflects the code currently implemented in the repository, includin
 - Settings page wired to backend persistence
 - Environment autosave preference stored in persisted settings and enabled by default
 - Signed in-app update checks, startup refresh, download progress reporting, and install handoff
+- Static GitHub Pages landing site in `docs/`, served at `post-not.com`, with checked-in WebP product screenshots and copy aligned with the current app surface
 - History panel wired to backend persistence
 - History detail inspection from persisted snapshots
 - Restore action that opens a stored history request snapshot as a new standalone tab
@@ -107,7 +108,9 @@ Responsibilities:
 - Manage page-level UI state
 - Persist and restore request-tab workspace state, including active tab selection and per-tab drafts
 - Render global floating notifications for cross-screen action feedback
-- Coordinate shared pointer-driven collection drag-and-drop interactions across the sidebar and Collections page
+- Provide Requests header datalist suggestions from common HTTP header names, existing header names in the draft, name-aware common values, and matching values already used for that header name in the same draft
+- Open the resolved request preview from the Requests send controls and render the native preview result as read-only outgoing URL, query, header, auth, body, settings, warning, and note sections
+- Coordinate shared pointer-driven collection drag-and-drop interactions for saved requests and folders across the sidebar and Collections page
 - Provide sidebar collection search that navigates directly to matching collections, folders, or saved requests
 - Render and execute playbooks in the frontend so sequential runs reuse worker-backed request scripting, active environment writes, cancellation, notifications, and normal request-history behavior
 - Keep URL query parameters for saved requests, collections, and environments in sync with the visible editor or browser, including canceling stale async work when the user navigates quickly
@@ -127,7 +130,8 @@ Responsibilities:
 - Persist request history
 - Persist request workspace state through `app_settings`
 - Load environment metadata from SQLite while storing secret environment values in the OS credential store
-- Coordinate signed release checks, download progress events, retryable failure handling, and install handoff for the Settings updater flow
+- Build resolved request previews without executing scripts or network traffic, using the same environment and dynamic-variable resolution path as sends and masking credential-looking values before returning data to the UI
+- Coordinate signed release checks against GitHub Releases' stable `latest` updater manifest, Linux installer-target selection, download progress events, retryable failure handling, and install handoff for the Settings updater flow
 - Resolve app data paths
 - Expose a stable Tauri command surface to the UI
 
@@ -135,7 +139,7 @@ Responsibilities:
 
 1. User edits a request in the UI
 2. The frontend keeps that draft inside the active request tab and persists workspace changes locally through the settings-backed workspace store
-3. Before sending, the user may open a read-only resolved request preview; the frontend invokes the native preview command, which resolves the active environment and settings, assembles outgoing query/auth/header/body data, masks credential-looking values, and returns warnings without executing scripts or network traffic
+3. Before sending, the user may open a read-only resolved request preview; the frontend invokes the native `preview_request` command, which resolves the active environment and settings, assembles outgoing query/auth/header/body data, adds auth/body-generated headers, masks credential-looking values, validates URL/header/body/file state, and returns warnings and notes without executing scripts, helper requests, environment writes, or network traffic
 4. On send, the frontend runs inherited collection, folder, and saved-request pre-request scripts (if any) against a draft copy and either stops with a script error surface or proceeds with the mutated draft as the payload
 5. Frontend invokes `send_request` with that payload
 6. Rust loads persisted request settings from SQLite
@@ -163,7 +167,18 @@ This is the meaningful structure currently present in the repo.
 ```text
 PostNot/
   docs/
+    CNAME
+    index.html
+    scripting.html
+    site.css
     tech-design.md
+    images/
+      collections-page.webp
+      environments-page.webp
+      playbooks-page.webp
+      request-preview.webp
+      requests-page.webp
+      settings-page.webp
   src/
     app.html
     app.d.ts
@@ -241,7 +256,6 @@ PostNot/
         requests.rs
         settings.rs
         history.rs
-        workspace.rs
         updates.rs
       db/
         mod.rs
@@ -264,6 +278,7 @@ PostNot/
         mod.rs
         http_client.rs
         playbooks_service.rs
+        request_preview_service.rs
         secret_store_service.rs
         settings_service.rs
         history_service.rs
@@ -347,7 +362,7 @@ Fields:
 
 ## 7. SQLite Storage Design
 
-The schema currently matches the initial migration in `src-tauri/migrations/0001_init.sql`.
+The schema is created by the migrations in `src-tauri/migrations/`: `0001_init.sql` for the original app tables, `0002_collection_scripts.sql` for collection-level scripts, and `0003_playbooks.sql` for playbook definitions and grouped run logs.
 
 ### Database Location
 
@@ -380,6 +395,8 @@ Current keys written by the app:
 - `notification_timeout_ms`
 - `last_update_checked_at`
 - `collection_sidebar_state`
+- `request_workspace_state`
+- `environment_autosave`
 
 #### `history_entries`
 
@@ -429,6 +446,18 @@ Implementation notes:
 
 Stores environment metadata, active-state, and non-secret variable definitions. Secret values are kept in the OS credential store.
 
+#### `playbooks`
+
+Stores Playbook metadata, default delay, stop-on-failure policy, and HTTP error failure policy.
+
+#### `playbook_steps`
+
+Stores ordered saved-request references for a Playbook, including per-step enabled state, optional name/notes, and optional delay override.
+
+#### `playbook_runs` and `playbook_run_steps`
+
+Store grouped Playbook execution summaries and per-step outcomes. Individual step sends still go through the normal request execution path and write normal request history entries.
+
 ## 8. Runtime Behavior
 
 ### Startup
@@ -466,6 +495,18 @@ For each request send, Rust then:
 
 After Rust returns a response (or error), the frontend may run the collection test script, ancestor folder test scripts from root to leaf, and then the saved test script, recording assertion results for display in the response panel.
 
+### Resolved Request Preview
+
+The Requests page can call `preview_request` before send. The command loads persisted settings, resolves the active environment and built-in dynamic variables, and passes both the original and resolved request through `request_preview_service`.
+
+The preview response is intentionally read-only. It does not execute pre-request scripts, helper HTTP calls, active-environment writes, or the main network request. It shows the final URL with enabled query parameters, auth-generated and body-generated headers, resolved auth/body data, active request settings, warnings for invalid URL/header/body/file state, unresolved-variable warnings, and notes about generated transport headers and sampled dynamic variables. Secret-derived values and credential-looking keys are masked before they reach the UI.
+
+### Updater
+
+The updater uses Tauri's signed updater plugin with a bundled public key and the stable GitHub Releases endpoint at `https://github.com/tansdf/PostNot/releases/latest/download/latest.json`. The frontend runs a silent startup check when Tauri is available and exposes manual checks from Settings.
+
+On Linux, update checks request a target matching the detected install type (`deb`, `rpm`, or `appimage`) and architecture. Debian and RPM installs download the package, verify the expected package magic bytes, hand installation to `pkexec`, and time out instead of waiting indefinitely for a missing PolicyKit prompt. Other targets use the plugin `download_and_install` path. Download progress is emitted as `update-download-progress` and surfaced in Settings; failed downloads or installer handoffs leave the pending update available for retry.
+
 ### History Persistence
 
 On successful request execution:
@@ -497,12 +538,15 @@ Commands currently exposed to the frontend:
 - `pick_multipart_files`
 - `get_settings`
 - `update_settings`
+- `get_request_workspace_state`
+- `save_request_workspace_state`
 - `check_for_updates`
 - `install_update`
 - `list_history`
 - `get_history_entry`
 - `clear_history`
 - `list_collections`
+- `search_collection_entities`
 - `get_collection_sidebar_state`
 - `save_collection_sidebar_state`
 - `create_collection`
@@ -516,8 +560,25 @@ Commands currently exposed to the frontend:
 - `save_request_to_collection`
 - `update_saved_request`
 - `get_saved_request`
+- `delete_collection_item`
 - `delete_saved_request`
 - `export_collection`
+- `list_playbooks`
+- `create_playbook`
+- `get_playbook`
+- `update_playbook`
+- `duplicate_playbook`
+- `delete_playbook`
+- `add_playbook_step`
+- `update_playbook_step`
+- `reorder_playbook_steps`
+- `delete_playbook_step`
+- `get_playbook_execution_context`
+- `create_playbook_run`
+- `finish_playbook_run`
+- `record_playbook_run_step`
+- `list_playbook_runs`
+- `get_playbook_run`
 - `list_environments`
 - `create_environment`
 - `get_environment`
@@ -528,6 +589,7 @@ Commands currently exposed to the frontend:
 - `export_environment`
 - `import_requests`
 - `import_curl_request_to_draft`
+- `import_openapi_request_to_draft`
 
 ### Command Roles
 
@@ -537,12 +599,15 @@ Commands currently exposed to the frontend:
 - `pick_multipart_files`: opens a native file picker and returns selected local file paths for multipart requests
 - `get_settings`: loads current settings from SQLite
 - `update_settings`: persists settings and returns the saved values
-- `check_for_updates`: checks the configured signed updater feed for a newer release
-- `install_update`: hands the available signed update off to the native installer, using the detected Debian/RPM/AppImage install type on Linux
+- `get_request_workspace_state`: loads the persisted Requests tab workspace snapshot from `app_settings`
+- `save_request_workspace_state`: stores the Requests tab workspace snapshot in `app_settings`
+- `check_for_updates`: checks the configured signed updater feed for a newer stable GitHub Release and stores a pending update when available
+- `install_update`: downloads the pending signed update with progress events and hands it off to the native installer, using the detected Debian/RPM/AppImage install type on Linux
 - `list_history`: returns recent history entries ordered by execution time descending
 - `get_history_entry`: returns a stored request snapshot and response metadata for one history entry
 - `clear_history`: deletes all stored history entries
 - `list_collections`: returns saved request collections with request counts and collection-level scripts
+- `search_collection_entities`: searches collections, folders, and saved requests for sidebar quick navigation
 - `get_collection_sidebar_state`: loads persisted sidebar expansion state for collections and folders
 - `save_collection_sidebar_state`: persists sidebar expansion state for collections and folders
 - `create_collection`: creates a new collection for saved requests, including empty or provided collection-level scripts
@@ -556,8 +621,25 @@ Commands currently exposed to the frontend:
 - `save_request_to_collection`: stores the current request draft in a collection
 - `update_saved_request`: updates an existing saved request in place
 - `get_saved_request`: loads one saved request back into the editor
+- `delete_collection_item`: removes a folder or saved request item from a collection tree
 - `delete_saved_request`: removes one saved request from a collection
 - `export_collection`: exports one collection to Postman Collection v2.1 JSON through a native save dialog
+- `list_playbooks`: returns Playbook summaries
+- `create_playbook`: creates a Playbook
+- `get_playbook`: returns one Playbook with its steps
+- `update_playbook`: updates Playbook metadata and execution policy
+- `duplicate_playbook`: copies a Playbook and its steps
+- `delete_playbook`: removes a Playbook and run history
+- `add_playbook_step`: appends a saved-request step to a Playbook
+- `update_playbook_step`: updates step metadata, enabled state, delay, or saved-request reference
+- `reorder_playbook_steps`: persists Playbook step ordering
+- `delete_playbook_step`: removes one Playbook step
+- `get_playbook_execution_context`: loads the latest saved request and inherited scripts for a step immediately before execution
+- `create_playbook_run`: creates a grouped Playbook run record
+- `finish_playbook_run`: finalizes a grouped Playbook run summary
+- `record_playbook_run_step`: stores one Playbook run step outcome
+- `list_playbook_runs`: returns grouped Playbook run summaries
+- `get_playbook_run`: returns one grouped Playbook run with step outcomes
 - `list_environments`: returns saved environments with active-state and variable counts
 - `create_environment`: creates a blank environment draft
 - `get_environment`: returns one environment and its variables
@@ -568,6 +650,7 @@ Commands currently exposed to the frontend:
 - `export_environment`: exports one environment to Postman environment JSON through a native save dialog
 - `import_requests`: imports requests from Postman collection JSON or cURL into PostNot collections
 - `import_curl_request_to_draft`: parses a cURL command into an editable request draft without saving it yet
+- `import_openapi_request_to_draft`: parses one OpenAPI operation into an editable request draft without saving it yet
 
 ## 10. Frontend Screens
 
@@ -578,10 +661,12 @@ Current UI sections:
 - request profile summary using persisted settings
 - active environment selector
 - request editor and collection editor with pre-request and test script editors (`ScriptEditor.svelte`)
+- header name autocomplete for common HTTP headers plus names already present in the draft
+- header value autocomplete based on the current header name, common values, and values already used by matching header rows in the draft
 - save flow with collection and folder target selection
 - request import modal for cURL and OpenAPI 3 single-request drafts
 - request export modal for cURL and PostNot request JSON
-- resolved request preview modal opened from a compact icon beside Send
+- resolved request preview modal opened from a compact icon beside Send, showing native-resolved URL, query params, headers, auth, body, active settings, warnings, and notes while keeping credential-looking values masked
 - request-level save/update action
 - response viewer
 - history panel
@@ -599,6 +684,8 @@ Current UI sections:
 - follow redirects toggle
 - validate TLS toggle
 - updater status and install surface
+- live download progress with byte counts when content length is known
+- available-update notes rendered from the signed updater metadata
 - persisted save action
 
 ### Collections Page
@@ -610,7 +697,7 @@ Current UI sections:
 - root-folder and subfolder creation
 - collection import/export actions
 - selected collection tree for folders and saved requests with vertical tree guides and folder open/closed icons (`FolderGlyph.svelte` + shared SVG paths in `folderPaths.ts`)
-- drag-and-drop saved-request management that matches the sidebar tree: reorder among siblings, move into folders, move across collections, and move back to collection root
+- drag-and-drop saved-request and folder management that matches the sidebar tree: reorder among siblings, move into folders, move across collections, and move back to collection root
 - matching sidebar tree styling for nested collections (see `SidebarCollections.svelte` and `app.css`)
 - open-in-requests and delete actions for saved requests
 
@@ -624,6 +711,29 @@ Current UI sections:
 - Postman environment import
 - Postman environment export
 - variable usage hint for `{{name}}` syntax
+
+### Playbooks Page
+
+Current UI sections:
+
+- Playbook list and editor
+- ordered saved-request steps with enable/disable controls, per-step notes, and delay overrides
+- default delay, stop-on-failure, and fail-on-HTTP-error policy controls
+- sequential run controls that reuse the normal request send, scripting, environment, and history paths
+- grouped run log summaries and per-step outcomes
+
+### Public Landing Site
+
+Current static site sections:
+
+- GitHub Pages landing page under `docs/index.html`, served with `docs/CNAME` for `post-not.com`
+- product copy updated for the current local-first app state, including Playbooks, resolved previews, OAuth2 token fetching, redacted exports, scripting, secrets, and imports
+- screenshot gallery using checked-in WebP captures under `docs/images/`
+- scripting reference page under `docs/scripting.html`
+
+Screenshot workflow note:
+
+- There is no checked-in screenshot automation script in the current repository. Public screenshots are static WebP assets committed under `docs/images/`; when the UI changes visibly, refresh those assets manually or add a documented capture workflow before relying on automated screenshot updates.
 
 ## 11. Security and Persistence Notes
 
@@ -679,6 +789,12 @@ Ship a usable desktop app that can compose and execute HTTP requests locally, pe
 - route/query stale-load guards, modal focus trapping, bounded `reqwest` client cache, and secret rollback warning logs as in `0.15.1`
 - OpenAPI 3 collection import plus single-operation draft import, with the Rust importer split into format-focused modules, as in `0.16.0`
 - restored multitab request workspaces with tab-local drafts persisted through `app_settings`, while response bodies and script output remain session-local
+- Requests history restore, environment autosave, hydration-flash avoidance through local first-paint caches, and sidebar collection search
+- cURL/OAuth2 import-auth improvements, OAuth2 client-credentials token fetching, redacted single-request export, compressed response decoding, full response body persistence, and retryable updater progress
+- Playbooks with ordered saved-request steps, run policies, grouped logs, and normal request-history integration
+- native resolved request preview before send, with validation notes and credential masking
+- static GitHub Pages landing page and scripting reference under `docs/`, with checked-in product screenshots
+- Requests header autocomplete for common names, existing draft names, name-aware common values, and matching values from the current draft
 
 ### Current Scripting Boundary
 
@@ -688,11 +804,11 @@ Scripts now run as awaited frontend JavaScript inside a short-lived worker-backe
 
 Helper script requests reuse the native request pipeline and active environment resolution, but they do not write separate history entries. Active-environment variable writes are buffered while scripts run and then persisted through the normal environment update path before the main request continues. The current runtime still allows only one native request in flight at a time, so helper requests should be awaited sequentially instead of fired concurrently.
 
-Manual end-to-end verification via `tauri dev` has already been completed for the current milestone state.
+Manual end-to-end verification via `tauri dev` remains the expected release-confidence check for scripting and request-send behavior.
 
 ### Current Position
 
-The project is no longer at the "prove the app works at all" stage. The implemented surface already covers the primary local API-client workflow: request composition and execution, persisted settings, history, collections, nested folders, environments, secret storage, import/export, multipart, and scripting helpers.
+The project is no longer at the "prove the app works at all" stage. The implemented `0.20.8` surface already covers the primary local API-client workflow: request composition and execution, persisted settings, restored local request tabs, resolved previews before send, history restore, collections, nested folders, folder/request drag management, sidebar search, Playbooks, environments, secret storage, import/export, multipart, OAuth2 helpers, header autocomplete, scripting helpers, signed stable-release updater checks, and a static public landing/scripting site.
 
 The remaining work is primarily about closing the last daily-driver gaps, tightening reliability, and deciding which behaviors are part of the supported `1.x` contract.
 
@@ -702,10 +818,9 @@ The remaining work is primarily about closing the last daily-driver gaps, tighte
 
 ### Must Be True For v1.0.0
 
-- the current core workflow remains stable: native request sending, auth modes, body modes, environments, secrets, history, collections, import/export, scripting, and updater flows
-- multi-tab workflow is implemented with behavior intentional enough to stand behind as part of the product, even if future releases expand it
-- history entries can be restored back into the request editor, not only inspected
-- collections support simple search so larger workspaces remain usable
+- the current core workflow remains stable: native request sending, resolved previews, auth modes, body modes, environments, secrets, history, collections, Playbooks, import/export, scripting, and updater flows
+- multi-tab workflow remains behaviorally intentional enough to stand behind as part of the product, even if future releases expand it
+- history restore and collection search stay reliable as hardening continues
 - error handling and desktop UX are hardened enough that the app feels dependable in normal daily use
 - the codebase receives a focused hardening and optimization pass rather than only feature additions
 
@@ -747,10 +862,9 @@ This means the project does not need to hold all remaining `v1` features for one
 
 One reasonable path from the current state is:
 
-1. `0.19.0`: cURL/OAuth2 import-auth and request-export polish
-2. `0.20.0`: Playbooks for sequential saved-request execution
-3. `0.21.0`: hardening, optimization, and UX/error-handling improvements
-4. `1.0.0`: release-signoff build after the `v1` scope is complete and verified
+1. `0.20.8`: current app baseline with Playbooks, resolved previews, updater progress/targeting, landing-site refresh, Requests header autocomplete, and collection folder drag/order polish
+2. `0.21.0`: hardening, optimization, and UX/error-handling improvements
+3. `1.0.0`: release-signoff build after the `v1` scope is complete and verified
 
 The exact version numbers are less important than the policy: `1.0.0` is allowed to be a smaller visible release than earlier `0.x` milestones if it represents a meaningful jump in confidence and support commitment.
 
@@ -758,7 +872,7 @@ The exact version numbers are less important than the policy: `1.0.0` is allowed
 
 These decisions remain relevant as the app approaches `1.0.0`:
 
-- whether large response bodies should spill to files instead of SQLite preview-only storage
+- whether full response body files need retention controls, size management, or migration beyond the current history-body file storage
 - exact import/export format for PostNot bundles
 - how far pattern-based export redaction should extend beyond the current credential-looking request fields
 - whether updater discovery should remain stable-only on GitHub's `/latest` endpoint or later grow an opt-in prerelease channel
@@ -767,6 +881,6 @@ These decisions remain relevant as the app approaches `1.0.0`:
 
 Treat the repository as being on the path from active Milestone 1 delivery to a deliberate `v1.0.0`, not as a project that still needs a broad product rethink.
 
-The current design is already grounded in a real desktop workflow: persisted settings influence request execution, history is stored in SQLite with secret-derived environment values redacted, secret environment values live in the OS credential store, environments resolve variables at send time, collections support nested folders in the working UI with consistent sidebar and collections-panel tree affordances, saved requests can be reordered or moved across folders and collections through a shared drag-and-drop model, collections, folders, and saved requests can run inherited pre-request and test scripts in the frontend before and after native execution, scripts can await helper HTTP requests through `pn.http.send(...)` without polluting history and can persist active-environment variable updates during script execution, import can pull requests in from Postman collections, OpenAPI 3 documents, and cURL, single-request exports can produce redacted-by-default cURL or PostNot JSON with explicit full export, multipart requests can attach local files, built-in dynamic variables resolve at runtime, and the desktop shell can check GitHub Releases for signed updater builds both on launch and from Settings.
+The current design is already grounded in a real desktop workflow: persisted settings influence request execution, history is stored in SQLite with secret-derived environment values redacted, decoded response bodies are persisted as history body files, secret environment values live in the OS credential store, environments resolve variables at send time, the Requests page can ask Rust for a masked resolved preview before send, header rows provide lightweight autocomplete, collections support nested folders in the working UI with consistent sidebar and collections-panel tree affordances, saved requests can be searched, reordered, or moved across folders and collections through a shared drag-and-drop model, Playbooks can run saved requests sequentially with grouped logs, collections, folders, and saved requests can run inherited pre-request and test scripts in the frontend before and after native execution, scripts can await helper HTTP requests through `pn.http.send(...)` without polluting history and can persist active-environment variable updates during script execution, import can pull requests in from Postman collections, OpenAPI 3 documents, and cURL, single-request exports can produce redacted-by-default cURL or PostNot JSON with explicit full export, multipart requests can attach local files, built-in dynamic variables resolve at runtime, the desktop shell can check GitHub Releases' stable `latest` feed for signed updater builds both on launch and from Settings, and the public `docs/` site reflects the current shipped workflow with static screenshot assets.
 
 The remaining `v1` work should stay focused on release-quality steps that close the last day-to-day gaps: strong hardening of correctness, UX, and performance, plus any small workflow fixes that surface during validation.

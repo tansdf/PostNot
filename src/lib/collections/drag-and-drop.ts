@@ -1,11 +1,14 @@
 import type { CollectionItemSummary, MoveCollectionItemInput } from "$lib/api/types";
 
-export type DraggedCollectionRequest = {
+export type DraggedCollectionItem = {
   itemId: string;
   collectionId: string;
   parentId: string | null;
   name: string;
+  kind: CollectionItemSummary["kind"];
 };
+
+export type DraggedCollectionRequest = DraggedCollectionItem;
 
 export type CollectionDropPlacement = "before" | "after" | "inside";
 
@@ -37,7 +40,7 @@ export function resolveItemDropPlacement(clientY: number, rect: DOMRect, allowIn
 }
 
 export function buildRootMoveInput(
-  dragged: DraggedCollectionRequest,
+  dragged: DraggedCollectionItem,
   sourceItems: CollectionItemSummary[],
   targetCollectionId: string
 ): MoveCollectionItemInput | null {
@@ -62,7 +65,7 @@ export function buildRootMoveInput(
 }
 
 export function buildItemMoveInput(args: {
-  dragged: DraggedCollectionRequest;
+  dragged: DraggedCollectionItem;
   sourceItems: CollectionItemSummary[];
   targetItems: CollectionItemSummary[];
   targetCollectionId: string;
@@ -73,6 +76,13 @@ export function buildItemMoveInput(args: {
   const targetLocation = findCollectionItemLocation(args.targetItems, args.targetItemId);
 
   if (!sourceLocation || !targetLocation || targetLocation.item.id === args.dragged.itemId) {
+    return null;
+  }
+
+  if (
+    sourceLocation.item.kind === "folder" &&
+    isCollectionItemDescendant(sourceLocation.item, targetLocation.item.id)
+  ) {
     return null;
   }
 
@@ -113,6 +123,20 @@ export function buildItemMoveInput(args: {
     targetParentId,
     targetIndex
   };
+}
+
+function isCollectionItemDescendant(item: CollectionItemSummary, maybeDescendantId: string): boolean {
+  if (item.kind !== "folder") {
+    return false;
+  }
+
+  return item.children.some((child) => {
+    if (child.id === maybeDescendantId) {
+      return true;
+    }
+
+    return isCollectionItemDescendant(child, maybeDescendantId);
+  });
 }
 
 function findCollectionItemLocation(

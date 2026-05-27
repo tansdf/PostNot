@@ -6,6 +6,12 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.20.8] - 2026-05-27
+
+### Added
+
+- New collection folders are inserted at the top of their parent list, and folders can now be reordered or moved with drag-and-drop alongside saved requests.
+
 ## [0.20.7] - 2026-05-25
 
 ### Added

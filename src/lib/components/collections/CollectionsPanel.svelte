@@ -2,7 +2,7 @@
   import type { CollectionItemSummary, CollectionSummary } from "$lib/api/types";
 
   import {
-    type DraggedCollectionRequest
+    type DraggedCollectionItem
   } from "$lib/collections/drag-and-drop";
   import FolderGlyph from "$lib/components/icons/FolderGlyph.svelte";
   import { collectionDnd } from "$lib/stores/collection-dnd.svelte";
@@ -87,21 +87,22 @@
     return `${childCount} item${childCount === 1 ? "" : "s"}`;
   }
 
-  function createDraggedRequest(item: CollectionItemSummary): DraggedCollectionRequest {
+  function createDraggedItem(item: CollectionItemSummary): DraggedCollectionItem {
     return {
       itemId: item.id,
       collectionId: item.collectionId,
       parentId: item.parentId ?? null,
-      name: item.name
+      name: item.name,
+      kind: item.kind
     };
   }
 
-  function handleRequestPointerDown(event: PointerEvent, item: CollectionItemSummary) {
+  function handleItemPointerDown(event: PointerEvent, item: CollectionItemSummary) {
     if (event.button !== 0 || collections.isMovingCollectionItem) {
       return;
     }
 
-    collectionDnd.beginPotentialDrag(createDraggedRequest(item), event.pointerId, {
+    collectionDnd.beginPotentialDrag(createDraggedItem(item), event.pointerId, {
       x: event.clientX,
       y: event.clientY
     });
@@ -199,13 +200,13 @@
                 "collection-item",
                 item.kind === "folder" && "collection-folder-item",
                 item.id === revealedItemId && "collection-item-revealed",
-                item.kind === "request" && collectionDnd.isDraggingRequest(item.id) && "collection-item-dragging",
+                collectionDnd.isDraggingItem(item.id) && "collection-item-dragging",
                 collection?.id && collectionDnd.matchesDropIndicator(collection.id, item.id, "before") && "collection-drop-target-before",
                 collection?.id && collectionDnd.matchesDropIndicator(collection.id, item.id, "after") && "collection-drop-target-after",
                 item.kind === "folder" && collection?.id && collectionDnd.matchesDropIndicator(collection.id, item.id, "inside") && "collection-drop-target-inside"
               ]}
               style={`--tree-depth:${depth};`}
-              onpointerdown={item.kind === "request" ? (event) => handleRequestPointerDown(event, item) : undefined}
+              onpointerdown={item.kind === "request" ? (event) => handleItemPointerDown(event, item) : undefined}
               data-collection-drop={collection ? "item" : undefined}
               data-collection-id={collection?.id}
               data-item-id={item.id}
@@ -214,7 +215,8 @@
             >
               <div class="saved-request-meta">
                 {#if item.kind === "folder"}
-                  <div class="collection-folder-heading">
+                  <!-- svelte-ignore a11y_no_static_element_interactions -->
+                  <div class="collection-folder-heading" onpointerdown={(event) => handleItemPointerDown(event, item)}>
                     <span class="collection-folder-icon" aria-hidden="true">
                       <FolderGlyph variant="panel-closed" />
                     </span>

@@ -93,7 +93,7 @@
   let selectedHistoryId = $state("");
   let selectedHistoryDetail: HistoryEntryDetail | null = $state(null);
   let isSaveDialogOpen = $state(false);
-  let saveDialogMode = $state<"replace-tab" | "copy-new-tab">("replace-tab");
+  let saveDialogMode = $state<"replace-tab" | "save-as">("replace-tab");
   let saveDialogTabId = $state("");
   let isRequestImportDialogOpen = $state(false);
   let requestImportFormat = $state<"curl" | "openapi">("curl");
@@ -1290,7 +1290,7 @@ paths:
       return;
     }
 
-    saveDialogMode = "copy-new-tab";
+    saveDialogMode = "save-as";
     saveDialogTabId = tab.id;
     saveTargetCollectionId = collections.selectedCollectionId || tab.collectionId || collections.collections[0].id;
     saveTargetParentId = tab.parentId ?? null;
@@ -1315,7 +1315,7 @@ paths:
     const draftToSave =
       saveDialogTabId === requestOwnerTabId ? cloneRequestDraft(request) : cloneRequestDraft(saveTab.request);
 
-    if (saveDialogMode === "copy-new-tab") {
+    if (saveDialogMode === "save-as") {
       const savedSummary = await collections.saveNewRequest(saveTargetCollectionId, draftToSave, saveTargetParentId);
 
       if (!savedSummary) {
@@ -1323,15 +1323,8 @@ paths:
         return;
       }
 
-      try {
-        const detail = await getSavedRequest(savedSummary.id);
-        const openedTab = requestWorkspace.openSavedRequest(detail);
-        bumpRequestTabsScrollIntoView(openedTab.id);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        requestWorkspace.setTabError(saveTab.id, message);
-        return;
-      }
+      requestWorkspace.setTabSaved(saveTab.id, savedSummary, draftToSave);
+      bumpRequestTabsScrollIntoView(saveTab.id);
 
       isSaveDialogOpen = false;
       saveDialogMode = "replace-tab";
@@ -1714,7 +1707,7 @@ paths:
       aria-labelledby="save-request-title"
     >
       <div class="editor-header">
-        <h2 id="save-request-title">{saveDialogMode === "copy-new-tab" ? "Save copy" : "Save request"}</h2>
+        <h2 id="save-request-title">{saveDialogMode === "save-as" ? "Save as" : "Save request"}</h2>
       </div>
 
       <div class="editor-block request-save-dialog-body">
@@ -1767,7 +1760,7 @@ paths:
 
         <div class="collections-page-actions">
           <button class="send-button" type="button" onclick={confirmSaveRequest} disabled={collections.isSavingRequest}>
-            {collections.isSavingRequest ? "Saving..." : saveDialogMode === "copy-new-tab" ? "Save copy" : "Save request"}
+            {collections.isSavingRequest ? "Saving..." : saveDialogMode === "save-as" ? "Save as" : "Save request"}
           </button>
           <button class="ghost-button" type="button" onclick={closeSaveDialog}>
             Cancel

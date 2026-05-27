@@ -36,22 +36,22 @@
         return;
       }
 
-      const draggedRequest = collectionDnd.draggedRequest;
+      const draggedItem = collectionDnd.draggedRequest;
       const dropIndicator = collectionDnd.dropIndicator;
 
-      if (!collectionDnd.isDragging || !draggedRequest || !dropIndicator) {
+      if (!collectionDnd.isDragging || !draggedItem || !dropIndicator) {
         collectionDnd.finishDrag();
         return;
       }
 
-      const sourceItems = collections.collectionItemsByCollection[draggedRequest.collectionId] ?? [];
+      const sourceItems = collections.collectionItemsByCollection[draggedItem.collectionId] ?? [];
       const targetItems = collections.collectionItemsByCollection[dropIndicator.collectionId] ?? [];
 
       const input =
         dropIndicator.placement === "root"
-          ? buildRootMoveInput(draggedRequest, sourceItems, dropIndicator.collectionId)
+          ? buildRootMoveInput(draggedItem, sourceItems, dropIndicator.collectionId)
           : buildItemMoveInput({
-              dragged: draggedRequest,
+              dragged: draggedItem,
               sourceItems,
               targetItems,
               targetCollectionId: dropIndicator.collectionId,
@@ -65,7 +65,7 @@
         return;
       }
 
-      await collections.moveSavedRequest(draggedRequest.itemId, draggedRequest.collectionId, input);
+      await collections.moveCollectionItem(draggedItem.itemId, draggedItem.collectionId, input);
     }
 
     function handlePointerCancel(event: PointerEvent) {
@@ -150,7 +150,7 @@
     style={`left:${collectionDnd.pointer.x + 14}px; top:${collectionDnd.pointer.y + 14}px;`}
     aria-hidden="true"
   >
-    <strong>{collectionDnd.draggedRequest.name || "Saved request"}</strong>
-    <span>Move request</span>
+    <strong>{collectionDnd.draggedRequest.name || (collectionDnd.draggedRequest.kind === "folder" ? "Folder" : "Saved request")}</strong>
+    <span>Move {collectionDnd.draggedRequest.kind === "folder" ? "folder" : "request"}</span>
   </div>
 {/if}

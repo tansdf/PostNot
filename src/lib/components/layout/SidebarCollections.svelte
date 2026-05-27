@@ -7,7 +7,7 @@
 
   import { getCollectionSidebarState, saveCollectionSidebarState } from "$lib/api/commands";
   import type { CollectionItemSummary, CollectionSearchResult } from "$lib/api/types";
-  import { type DraggedCollectionRequest } from "$lib/collections/drag-and-drop";
+  import { type DraggedCollectionItem } from "$lib/collections/drag-and-drop";
   import FolderGlyph from "$lib/components/icons/FolderGlyph.svelte";
   import { collectionDnd } from "$lib/stores/collection-dnd.svelte";
   import { collectionSearch } from "$lib/stores/collection-search.svelte";
@@ -410,21 +410,22 @@
     await clearSearchAndScrollSidebarToResult(result);
   }
 
-  function createDraggedRequest(item: CollectionItemSummary): DraggedCollectionRequest {
+  function createDraggedItem(item: CollectionItemSummary): DraggedCollectionItem {
     return {
       itemId: item.id,
       collectionId: item.collectionId,
       parentId: item.parentId ?? null,
-      name: item.name
+      name: item.name,
+      kind: item.kind
     };
   }
 
-  function handleRequestPointerDown(event: PointerEvent, item: CollectionItemSummary) {
+  function handleItemPointerDown(event: PointerEvent, item: CollectionItemSummary) {
     if (event.button !== 0 || collections.isMovingCollectionItem || collectionSearch.isActive) {
       return;
     }
 
-    collectionDnd.beginPotentialDrag(createDraggedRequest(item), event.pointerId, {
+    collectionDnd.beginPotentialDrag(createDraggedItem(item), event.pointerId, {
       x: event.clientX,
       y: event.clientY
     });
@@ -774,12 +775,14 @@
                                 "sidebar-folder-button",
                                 expandedFolderIds.has(item.id) && "sidebar-folder-open",
                                 revealedSidebarItemId === item.id && "sidebar-search-revealed",
+                                collectionDnd.isDraggingItem(item.id) && "sidebar-request-dragging",
                                 collectionDnd.matchesDropIndicator(collection.id, item.id, "before") && "sidebar-drop-target-before",
                                 collectionDnd.matchesDropIndicator(collection.id, item.id, "after") && "sidebar-drop-target-after",
                                 collectionDnd.matchesDropIndicator(collection.id, item.id, "inside") && "sidebar-drop-target-inside"
                               ]}
                               type="button"
                               onclick={() => toggleFolder(item.id)}
+                              onpointerdown={(event) => handleItemPointerDown(event, item)}
                               aria-expanded={expandedFolderIds.has(item.id)}
                               style={`--tree-depth:${depth};`}
                               data-collection-drop="item"
@@ -820,7 +823,7 @@
                             type="button"
                             onclick={() => openSavedRequest(collection.id, item.id)}
                             style={`--tree-depth:${depth};`}
-                            onpointerdown={(event) => handleRequestPointerDown(event, item)}
+                            onpointerdown={(event) => handleItemPointerDown(event, item)}
                             data-collection-drop="item"
                             data-collection-id={collection.id}
                             data-item-id={item.id}
