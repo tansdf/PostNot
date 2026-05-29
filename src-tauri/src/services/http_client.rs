@@ -1,7 +1,7 @@
 use std::{
     collections::{HashMap, VecDeque},
     path::Path,
-    sync::{LazyLock, Mutex},
+    sync::{Arc, LazyLock, Mutex},
     time::{Duration, Instant},
 };
 
@@ -26,6 +26,15 @@ struct ClientCacheKey {
 }
 
 const HTTP_CLIENT_CACHE_MAX: usize = 32;
+
+#[derive(Clone, Debug)]
+pub struct ResponseDownloadProgress {
+    pub downloaded_bytes: usize,
+    pub content_length: Option<u64>,
+    pub finished: bool,
+}
+
+pub type ResponseProgressSink = Arc<dyn Fn(ResponseDownloadProgress) + Send + Sync>;
 
 struct ClientCache {
     clients: HashMap<ClientCacheKey, Client>,
@@ -88,6 +97,7 @@ pub async fn send_request(
     payload: &SendRequestPayload,
     settings: &AppSettings,
     cancel_rx: watch::Receiver<bool>,
+    progress_sink: Option<ResponseProgressSink>,
 ) -> AppResult<ResponsePayload> {
     let mut cancel_rx = cancel_rx;
     let client = client_for_settings(settings)?;
@@ -233,11 +243,27 @@ pub async fn send_request(
         })
         .collect();
 
-    let body_bytes = read_full_body(&mut response, &mut cancel_rx).await?;
+    if let Some(progress_sink) = progress_sink.as_ref() {
+        progress_sink(ResponseDownloadProgress {
+            downloaded_bytes: 0,
+            content_length,
+            finished: false,
+        });
+    }
+
+    let body_bytes = read_full_body(&mut response, &mut cancel_rx, progress_sink.as_ref()).await?;
     let body_size = content_length
         .and_then(|value| usize::try_from(value).ok())
         .unwrap_or(body_bytes.len());
     let body_text = String::from_utf8_lossy(&body_bytes).to_string();
+
+    if let Some(progress_sink) = progress_sink.as_ref() {
+        progress_sink(ResponseDownloadProgress {
+            downloaded_bytes: body_bytes.len(),
+            content_length,
+            finished: true,
+        });
+    }
 
     Ok(ResponsePayload {
         status_code: Some(status.as_u16()),
@@ -254,6 +280,7 @@ pub async fn send_request(
 async fn read_full_body(
     response: &mut Response,
     cancel_rx: &mut watch::Receiver<bool>,
+    progress_sink: Option<&ResponseProgressSink>,
 ) -> AppResult<Vec<u8>> {
     let mut bytes = Vec::new();
 
@@ -268,6 +295,14 @@ async fn read_full_body(
         };
 
         bytes.extend_from_slice(&chunk);
+
+        if let Some(progress_sink) = progress_sink {
+            progress_sink(ResponseDownloadProgress {
+                downloaded_bytes: bytes.len(),
+                content_length: response.content_length(),
+                finished: false,
+            });
+        }
     }
 }
 
@@ -338,6 +373,7 @@ mod tests {
             },
             &default_settings(),
             cancel_rx,
+            None,
         )
         .await
         .expect("request should succeed");
@@ -396,6 +432,7 @@ mod tests {
             },
             &default_settings(),
             cancel_rx,
+            None,
         )
         .await
         .expect("large response should succeed");
@@ -440,6 +477,7 @@ mod tests {
             },
             &default_settings(),
             cancel_rx,
+            None,
         )
         .await
         .expect("compressed response should decode");

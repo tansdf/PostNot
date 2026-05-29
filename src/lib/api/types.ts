@@ -75,6 +75,13 @@ export type SendRequestResult = {
   historyPersistenceError: string | null;
 };
 
+export type RequestResponseProgress = {
+  requestId: string;
+  downloadedBytes: number;
+  contentLength: number | null;
+  finished: boolean;
+};
+
 export type RequestPreviewSettings = {
   requestTimeoutMs: number;
   followRedirects: boolean;
@@ -591,7 +598,10 @@ export function cloneRequestDraft(request: RequestDraft): RequestDraft {
 }
 
 export function cloneResponsePayload(response: ResponsePayload): ResponsePayload {
-  return deepCloneSerializable(response);
+  return {
+    ...response,
+    headers: response.headers.map((header) => ({ ...header }))
+  };
 }
 
 export function cloneRequestScriptExecution(execution: RequestScriptExecution): RequestScriptExecution {

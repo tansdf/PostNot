@@ -2,6 +2,7 @@
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { page } from "$app/state";
+  import { listen } from "@tauri-apps/api/event";
   import { onMount, tick } from "svelte";
 
   import {
@@ -11,6 +12,7 @@
     getHistoryEntry,
     getSavedRequest,
     getSettings,
+    hasTauriRuntime,
     importCurlRequestToDraft,
     importOpenApiRequestToDraft,
     listEnvironments,
@@ -31,6 +33,7 @@
     KeyValueRow,
     RequestDraft,
     RequestPreview,
+    RequestResponseProgress,
     RequestWorkspaceTab,
     RequestScriptExecution
   } from "$lib/api/types";
@@ -88,6 +91,10 @@
     readCachedJson<number>(UI_CACHE_KEYS.environmentsActiveVarCount)
   );
   let isEnvironmentsLoading = $state(true);
+  let activeResponseProgress: RequestResponseProgress | null = $state(null);
+  let sendElapsedMs = $state(0);
+  let sendStartedAt = 0;
+  let sendTimer: ReturnType<typeof setInterval> | null = null;
   let isEnvironmentChanging = $state(false);
   let environmentsErrorText = $state("");
   let selectedHistoryId = $state("");
@@ -523,6 +530,28 @@ paths:
 
   onMount(() => {
     void initializePage();
+
+    let isDisposed = false;
+    let unlistenProgress: (() => void) | null = null;
+    if (hasTauriRuntime()) {
+      void listen<RequestResponseProgress>("request-response-progress", (event) => {
+        if (!isDisposed) {
+          activeResponseProgress = event.payload;
+        }
+      }).then((unlisten) => {
+        if (isDisposed) {
+          unlisten();
+        } else {
+          unlistenProgress = unlisten;
+        }
+      });
+    }
+
+    return () => {
+      isDisposed = true;
+      unlistenProgress?.();
+      stopSendTimer();
+    };
   });
 
   $effect(() => {
@@ -888,6 +917,23 @@ paths:
     return normalized.length > 240 ? `${normalized.slice(0, 240)}...` : normalized;
   }
 
+  function startSendTimer() {
+    stopSendTimer();
+    activeResponseProgress = null;
+    sendElapsedMs = 0;
+    sendStartedAt = Date.now();
+    sendTimer = setInterval(() => {
+      sendElapsedMs = Date.now() - sendStartedAt;
+    }, 100);
+  }
+
+  function stopSendTimer() {
+    if (sendTimer) {
+      clearInterval(sendTimer);
+      sendTimer = null;
+    }
+  }
+
   async function handleFetchOAuth2Token(options: { persistToEnvironment: boolean }) {
     const auth = request.auth;
     const tokenUrl = auth.oauth2TokenUrl.trim();
@@ -1127,6 +1173,7 @@ paths:
     const requestToSend = cloneRequestDraft(request);
     requestWorkspace.clearTabError(tabId);
     requestWorkspace.markSendStarted(tabId);
+    startSendTimer();
 
     try {
       const inheritedScripts = activeCollectionScripts(tab);
@@ -1205,6 +1252,8 @@ paths:
         executedAt: new Date().toISOString()
       });
     } finally {
+      stopSendTimer();
+      activeResponseProgress = null;
       requestWorkspace.markSendFinished(tabId);
       await loadHistory();
 
@@ -1662,7 +1711,13 @@ paths:
     <div class="response-error">{activeTabErrorText}</div>
   {/if}
 
-  <ResponseViewer response={activeTabResponse} scriptExecution={activeTabScriptExecution} />
+  <ResponseViewer
+    response={activeTabResponse}
+    scriptExecution={activeTabScriptExecution}
+    isSending={activeTabIsSending}
+    progress={activeResponseProgress}
+    elapsedMs={sendElapsedMs}
+  />
 
   <HistoryPanel
     items={history}

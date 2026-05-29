@@ -6,6 +6,17 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.20.9] - 2026-05-29
+
+### Added
+
+- Added live response receive progress on the Requests page, including elapsed time, downloaded bytes, known content length when available, and an indeterminate progress state while waiting for body chunks.
+
+### Fixed
+
+- Large response bodies now render in a lightweight large-body mode instead of forcing expensive JSON parsing, pretty formatting, tokenization, and syntax-highlighted DOM output that could freeze or crash the UI.
+- Reduced avoidable frontend cloning of full response bodies and skipped response script worker setup when no inherited or request-level test scripts are configured.
+
 ## [0.20.8] - 2026-05-27
 
 ### Added

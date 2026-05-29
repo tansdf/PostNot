@@ -1,6 +1,9 @@
 <script lang="ts">
   type Token = { type: string; value: string };
 
+  const JSON_HIGHLIGHT_LIMIT = 512 * 1024;
+  const LARGE_RESPONSE_LIMIT = 1024 * 1024;
+
   let {
     source = "",
     maxHeight = "clamp(16rem, 62vh, 44rem)"
@@ -107,6 +110,7 @@
 
   function tryFormat(raw: string): string {
     if (!raw) return "";
+    if (raw.length > JSON_HIGHLIGHT_LIMIT) return raw;
     try {
       return JSON.stringify(JSON.parse(raw), null, 2);
     } catch {
@@ -114,22 +118,56 @@
     }
   }
 
-  let isJson = $derived((() => {
+  let isLargeResponse = $derived(source.length > LARGE_RESPONSE_LIMIT);
+  let isHighlightableJson = $derived((() => {
     if (!source) return false;
+    if (source.length > JSON_HIGHLIGHT_LIMIT) return false;
     try { JSON.parse(source); return true; } catch { return false; }
   })());
 
   let formatted = $derived(tryFormat(source));
-  let tokens = $derived(isJson ? tokenize(formatted) : []);
+  let tokens = $derived(isHighlightableJson ? tokenize(formatted) : []);
+  let largeResponseLabel = $derived(`${formatBytes(source.length)} response shown in large-body mode`);
 
   function handleCopy() {
     void navigator.clipboard.writeText(formatted || source);
+  }
+
+  function formatBytes(bytes: number) {
+    if (!Number.isFinite(bytes) || bytes <= 0) {
+      return "0 B";
+    }
+
+    const units = ["B", "KB", "MB", "GB"];
+    let value = bytes;
+    let unitIndex = 0;
+
+    while (value >= 1024 && unitIndex < units.length - 1) {
+      value /= 1024;
+      unitIndex += 1;
+    }
+
+    const precision = value >= 10 || unitIndex === 0 ? 0 : 1;
+    return `${value.toFixed(precision)} ${units[unitIndex]}`;
   }
 </script>
 
 {#if !source}
   <pre class="json-viewer" style:max-height={maxHeight}></pre>
-{:else if isJson}
+{:else if isLargeResponse}
+  <div class="json-viewer-wrap">
+    <button class="json-copy-button" type="button" onclick={handleCopy} title="Copy to clipboard">Copy</button>
+    <div class="large-response-note">{largeResponseLabel}</div>
+    <textarea
+      class="json-viewer large-response-viewer"
+      style:max-height={maxHeight}
+      readonly
+      spellcheck="false"
+      value={source}
+      aria-label="Large response body"
+    ></textarea>
+  </div>
+{:else if isHighlightableJson}
   <div class="json-viewer-wrap">
     <button class="json-copy-button" type="button" onclick={handleCopy} title="Copy to clipboard">Copy</button>
     <pre class="json-viewer json-highlighted" style:max-height={maxHeight}>{#each tokens as token, i (i)}{#if token.type === "key"}<span class="jt-key">{token.value}</span>{:else if token.type === "string"}<span class="jt-string">{token.value}</span>{:else if token.type === "number"}<span class="jt-number">{token.value}</span>{:else if token.type === "boolean"}<span class="jt-bool">{token.value}</span>{:else if token.type === "null"}<span class="jt-null">{token.value}</span>{:else if token.type === "bracket"}<span class="jt-bracket">{token.value}</span>{:else if token.type === "colon"}<span class="jt-colon">{token.value}</span>{:else if token.type === "comma"}<span class="jt-comma">{token.value}</span>{:else}{token.value}{/if}{/each}</pre>

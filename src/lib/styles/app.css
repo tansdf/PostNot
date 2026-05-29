@@ -1313,6 +1313,75 @@ select option {
   font-size: 0.82rem;
 }
 
+.response-receive-status {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-soft);
+  background: var(--surface-subtle);
+}
+
+.response-receive-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: 0.86rem;
+}
+
+.response-live-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--bg-accent);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--bg-accent) 36%, transparent);
+  animation: response-live-pulse 1.25s ease-in-out infinite;
+}
+
+.response-receive-track {
+  position: relative;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--border-soft) 58%, transparent);
+}
+
+.response-receive-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  border-radius: inherit;
+  background: var(--bg-accent);
+  transition: width 160ms ease;
+}
+
+.response-receive-bar-indeterminate {
+  width: 42%;
+  animation: response-receive-slide 1.15s ease-in-out infinite;
+}
+
+@keyframes response-live-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--bg-accent) 36%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+
+@keyframes response-receive-slide {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(260%);
+  }
+}
+
 .response-columns {
   margin-top: 18px;
   display: grid;
@@ -3699,6 +3768,22 @@ body.collection-dnd-active {
 .json-copy-button:hover {
   background: var(--bg-panel-strong);
   color: var(--text-primary);
+}
+
+.large-response-note {
+  margin: 0 0 8px;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+.large-response-viewer {
+  min-height: clamp(18rem, 62vh, 44rem);
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-soft);
+  background: var(--bg-code, var(--bg-panel-strong));
+  color: var(--text-primary);
+  resize: vertical;
 }
 
 .jt-key { color: #8fbcbb; }

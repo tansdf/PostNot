@@ -2,12 +2,24 @@
   import type { RequestScriptExecution, ResponsePayload } from "$lib/api/types";
   import JsonViewer from "$lib/components/response/JsonViewer.svelte";
 
+  type RequestResponseProgress = {
+    downloadedBytes: number;
+    contentLength: number | null;
+    finished: boolean;
+  };
+
   let {
     response = null,
-    scriptExecution = null
+    scriptExecution = null,
+    isSending = false,
+    progress = null,
+    elapsedMs = 0
   }: {
     response?: ResponsePayload | null;
     scriptExecution?: RequestScriptExecution | null;
+    isSending?: boolean;
+    progress?: RequestResponseProgress | null;
+    elapsedMs?: number;
   } = $props();
 
   let responseErrorSummary = $derived.by(() => {
@@ -17,6 +29,55 @@
 
     return response.statusText || "Request failed";
   });
+
+  let progressPercent = $derived(
+    progress?.contentLength
+      ? Math.min(100, Math.max(0, (progress.downloadedBytes / progress.contentLength) * 100))
+      : null
+  );
+  let receiveLabel = $derived.by(() => {
+    if (!isSending) {
+      return "";
+    }
+
+    const elapsed = formatDuration(elapsedMs);
+    if (!progress) {
+      return `Connecting... ${elapsed}`;
+    }
+
+    const downloaded = formatBytes(progress.downloadedBytes);
+    if (progress.contentLength) {
+      return `Receiving ${downloaded} of ${formatBytes(progress.contentLength)} · ${elapsed}`;
+    }
+
+    return `Receiving ${downloaded} · ${elapsed}`;
+  });
+
+  function formatBytes(bytes: number) {
+    if (!Number.isFinite(bytes) || bytes <= 0) {
+      return "0 B";
+    }
+
+    const units = ["B", "KB", "MB", "GB"];
+    let value = bytes;
+    let unitIndex = 0;
+
+    while (value >= 1024 && unitIndex < units.length - 1) {
+      value /= 1024;
+      unitIndex += 1;
+    }
+
+    const precision = value >= 10 || unitIndex === 0 ? 0 : 1;
+    return `${value.toFixed(precision)} ${units[unitIndex]}`;
+  }
+
+  function formatDuration(ms: number) {
+    if (!Number.isFinite(ms) || ms <= 0) {
+      return "0.0 s";
+    }
+
+    return `${(ms / 1000).toFixed(1)} s`;
+  }
 </script>
 
 <section class="panel response-panel">
@@ -31,6 +92,22 @@
       </div>
     {/if}
   </div>
+
+  {#if isSending}
+    <div class="response-receive-status">
+      <div class="response-receive-label">
+        <span class="response-live-dot" aria-hidden="true"></span>
+        <span>{receiveLabel}</span>
+      </div>
+      <div class="response-receive-track" aria-hidden="true">
+        {#if progressPercent !== null}
+          <span class="response-receive-bar" style:width={`${progressPercent}%`}></span>
+        {:else}
+          <span class="response-receive-bar response-receive-bar-indeterminate"></span>
+        {/if}
+      </div>
+    </div>
+  {/if}
 
   {#if response}
     {#if response.errorText}

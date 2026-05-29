@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
 
@@ -12,11 +14,21 @@ use crate::{
 };
 
 const HISTORY_PERSISTENCE_EVENT: &str = "history-persistence-error";
+const RESPONSE_PROGRESS_EVENT: &str = "request-response-progress";
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct HistoryPersistenceEvent {
     message: String,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RequestResponseProgressEvent {
+    request_id: String,
+    downloaded_bytes: usize,
+    content_length: Option<u64>,
+    finished: bool,
 }
 
 fn emit_history_persistence_error(app: &AppHandle, message: String) {
@@ -46,8 +58,27 @@ pub async fn send_request(
         &resolved_request.secret_usage,
     );
 
-    let request_result =
-        http_client::send_request(&resolved_request.payload, &settings, cancel_rx).await;
+    let progress_app = app.clone();
+    let progress_request_id = request_id.clone();
+    let progress_sink: http_client::ResponseProgressSink = Arc::new(move |progress| {
+        let _ = progress_app.emit(
+            RESPONSE_PROGRESS_EVENT,
+            RequestResponseProgressEvent {
+                request_id: progress_request_id.clone(),
+                downloaded_bytes: progress.downloaded_bytes,
+                content_length: progress.content_length,
+                finished: progress.finished,
+            },
+        );
+    });
+
+    let request_result = http_client::send_request(
+        &resolved_request.payload,
+        &settings,
+        cancel_rx,
+        Some(progress_sink),
+    )
+    .await;
 
     let result = match request_result {
         Ok(response) => {

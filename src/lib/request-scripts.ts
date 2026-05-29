@@ -188,7 +188,10 @@ function cloneEnvironmentVariables(variables: EnvironmentVariable[]): Environmen
 }
 
 function cloneResponsePayload(response: ResponsePayload): ResponsePayload {
-  return JSON.parse(JSON.stringify(response)) as ResponsePayload;
+  return {
+    ...response,
+    headers: response.headers.map((header) => ({ ...header }))
+  };
 }
 
 function cloneInheritedScripts(scripts: InheritedRequestScripts | null): InheritedRequestScripts | null {
@@ -1004,6 +1007,10 @@ export async function runTestScript(
   inheritedScripts: InheritedRequestScripts | null = null,
   runtimeContext: ScriptRuntimeContext = {}
 ): Promise<RequestScriptExecution> {
+  if (!hasTestScriptSources(request, inheritedScripts)) {
+    return createEmptyExecution();
+  }
+
   try {
     return await runScriptInWorker(
       {
@@ -1023,6 +1030,14 @@ export async function runTestScript(
       testScriptErrorText: `Script worker: ${normalizeScriptError(error)}`
     };
   }
+}
+
+function hasTestScriptSources(request: RequestDraft, inheritedScripts: InheritedRequestScripts | null) {
+  if (request.testScript.trim() || inheritedScripts?.testScript.trim()) {
+    return true;
+  }
+
+  return (inheritedScripts?.folderScripts ?? []).some((folder) => folder.testScript.trim());
 }
 
 async function runTestScriptInPage(
