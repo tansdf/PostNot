@@ -981,6 +981,7 @@
             highlightTokens={jsonTokens}
             highlightOverlayClassName="json-editor-overlay"
             placeholder={'{"hello":"world"}'}
+            spellcheck={false}
             onValueInput={(nextValue) => updateBodyField("raw", nextValue)}
             onExtraKeydown={handleJsonKeydown}
           />

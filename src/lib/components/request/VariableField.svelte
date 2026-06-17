@@ -79,6 +79,7 @@
   let historyEntries = $state<FieldHistoryEntry[]>([]);
   let historyIndex = $state(-1);
   let isApplyingHistory = false;
+  let highlightSyncFrame: number | null = null;
 
   const variablePattern = /{{\s*(\$[A-Za-z0-9_.-]+(?:\[\d+\])?|[A-Za-z0-9_.-]+)\s*}}/g;
   const dynamicVariableOptions: VariableOption[] = [
@@ -127,25 +128,43 @@
   });
 
   $effect(() => {
+    if (!fieldElement) {
+      return;
+    }
+
+    fieldElement.setAttribute('autocorrect', 'off');
+  });
+  $effect(() => {
     if (!hasHighlightOverlay || !fieldElement || !highlightOverlayElement) {
       return;
     }
 
     const activeFieldElement = fieldElement;
+    const resizeObserver = new ResizeObserver(() => scheduleHighlightOverlaySync());
 
-    const syncScroll = () => {
-      if (!highlightOverlayElement) {
-        return;
+    scheduleHighlightOverlaySync();
+    resizeObserver.observe(activeFieldElement);
+    activeFieldElement.addEventListener('scroll', syncHighlightOverlay);
+
+    return () => {
+      activeFieldElement.removeEventListener('scroll', syncHighlightOverlay);
+      resizeObserver.disconnect();
+      if (highlightSyncFrame !== null) {
+        cancelAnimationFrame(highlightSyncFrame);
+        highlightSyncFrame = null;
       }
-
-      highlightOverlayElement.scrollTop = activeFieldElement.scrollTop;
-      highlightOverlayElement.scrollLeft = activeFieldElement.scrollLeft;
     };
+  });
 
-    syncScroll();
-    activeFieldElement.addEventListener("scroll", syncScroll);
+  $effect(() => {
+    value;
+    highlightTokens;
 
-    return () => activeFieldElement.removeEventListener("scroll", syncScroll);
+    if (!hasHighlightOverlay) {
+      return;
+    }
+
+    void tick().then(() => scheduleHighlightOverlaySync());
   });
 
   function clampSuggestionIndex() {
@@ -272,6 +291,52 @@
     value = nextValue;
     onValueInput(nextValue);
     pushHistoryEntry(nextValue);
+    scheduleHighlightOverlaySync();
+  }
+  function scheduleHighlightOverlaySync() {
+    if (!hasHighlightOverlay || !fieldElement || !highlightOverlayElement) {
+      return;
+    }
+
+    if (highlightSyncFrame !== null) {
+      cancelAnimationFrame(highlightSyncFrame);
+    }
+
+    highlightSyncFrame = requestAnimationFrame(() => {
+      highlightSyncFrame = null;
+      syncHighlightOverlay();
+    });
+  }
+
+  function syncHighlightOverlay() {
+    if (!fieldElement || !highlightOverlayElement) {
+      return;
+    }
+
+    const computedStyle = window.getComputedStyle(fieldElement);
+
+    highlightOverlayElement.style.width = fieldElement.offsetWidth + 'px';
+    highlightOverlayElement.style.height = fieldElement.offsetHeight + 'px';
+    highlightOverlayElement.style.boxSizing = computedStyle.boxSizing;
+    highlightOverlayElement.style.padding = computedStyle.padding;
+    highlightOverlayElement.style.borderWidth = computedStyle.borderWidth;
+    highlightOverlayElement.style.borderStyle = computedStyle.borderStyle;
+    highlightOverlayElement.style.borderColor = 'transparent';
+    highlightOverlayElement.style.font = computedStyle.font;
+    highlightOverlayElement.style.letterSpacing = computedStyle.letterSpacing;
+    highlightOverlayElement.style.lineHeight = computedStyle.lineHeight;
+    highlightOverlayElement.style.textAlign = computedStyle.textAlign;
+    highlightOverlayElement.style.textIndent = computedStyle.textIndent;
+    highlightOverlayElement.style.textTransform = computedStyle.textTransform;
+    highlightOverlayElement.style.tabSize = computedStyle.tabSize;
+    highlightOverlayElement.style.whiteSpace = computedStyle.whiteSpace;
+    highlightOverlayElement.style.overflowWrap = computedStyle.overflowWrap;
+    highlightOverlayElement.style.wordBreak = computedStyle.wordBreak;
+    highlightOverlayElement.style.overflowX = 'hidden';
+    highlightOverlayElement.style.overflowY = 'hidden';
+    highlightOverlayElement.style.resize = 'none';
+    highlightOverlayElement.scrollTop = fieldElement.scrollTop;
+    highlightOverlayElement.scrollLeft = fieldElement.scrollLeft;
   }
 
   function createHistoryEntry(nextValue: string): FieldHistoryEntry {
@@ -490,6 +555,7 @@
     const target = event.currentTarget as HTMLInputElement | HTMLTextAreaElement;
     updateValue(target.value);
     updateAutocompleteState();
+    scheduleHighlightOverlaySync();
   }
 
   function handleFocus() {
@@ -612,6 +678,7 @@
       <pre
         class={getHighlightOverlayClasses()}
         aria-hidden="true"
+        spellcheck={false}
         bind:this={highlightOverlayElement}
       >{#each highlightTokens as token, index (index)}{#if getHighlightTokenClass(token.type)}<span class={getHighlightTokenClass(token.type)}>{token.value}</span>{:else}{token.value}{/if}{/each}</pre>
     {/if}
@@ -623,6 +690,8 @@
         class={getFieldClasses()}
         {placeholder}
         {spellcheck}
+        autocapitalize=off
+        autocomplete=off
         {disabled}
         bind:value={value}
         onblur={handleBlur}
@@ -639,6 +708,8 @@
         class={getFieldClasses()}
         {placeholder}
         {spellcheck}
+        autocapitalize=off
+        autocomplete=off
         {disabled}
         {type}
         {list}

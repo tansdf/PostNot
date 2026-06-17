@@ -6,6 +6,13 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.20.10] - 2026-06-17
+
+### Fixed
+
+- Hardened the layered JSON request body editor so the editable textarea remains the single interaction surface while the syntax-highlight overlay mirrors size, wrapping, scrolling, and resize changes reliably.
+- Disabled browser spelling and text-assistance behavior for highlighted request editor fields, including both the JSON textarea and its visual overlay.
+
 ## [0.20.9] - 2026-05-29
 
 ### Added
