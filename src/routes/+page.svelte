@@ -49,7 +49,7 @@
   import JsonViewer from "$lib/components/response/JsonViewer.svelte";
   import ResponseViewer from "$lib/components/response/ResponseViewer.svelte";
   import { createStaleGuard } from "$lib/async-stale-guard";
-  import { modalFocusTrap } from "$lib/modal-focus-trap";
+  import { modalBackdropDismiss, modalFocusTrap } from "$lib/modal-focus-trap";
   import {
     createEmptyRequestScriptExecution,
     type InheritedRequestScripts,
@@ -1489,13 +1489,6 @@ paths:
     requestPreviewErrorText = "";
   }
 
-  function handleModalBackdropKeydown(event: KeyboardEvent, close: () => void) {
-    if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
-      event.preventDefault();
-      close();
-    }
-  }
-
   function openRequestExportDialog() {
     requestExportFormat = "curl";
     requestExportSafety = "redacted";
@@ -1596,13 +1589,6 @@ paths:
       requestImportErrorText = error instanceof Error ? error.message : String(error);
     } finally {
       isImportingRequest = false;
-    }
-  }
-
-  function handleSaveDialogBackdropKeydown(event: KeyboardEvent) {
-    if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
-      event.preventDefault();
-      closeSaveDialog();
     }
   }
 
@@ -1743,16 +1729,8 @@ paths:
 {#if isSaveDialogOpen}
   <div
     class="modal-backdrop"
-    role="button"
-    tabindex="0"
-    aria-label="Close save request dialog"
     use:modalFocusTrap={{ onEscape: closeSaveDialog }}
-    onclick={(event) => {
-      if (event.target === event.currentTarget) {
-        closeSaveDialog();
-      }
-    }}
-    onkeydown={handleSaveDialogBackdropKeydown}
+    use:modalBackdropDismiss={{ onDismiss: closeSaveDialog }}
   >
     <div
       class="panel save-dialog request-save-dialog"
@@ -1829,16 +1807,8 @@ paths:
 {#if isRequestPreviewDialogOpen}
   <div
     class="modal-backdrop"
-    role="button"
-    tabindex="0"
-    aria-label="Close request preview dialog"
     use:modalFocusTrap={{ onEscape: closeRequestPreviewDialog }}
-    onclick={(event) => {
-      if (event.target === event.currentTarget) {
-        closeRequestPreviewDialog();
-      }
-    }}
-    onkeydown={(event) => handleModalBackdropKeydown(event, closeRequestPreviewDialog)}
+    use:modalBackdropDismiss={{ onDismiss: closeRequestPreviewDialog }}
   >
     <div class="panel request-preview-dialog" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="request-preview-title">
       <div class="editor-header import-dialog-header">
@@ -2043,16 +2013,8 @@ paths:
 {#if isRequestExportDialogOpen}
   <div
     class="modal-backdrop"
-    role="button"
-    tabindex="0"
-    aria-label="Close request export dialog"
     use:modalFocusTrap={{ onEscape: closeRequestExportDialog }}
-    onclick={(event) => {
-      if (event.target === event.currentTarget) {
-        closeRequestExportDialog();
-      }
-    }}
-    onkeydown={(event) => handleModalBackdropKeydown(event, closeRequestExportDialog)}
+    use:modalBackdropDismiss={{ onDismiss: closeRequestExportDialog }}
   >
     <div class="panel save-dialog" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="request-export-title">
       <div class="editor-header import-dialog-header">
@@ -2141,21 +2103,8 @@ paths:
 {#if isRequestImportDialogOpen}
   <div
     class="modal-backdrop"
-    role="button"
-    tabindex="0"
-    aria-label="Close request import dialog"
     use:modalFocusTrap={{ onEscape: closeRequestImportDialog }}
-    onclick={(event) => {
-      if (event.target === event.currentTarget) {
-        closeRequestImportDialog();
-      }
-    }}
-    onkeydown={(event) => {
-      if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
-        event.preventDefault();
-        closeRequestImportDialog();
-      }
-    }}
+    use:modalBackdropDismiss={{ onDismiss: closeRequestImportDialog }}
   >
     <div class="panel save-dialog" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="request-import-title">
       <div class="editor-header import-dialog-header">

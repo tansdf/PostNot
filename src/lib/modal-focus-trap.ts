@@ -7,6 +7,10 @@ export type ModalFocusTrapParams = {
   onEscape: () => void;
 };
 
+export type ModalBackdropDismissParams = {
+  onDismiss: () => void;
+};
+
 function listFocusables(dialog: HTMLElement): HTMLElement[] {
   return Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
     (el) => !el.closest(".sr-only") && !el.hasAttribute("disabled")
@@ -75,6 +79,25 @@ export const modalFocusTrap: Action<HTMLElement, ModalFocusTrapParams> = (backdr
       cancelAnimationFrame(rafId);
       backdrop.removeEventListener("keydown", handleKeydown);
       previousFocus?.focus?.({ preventScroll: true });
+    }
+  };
+};
+
+export const modalBackdropDismiss: Action<HTMLElement, ModalBackdropDismissParams> = (backdrop, { onDismiss }) => {
+  function handlePointerDown(event: PointerEvent) {
+    if (event.target === event.currentTarget) {
+      onDismiss();
+    }
+  }
+
+  backdrop.addEventListener("pointerdown", handlePointerDown);
+
+  return {
+    update(nextParams) {
+      onDismiss = nextParams.onDismiss;
+    },
+    destroy() {
+      backdrop.removeEventListener("pointerdown", handlePointerDown);
     }
   };
 };

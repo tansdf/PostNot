@@ -704,7 +704,7 @@
         <p class="eyebrow">Sequences</p>
         <h2>Playbooks</h2>
       </div>
-      <button class="secondary-button compact" type="button" onclick={handleCreatePlaybook}>New</button>
+      <button class="button-secondary button-compact" type="button" onclick={handleCreatePlaybook}>New</button>
     </div>
 
     {#if isLoading}
@@ -741,9 +741,9 @@
           <h2>{selectedPlaybook.name}</h2>
         </div>
         <div class="playbook-header-actions">
-          <button class="secondary-button compact" type="button" onclick={handleDuplicatePlaybook} disabled={isRunning}>Duplicate</button>
-          <button class="danger-button compact" type="button" onclick={handleDeletePlaybook} disabled={isRunning}>Delete</button>
-          <button class="primary-button compact" type="button" onclick={handleSavePlaybook} disabled={isSavingPlaybook || isRunning}>
+          <button class="button-secondary button-compact" type="button" onclick={handleDuplicatePlaybook} disabled={isRunning}>Duplicate</button>
+          <button class="button-danger button-compact" type="button" onclick={handleDeletePlaybook} disabled={isRunning}>Delete</button>
+          <button class="button-primary button-compact" type="button" onclick={handleSavePlaybook} disabled={isSavingPlaybook || isRunning}>
             {isSavingPlaybook ? "Saving..." : "Save"}
           </button>
         </div>
@@ -876,8 +876,24 @@
                 </div>
               </div>
               <div class="step-actions">
-                <button class="secondary-button compact" type="button" onclick={() => openSavedRequest(step)} disabled={!step.savedRequestId}>Open</button>
-                <button class="danger-button compact" type="button" onclick={() => handleDeleteStep(step)} disabled={isRunning}>Remove</button>
+                <button class="button-secondary button-compact" type="button" onclick={() => openSavedRequest(step)} disabled={!step.savedRequestId}>Open</button>
+                <button
+                  class="icon-button row-action-button row-action-danger"
+                  type="button"
+                  title={`Remove ${displayStepName(step)} from playbook`}
+                  aria-label={`Remove ${displayStepName(step)} from playbook`}
+                  onclick={() => handleDeleteStep(step)}
+                  disabled={isRunning}
+                >
+                  <svg viewBox="0 0 20 20" aria-hidden="true">
+                    <path d="M3 5h14" />
+                    <path d="M8 5V3h4v2" />
+                    <path d="M6 8v8" />
+                    <path d="M10 8v8" />
+                    <path d="M14 8v8" />
+                    <path d="M5 5l1 12h8l1-12" />
+                  </svg>
+                </button>
               </div>
             </article>
           {/each}
@@ -898,9 +914,9 @@
         <h2>Execution</h2>
       </div>
       {#if isRunning}
-        <button class="danger-button compact" type="button" onclick={handleCancelRun}>Cancel</button>
+        <button class="button-danger button-compact" type="button" onclick={handleCancelRun}>Cancel</button>
       {:else}
-        <button class="primary-button compact" type="button" onclick={handleRunPlaybook} disabled={!canRun}>Run</button>
+        <button class="button-primary button-compact" type="button" onclick={handleRunPlaybook} disabled={!canRun}>Run</button>
       {/if}
     </div>
 
@@ -1311,32 +1327,6 @@
     justify-content: flex-end;
     min-width: 0;
     max-width: 150px;
-  }
-
-  .primary-button,
-  .secondary-button,
-  .danger-button {
-    border-radius: var(--radius-sm);
-    padding: 8px 12px;
-    border: 1px solid var(--border-soft);
-    background: var(--surface-muted);
-    font-weight: 700;
-  }
-
-  .primary-button {
-    background: var(--bg-accent);
-    color: white;
-    border-color: var(--bg-accent);
-  }
-
-  .danger-button {
-    background: var(--surface-danger);
-    color: var(--danger);
-  }
-
-  .compact {
-    padding: 6px 10px;
-    font-size: 0.86rem;
   }
 
   .run-summary {

@@ -686,6 +686,10 @@
     };
   }
 
+  function removeActionLabel(label: string) {
+    return `Remove ${label}`;
+  }
+
   async function fetchOAuth2Token() {
     if (!handleFetchOAuth2Token || isFetchingOAuth2Token) {
       return;
@@ -890,7 +894,22 @@
               placeholder="Value"
               onValueInput={(nextValue) => updateRows("queryParams", index, { value: nextValue })}
             />
-            <button class="icon-button" type="button" onclick={() => removeRow("queryParams", row.id)}>Remove</button>
+            <button
+              class="icon-button row-action-button row-action-danger"
+              type="button"
+              title={removeActionLabel("query parameter row")}
+              aria-label={removeActionLabel("query parameter row")}
+              onclick={() => removeRow("queryParams", row.id)}
+            >
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <path d="M3 5h14" />
+                <path d="M8 5V3h4v2" />
+                <path d="M6 8v8" />
+                <path d="M10 8v8" />
+                <path d="M14 8v8" />
+                <path d="M5 5l1 12h8l1-12" />
+              </svg>
+            </button>
           </div>
         {/each}
       </div>
@@ -939,7 +958,22 @@
                 <option value={headerValue}></option>
               {/each}
             </datalist>
-            <button class="icon-button" type="button" onclick={() => removeRow("headers", row.id)}>Remove</button>
+            <button
+              class="icon-button row-action-button row-action-danger"
+              type="button"
+              title={removeActionLabel("header row")}
+              aria-label={removeActionLabel("header row")}
+              onclick={() => removeRow("headers", row.id)}
+            >
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <path d="M3 5h14" />
+                <path d="M8 5V3h4v2" />
+                <path d="M6 8v8" />
+                <path d="M10 8v8" />
+                <path d="M14 8v8" />
+                <path d="M5 5l1 12h8l1-12" />
+              </svg>
+            </button>
           </div>
         {/each}
       </div>
@@ -1019,7 +1053,22 @@
                 placeholder="Value"
                 onValueInput={(nextValue) => updateFormRow(index, { value: nextValue })}
               />
-              <button class="icon-button" type="button" onclick={() => removeFormRow(row.id)}>Remove</button>
+              <button
+                class="icon-button row-action-button row-action-danger"
+                type="button"
+                title={removeActionLabel("form field row")}
+                aria-label={removeActionLabel("form field row")}
+                onclick={() => removeFormRow(row.id)}
+              >
+                <svg viewBox="0 0 20 20" aria-hidden="true">
+                  <path d="M3 5h14" />
+                  <path d="M8 5V3h4v2" />
+                  <path d="M6 8v8" />
+                  <path d="M10 8v8" />
+                  <path d="M14 8v8" />
+                  <path d="M5 5l1 12h8l1-12" />
+                </svg>
+              </button>
             </div>
           {/each}
 
@@ -1053,7 +1102,22 @@
                     placeholder="Value"
                     onValueInput={(nextValue) => updateFormRow(index, { value: nextValue })}
                   />
-                  <button class="icon-button" type="button" onclick={() => removeFormRow(row.id)}>Remove</button>
+                  <button
+                    class="icon-button row-action-button row-action-danger"
+                    type="button"
+                    title={removeActionLabel("multipart field row")}
+                    aria-label={removeActionLabel("multipart field row")}
+                    onclick={() => removeFormRow(row.id)}
+                  >
+                    <svg viewBox="0 0 20 20" aria-hidden="true">
+                      <path d="M3 5h14" />
+                      <path d="M8 5V3h4v2" />
+                      <path d="M6 8v8" />
+                      <path d="M10 8v8" />
+                      <path d="M14 8v8" />
+                      <path d="M5 5l1 12h8l1-12" />
+                    </svg>
+                  </button>
                 </div>
               {/each}
             </div>
@@ -1099,7 +1163,22 @@
                         placeholder="/path/to/file"
                         onValueInput={(nextValue) => updateFileRow(index, { path: nextValue })}
                       />
-                      <button class="icon-button" type="button" onclick={() => removeFileRow(file.id)}>Remove</button>
+                      <button
+                        class="icon-button row-action-button row-action-danger"
+                        type="button"
+                        title={removeActionLabel("multipart file row")}
+                        aria-label={removeActionLabel("multipart file row")}
+                        onclick={() => removeFileRow(file.id)}
+                      >
+                        <svg viewBox="0 0 20 20" aria-hidden="true">
+                          <path d="M3 5h14" />
+                          <path d="M8 5V3h4v2" />
+                          <path d="M6 8v8" />
+                          <path d="M10 8v8" />
+                          <path d="M14 8v8" />
+                          <path d="M5 5l1 12h8l1-12" />
+                        </svg>
+                      </button>
                     </div>
                     <div class="multipart-file-meta">
                       <span class="multipart-file-name">{file.path ? getFileName(file.path) : "No file selected yet"}</span>

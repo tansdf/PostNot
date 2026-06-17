@@ -6,6 +6,20 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.20.11] - 2026-06-18
+
+### Changed
+
+- Refined the desktop UI system with shared button, icon-button, radius, empty-state, and interaction-state styling so dense request, environment, and playbook controls feel more precise and consistent.
+- Reworked repeated row removal actions in request editors, environment variables, and playbook steps into compact icon buttons with specific accessible labels.
+- Updated Playbooks to use the shared button variants instead of page-local button styles.
+
+### Fixed
+
+- Cleaned up modal backdrop semantics so dialogs no longer expose the backdrop as a keyboard-focusable button while preserving Escape and pointer backdrop dismissal behavior.
+- Improved keyboard focus outlines for the split Send control so both Send and preview halves show a clear focus state.
+- Improved dark-theme contrast for shared danger buttons, including the Playbooks Delete action.
+
 ## [0.20.10] - 2026-06-17
 
 ### Fixed

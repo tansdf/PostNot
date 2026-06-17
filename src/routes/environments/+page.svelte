@@ -23,7 +23,7 @@
     updateEnvironment
   } from "$lib/api/commands";
   import { createStaleGuard } from "$lib/async-stale-guard";
-  import { modalFocusTrap } from "$lib/modal-focus-trap";
+  import { modalBackdropDismiss, modalFocusTrap } from "$lib/modal-focus-trap";
   import { notifications } from "$lib/stores/notifications.svelte";
   import { readCachedJson, writeCachedJson, UI_CACHE_KEYS } from "$lib/ui-cache";
 
@@ -437,6 +437,10 @@
     return revealedSecretRowIds.includes(id);
   }
 
+  function variableName(row: EnvironmentVariable) {
+    return row.key.trim() || "environment variable";
+  }
+
   async function copyVariableValue(row: EnvironmentVariable) {
     try {
       await navigator.clipboard.writeText(row.value);
@@ -723,12 +727,26 @@
                   {environment.isActive ? "Deactivate" : "Set active"}
                 </button>
                 <button
-                  class="icon-button"
+                  class="icon-button row-action-button row-action-danger"
                   type="button"
+                  title={`Delete ${environment.name}`}
+                  aria-label={`Delete ${environment.name}`}
                   onclick={() => handleDelete(environment.id)}
                   disabled={pendingDeleteId === environment.id}
                 >
-                  {pendingDeleteId === environment.id ? "Deleting..." : "Delete"}
+                  {#if pendingDeleteId === environment.id}
+                    <span class="sr-only">Deleting {environment.name}</span>
+                    <span aria-hidden="true">...</span>
+                  {:else}
+                    <svg viewBox="0 0 20 20" aria-hidden="true">
+                      <path d="M3 5h14" />
+                      <path d="M8 5V3h4v2" />
+                      <path d="M6 8v8" />
+                      <path d="M10 8v8" />
+                      <path d="M14 8v8" />
+                      <path d="M5 5l1 12h8l1-12" />
+                    </svg>
+                  {/if}
                 </button>
               </div>
             </article>
@@ -813,13 +831,13 @@
                           {/if}
                         </button>
                       {/if}
-                      <button
-                        class="environment-variable-icon-button"
-                        type="button"
-                        title="Copy value"
-                        aria-label="Copy value"
-                        onclick={() => copyVariableValue(row)}
-                      >
+                    <button
+                      class="environment-variable-icon-button"
+                      type="button"
+                      title={`Copy ${variableName(row)} value`}
+                      aria-label={`Copy ${variableName(row)} value`}
+                      onclick={() => copyVariableValue(row)}
+                    >
                         <svg viewBox="0 0 20 20" aria-hidden="true">
                           <rect x="7" y="3" width="9" height="11" rx="2" />
                           <rect x="4" y="6" width="9" height="11" rx="2" />
@@ -845,7 +863,22 @@
                     <path d="M15.9 10V8.8" />
                   </svg>
                 </button>
-                <button class="icon-button" type="button" onclick={() => removeVariable(row.id)}>Remove</button>
+                <button
+                  class="icon-button row-action-button row-action-danger"
+                  type="button"
+                  title={`Remove ${variableName(row)}`}
+                  aria-label={`Remove ${variableName(row)}`}
+                  onclick={() => removeVariable(row.id)}
+                >
+                  <svg viewBox="0 0 20 20" aria-hidden="true">
+                    <path d="M3 5h14" />
+                    <path d="M8 5V3h4v2" />
+                    <path d="M6 8v8" />
+                    <path d="M10 8v8" />
+                    <path d="M14 8v8" />
+                    <path d="M5 5l1 12h8l1-12" />
+                  </svg>
+                </button>
               </div>
             {/each}
           </div>
@@ -870,17 +903,8 @@
   {#if isImportModalOpen}
     <div
       class="modal-backdrop"
-      role="button"
-      tabindex="0"
-      aria-label="Close import dialog"
       use:modalFocusTrap={{ onEscape: closeImportModal }}
-      onclick={(e) => { if (e.target === e.currentTarget) closeImportModal(); }}
-      onkeydown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          closeImportModal();
-        }
-      }}
+      use:modalBackdropDismiss={{ onDismiss: closeImportModal }}
     >
       <div class="panel save-dialog" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="import-environment-title">
         <div class="editor-header import-dialog-header">

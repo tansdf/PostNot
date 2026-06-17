@@ -248,7 +248,7 @@ button:disabled {
 }
 
 .panel {
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-panel, var(--radius-lg));
   background: var(--bg-panel);
   border: 1px solid var(--border-soft);
   box-shadow: var(--shadow-soft);
@@ -529,12 +529,14 @@ button:disabled {
 .request-send-preview-control {
   flex: 0 0 2.45rem;
   padding: 0;
+  border-radius: var(--radius-pill) 0 0 var(--radius-pill);
   border-right: 1px solid color-mix(in srgb, white 24%, transparent);
 }
 
 .request-send-main-control {
   flex: 1 1 auto;
   padding: 0 12px;
+  border-radius: 0 var(--radius-pill) var(--radius-pill) 0;
   font-size: 0.92rem;
   white-space: nowrap;
 }
@@ -546,8 +548,8 @@ button:disabled {
 
 .request-send-preview-control:focus-visible,
 .request-send-main-control:focus-visible {
-  outline: 2px solid color-mix(in srgb, white 72%, var(--control-selected-border));
-  outline-offset: -2px;
+  outline: none;
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--text-primary) 58%, var(--bg-accent-strong));
   position: relative;
   z-index: 1;
 }
@@ -649,6 +651,10 @@ select option {
   align-self: flex-end;
 }
 
+.button-primary,
+.button-secondary,
+.button-ghost,
+.button-danger,
 .send-button,
 .ghost-button,
 .system-button,
@@ -656,12 +662,12 @@ select option {
 .tab-button {
   box-sizing: border-box;
   border: 0;
-  border-radius: 999px;
-  height: 36px;
-  min-height: 36px;
+  border-radius: var(--radius-control);
+  height: var(--control-height-md);
+  min-height: var(--control-height-md);
   padding: 0 14px;
-  font-size: 0.88rem;
-  transition: 180ms ease;
+  font-size: var(--font-body);
+  transition: background var(--motion-base) var(--ease-standard), border-color var(--motion-base) var(--ease-standard), color var(--motion-base) var(--ease-standard), opacity var(--motion-base) var(--ease-standard);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -680,29 +686,55 @@ select option {
   padding: 0 12px;
 }
 
+.button-primary,
 .send-button {
   background: var(--bg-accent);
   color: white;
   font-weight: 600;
 }
 
+.button-primary:hover:not(:disabled),
 .send-button:hover:not(:disabled) {
   background: var(--bg-accent-strong);
 }
 
+.button-danger,
 .send-button.cancel-button {
   background: var(--danger);
+  border-color: var(--danger);
+  color: white;
 }
 
+.button-danger:hover:not(:disabled),
 .send-button.cancel-button:hover:not(:disabled) {
   background: #a83030;
 }
 
-.send-button:disabled {
-  opacity: 0.62;
-  cursor: wait;
+:root[data-theme="dark"] .button-danger,
+:root[data-theme="dark"] .send-button.cancel-button {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: var(--bg-app);
 }
 
+:root[data-theme="dark"] .button-danger:hover:not(:disabled),
+:root[data-theme="dark"] .send-button.cancel-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 86%, white 14%);
+  border-color: color-mix(in srgb, var(--danger) 86%, white 14%);
+  color: var(--bg-app);
+}
+
+.button-primary:disabled,
+.button-secondary:disabled,
+.button-ghost:disabled,
+.button-danger:disabled,
+.send-button:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.button-secondary,
+.button-ghost,
 .ghost-button,
 .system-button,
 .icon-button,
@@ -712,6 +744,10 @@ select option {
   border: 1px solid var(--border-soft);
 }
 
+.button-secondary:hover,
+.button-ghost:hover,
+.button-secondary:hover:not(:disabled),
+.button-ghost:hover:not(:disabled),
 .ghost-button:hover,
 .system-button:hover,
 .icon-button:hover,
@@ -719,11 +755,16 @@ select option {
   background: var(--control-hover-bg);
 }
 
+.button-ghost {
+  background: transparent;
+}
+
+.button-compact,
 .system-button {
-  height: 32px;
-  min-height: 32px;
+  height: var(--control-height-sm);
+  min-height: var(--control-height-sm);
   padding: 0 12px;
-  font-size: 0.82rem;
+  font-size: var(--font-meta);
   letter-spacing: 0;
 }
 
@@ -1065,6 +1106,7 @@ select option {
   align-items: center;
 }
 
+.row-action-button,
 .environment-variable-icon-actions .environment-variable-icon-button {
   width: 30px;
   height: 30px;
@@ -1072,13 +1114,14 @@ select option {
   min-height: 30px;
 }
 
+.row-action-button,
 .environment-variable-icon-button {
   width: 36px;
   height: 36px;
   min-width: 36px;
   min-height: 36px;
   padding: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-compact);
   border: 1px solid var(--border-soft);
   background: var(--control-bg);
   color: var(--text-secondary);
@@ -1088,11 +1131,13 @@ select option {
   transition: 180ms ease;
 }
 
+.row-action-button:hover,
 .environment-variable-icon-button:hover {
   background: var(--control-hover-bg);
   color: var(--text-primary);
 }
 
+.row-action-button svg,
 .environment-variable-icon-button svg {
   width: 18px;
   height: 18px;
@@ -1106,6 +1151,17 @@ select option {
 .environment-variable-icon-actions .environment-variable-icon-button svg {
   width: 15px;
   height: 15px;
+}
+
+.row-action-button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.row-action-danger:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--danger) 44%, var(--border-soft));
+  background: var(--surface-danger-soft);
+  color: var(--danger);
 }
 
 .environment-variable-icon-button-active {
@@ -1279,8 +1335,20 @@ select option {
 .empty-state,
 .response-error {
   padding: 16px;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-card);
   background: var(--surface-muted);
+}
+
+.empty-state {
+  color: var(--text-secondary);
+  font-size: var(--font-body);
+  line-height: 1.45;
+}
+
+.empty-state-inline {
+  padding: 10px 12px;
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--surface-muted) 62%, transparent);
 }
 
 .response-error {

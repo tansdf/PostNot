@@ -7,7 +7,7 @@
   import type { CollectionItemSummary } from "$lib/api/types";
   import { createStaleGuard } from "$lib/async-stale-guard";
   import CollectionsPanel from "$lib/components/collections/CollectionsPanel.svelte";
-  import { modalFocusTrap } from "$lib/modal-focus-trap";
+  import { modalBackdropDismiss, modalFocusTrap } from "$lib/modal-focus-trap";
   import { exportCollection, importRequests } from "$lib/api/commands";
   import { notifications } from "$lib/stores/notifications.svelte";
   import { collections } from "$lib/stores/collections.svelte";
@@ -320,17 +320,8 @@
   {#if isImportModalOpen}
     <div
       class="modal-backdrop"
-      role="button"
-      tabindex="0"
-      aria-label="Close import dialog"
       use:modalFocusTrap={{ onEscape: closeImportModal }}
-      onclick={(e) => { if (e.target === e.currentTarget) closeImportModal(); }}
-      onkeydown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          closeImportModal();
-        }
-      }}
+      use:modalBackdropDismiss={{ onDismiss: closeImportModal }}
     >
       <div class="panel save-dialog" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="import-collection-title">
         <div class="editor-header import-dialog-header">

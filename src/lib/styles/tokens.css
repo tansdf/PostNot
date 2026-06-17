@@ -44,6 +44,24 @@
   --radius-lg: 14px;
   --radius-md: 10px;
   --radius-sm: 8px;
+  --radius-panel: 12px;
+  --radius-card: 8px;
+  --radius-control: 8px;
+  --radius-compact: 6px;
+  --radius-pill: 999px;
+  --control-height-sm: 32px;
+  --control-height-md: 36px;
+  --control-height-lg: 40px;
+  --font-page-title: 1.45rem;
+  --font-panel-title: 1.05rem;
+  --font-section-title: 0.95rem;
+  --font-label: 0.8rem;
+  --font-body: 0.9rem;
+  --font-meta: 0.8rem;
+  --font-code: 0.86rem;
+  --motion-fast: 140ms;
+  --motion-base: 180ms;
+  --ease-standard: ease;
 }
 
 :root[data-theme="dark"] {
