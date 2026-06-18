@@ -3854,6 +3854,22 @@ body.collection-dnd-active {
   resize: vertical;
 }
 
+iframe.large-response-viewer {
+  height: clamp(18rem, 62vh, 44rem);
+  padding: 0;
+  resize: none;
+}
+
+.large-response-loading {
+  display: grid;
+  place-items: center;
+  min-height: clamp(18rem, 62vh, 44rem);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-soft);
+  background: var(--bg-code, var(--bg-panel-strong));
+}
+
 .jt-key { color: #8fbcbb; }
 .jt-string { color: #a3be8c; }
 .jt-number { color: #d08770; }

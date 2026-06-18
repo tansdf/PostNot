@@ -6,6 +6,12 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.20.12] - 2026-06-18
+
+### Fixed
+
+- Improved 60MB+ response body responsiveness by rendering large response text through a browser-managed plain-text document instead of binding the full body into a giant textarea, preserving full-body visibility, natural scrolling, copy, and built-in search behavior.
+
 ## [0.20.11] - 2026-06-18
 
 ### Changed

@@ -125,9 +125,24 @@
     try { JSON.parse(source); return true; } catch { return false; }
   })());
 
+  let largeResponseUrl = $state("");
   let formatted = $derived(tryFormat(source));
   let tokens = $derived(isHighlightableJson ? tokenize(formatted) : []);
   let largeResponseLabel = $derived(`${formatBytes(source.length)} response shown in large-body mode`);
+
+  $effect(() => {
+    if (!isLargeResponse || !source || typeof URL === "undefined" || typeof Blob === "undefined") {
+      largeResponseUrl = "";
+      return;
+    }
+
+    const nextUrl = URL.createObjectURL(new Blob([source], { type: "text/plain;charset=utf-8" }));
+    largeResponseUrl = nextUrl;
+
+    return () => {
+      URL.revokeObjectURL(nextUrl);
+    };
+  });
 
   function handleCopy() {
     void navigator.clipboard.writeText(formatted || source);
@@ -158,14 +173,19 @@
   <div class="json-viewer-wrap">
     <button class="json-copy-button" type="button" onclick={handleCopy} title="Copy to clipboard">Copy</button>
     <div class="large-response-note">{largeResponseLabel}</div>
-    <textarea
-      class="json-viewer large-response-viewer"
-      style:max-height={maxHeight}
-      readonly
-      spellcheck="false"
-      value={source}
-      aria-label="Large response body"
-    ></textarea>
+    {#if largeResponseUrl}
+      <iframe
+        class="json-viewer large-response-viewer"
+        style:max-height={maxHeight}
+        src={largeResponseUrl}
+        title="Large response body"
+        aria-label="Large response body"
+      ></iframe>
+    {:else}
+      <div class="json-viewer large-response-viewer large-response-loading" style:max-height={maxHeight}>
+        Preparing response view...
+      </div>
+    {/if}
   </div>
 {:else if isHighlightableJson}
   <div class="json-viewer-wrap">
