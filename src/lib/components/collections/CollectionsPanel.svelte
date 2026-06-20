@@ -32,6 +32,7 @@
     onDeleteCollection = () => {},
     onSaveFolder = () => false,
     onOpenSavedRequest = () => {},
+    onMoveCollectionItem = () => {},
     onDeleteCollectionItem = () => {},
   }: {
     collection?: CollectionSummary | null;
@@ -65,6 +66,7 @@
       testScript: string
     ) => Promise<boolean> | boolean;
     onOpenSavedRequest?: (itemId: string) => Promise<void> | void;
+    onMoveCollectionItem?: (item: CollectionItemSummary) => Promise<void> | void;
     onDeleteCollectionItem?: (item: CollectionItemSummary) => Promise<void> | void;
   } = $props();
 
@@ -123,11 +125,11 @@
     <div class="request-section-header">
       <div class="request-section-title">
         <h1>Collection View</h1>
-        <button class="system-button" type="button" onclick={onOpenImport}>Import</button>
-        <button class="system-button" type="button" onclick={onCreateRootFolder} disabled={!collection || isCreatingFolder}>
+        <button class="button-secondary button-compact" type="button" onclick={onOpenImport}>Import</button>
+        <button class="button-secondary button-compact" type="button" onclick={onCreateRootFolder} disabled={!collection || isCreatingFolder}>
           {isCreatingFolder ? "Creating..." : "New folder"}
         </button>
-        <button class="system-button" type="button" onclick={onExportCollection} disabled={!collection || isExporting}>
+        <button class="button-secondary button-compact" type="button" onclick={onExportCollection} disabled={!collection || isExporting}>
           {isExporting ? "Exporting..." : "Export"}
         </button>
       </div>
@@ -142,7 +144,7 @@
     </div>
 
     {#if errorText}
-      <div class="response-error">{errorText}</div>
+      <div class="feedback feedback-error">{errorText}</div>
     {/if}
 
     {#if collection}
@@ -260,6 +262,15 @@
                     Open in Requests
                   </button>
                 {/if}
+
+                <button
+                  class="button-secondary button-compact"
+                  type="button"
+                  onclick={() => onMoveCollectionItem(item)}
+                  disabled={collections.isMovingCollectionItem}
+                >
+                  Move…
+                </button>
 
                 <button
                   class="icon-button"

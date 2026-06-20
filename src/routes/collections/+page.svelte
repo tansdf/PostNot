@@ -6,8 +6,9 @@
 
   import type { CollectionItemSummary } from "$lib/api/types";
   import { createStaleGuard } from "$lib/async-stale-guard";
+  import { buildAccessibleMoveInput, type DraggedCollectionItem } from "$lib/collections/drag-and-drop";
   import CollectionsPanel from "$lib/components/collections/CollectionsPanel.svelte";
-  import { modalBackdropDismiss, modalFocusTrap } from "$lib/modal-focus-trap";
+  import DialogShell from "$lib/components/layout/DialogShell.svelte";
   import { exportCollection, importRequests } from "$lib/api/commands";
   import { notifications } from "$lib/stores/notifications.svelte";
   import { collections } from "$lib/stores/collections.svelte";
@@ -21,12 +22,19 @@
   let isImportModalOpen = $state(false);
   let importFileInput: HTMLInputElement | null = $state(null);
   let revealedItemId = $state("");
+  let moveItem: CollectionItemSummary | null = $state(null);
+  let moveTargetCollectionId = $state("");
+  let moveTargetParentId = $state("");
+  let moveAfterItemId = $state("");
+  let moveErrorText = $state("");
+  let isMoveTargetLoading = $state(false);
   let revealResetTimer: ReturnType<typeof setTimeout> | null = null;
 
   let requestedCollectionId = $derived(page.url.searchParams.get("collectionId") ?? "");
   let requestedItemId = $derived(page.url.searchParams.get("itemId") ?? "");
 
   const collectionRoute = createStaleGuard();
+  const moveTargetLoad = createStaleGuard();
 
   $effect(() => {
     void syncCollectionFromRoute(requestedCollectionId, requestedItemId);
@@ -211,6 +219,136 @@
     await collections.loadCollections(collection.id);
   }
 
+  function findItemLocation(
+    items: CollectionItemSummary[],
+    itemId: string,
+    parentId: string | null = null
+  ): { item: CollectionItemSummary; parentId: string | null; siblings: CollectionItemSummary[]; index: number } | null {
+    for (const [index, item] of items.entries()) {
+      if (item.id === itemId) {
+        return { item, parentId, siblings: items, index };
+      }
+      if (item.kind === "folder") {
+        const nested = findItemLocation(item.children, itemId, item.id);
+        if (nested) return nested;
+      }
+    }
+    return null;
+  }
+
+  function containsItem(item: CollectionItemSummary, itemId: string): boolean {
+    return item.id === itemId || item.children.some((child) => containsItem(child, itemId));
+  }
+
+  function moveFolderTargets() {
+    const items = collections.collectionItemsByCollection[moveTargetCollectionId] ?? [];
+    const targets: Array<{ id: string; name: string; depth: number }> = [
+      { id: "", name: "Collection root", depth: 0 }
+    ];
+
+    function visit(children: CollectionItemSummary[], depth: number) {
+      for (const child of children) {
+        if (child.kind !== "folder" || (moveItem?.kind === "folder" && containsItem(moveItem, child.id))) {
+          continue;
+        }
+        targets.push({ id: child.id, name: child.name || "Untitled folder", depth });
+        visit(child.children, depth + 1);
+      }
+    }
+
+    visit(items, 0);
+    return targets;
+  }
+
+  function movePositionItems() {
+    const items = collections.collectionItemsByCollection[moveTargetCollectionId] ?? [];
+    const siblings = moveTargetParentId
+      ? findItemLocation(items, moveTargetParentId)?.item.children ?? []
+      : items;
+    return siblings.filter((item) => item.id !== moveItem?.id);
+  }
+
+  function openMoveDialog(item: CollectionItemSummary) {
+    moveTargetLoad.next();
+    moveErrorText = "";
+    isMoveTargetLoading = false;
+    moveItem = item;
+    moveTargetCollectionId = item.collectionId;
+
+    const sourceItems = collections.collectionItemsByCollection[item.collectionId] ?? [];
+    const location = findItemLocation(sourceItems, item.id);
+    moveTargetParentId = location?.parentId ?? "";
+    moveAfterItemId = location && location.index > 0 ? location.siblings[location.index - 1]?.id ?? "" : "";
+  }
+
+  async function handleMoveTargetCollectionChange(collectionId: string) {
+    moveTargetCollectionId = collectionId;
+    const seq = moveTargetLoad.next();
+    moveTargetParentId = "";
+    moveAfterItemId = "";
+    moveErrorText = "";
+
+    if (collectionId in collections.collectionItemsByCollection) {
+      isMoveTargetLoading = false;
+      return;
+    }
+
+    isMoveTargetLoading = true;
+    await collections.loadCollectionItems(collectionId);
+    if (moveTargetLoad.isStale(seq) || moveTargetCollectionId !== collectionId) {
+      return;
+    }
+
+    isMoveTargetLoading = false;
+    if (!(collectionId in collections.collectionItemsByCollection)) {
+      moveErrorText = collections.errorText || "The destination collection could not be loaded.";
+    }
+  }
+
+  function closeMoveDialog() {
+    moveTargetLoad.next();
+    moveItem = null;
+    moveTargetCollectionId = "";
+    moveTargetParentId = "";
+    moveAfterItemId = "";
+    moveErrorText = "";
+    isMoveTargetLoading = false;
+  }
+
+  async function confirmMove() {
+    if (!moveItem) return;
+
+    const sourceItems = collections.collectionItemsByCollection[moveItem.collectionId] ?? [];
+    const targetItems = collections.collectionItemsByCollection[moveTargetCollectionId] ?? [];
+    const dragged: DraggedCollectionItem = {
+      itemId: moveItem.id,
+      collectionId: moveItem.collectionId,
+      parentId: moveItem.parentId ?? null,
+      name: moveItem.name,
+      kind: moveItem.kind
+    };
+    const input = buildAccessibleMoveInput({
+      dragged,
+      sourceItems,
+      targetItems,
+      target: {
+        targetCollectionId: moveTargetCollectionId,
+        targetParentId: moveTargetParentId || null,
+        afterItemId: moveAfterItemId || null
+      }
+    });
+
+    if (!input) {
+      moveErrorText = "Choose a different destination or position. A folder cannot be moved inside itself or one of its subfolders.";
+      return;
+    }
+
+    moveErrorText = "";
+    const moved = await collections.moveCollectionItem(moveItem.id, moveItem.collectionId, input);
+    if (moved) closeMoveDialog();
+    else moveErrorText = collections.errorText || "The collection item could not be moved.";
+  }
+
   async function handleExportCollection() {
     const collection = collections.selectedCollection;
     if (!collection) {
@@ -314,16 +452,81 @@
     onSaveFolder={handleSaveFolder}
     onDeleteCollection={handleDeleteCollection}
     onOpenSavedRequest={handleOpenSavedRequest}
+    onMoveCollectionItem={openMoveDialog}
     onDeleteCollectionItem={handleDeleteCollectionItem}
   />
 
+  {#if moveItem}
+    <DialogShell ariaLabelledby="move-collection-item-title" onDismiss={closeMoveDialog}>
+      <div class="editor-header import-dialog-header">
+        <div>
+          <h2 id="move-collection-item-title">Move {moveItem.kind === "folder" ? "folder" : "saved request"}</h2>
+          <span class="history-meta">{moveItem.name || "Untitled item"}</span>
+        </div>
+      </div>
+
+      <div class="editor-block modal-scroll-body move-item-dialog-body">
+        <label>
+          <span class="field-label">Collection</span>
+          <select
+            class="text-input"
+            bind:value={moveTargetCollectionId}
+            onchange={(event) => void handleMoveTargetCollectionChange(event.currentTarget.value)}
+          >
+            {#each collections.collections as targetCollection (targetCollection.id)}
+              <option value={targetCollection.id}>{targetCollection.name}</option>
+            {/each}
+          </select>
+        </label>
+
+        <label>
+          <span class="field-label">Folder</span>
+          <select
+            class="text-input"
+            bind:value={moveTargetParentId}
+            disabled={isMoveTargetLoading}
+            onchange={() => {
+              moveAfterItemId = "";
+              moveErrorText = "";
+            }}
+          >
+            {#each moveFolderTargets() as target (`${moveTargetCollectionId}-${target.id || "root"}`)}
+              <option value={target.id}>{`${"— ".repeat(target.depth)}${target.name}`}</option>
+            {/each}
+          </select>
+        </label>
+
+        <label>
+          <span class="field-label">Position</span>
+          <select class="text-input" bind:value={moveAfterItemId} disabled={isMoveTargetLoading} onchange={() => (moveErrorText = "")}>
+            <option value="">First</option>
+            {#each movePositionItems() as sibling (sibling.id)}
+              <option value={sibling.id}>After {sibling.name || (sibling.kind === "folder" ? "Untitled folder" : sibling.url || "Untitled request")}</option>
+            {/each}
+          </select>
+        </label>
+
+        {#if moveErrorText}
+          <div class="feedback feedback-error" role="alert">{moveErrorText}</div>
+        {/if}
+
+        <div class="collections-page-actions">
+          <button class="button-secondary" type="button" onclick={closeMoveDialog}>Cancel</button>
+          <button
+            class="button-primary"
+            type="button"
+            onclick={confirmMove}
+            disabled={isMoveTargetLoading || collections.isMovingCollectionItem}
+          >
+            {isMoveTargetLoading ? "Loading…" : collections.isMovingCollectionItem ? "Moving…" : "Move"}
+          </button>
+        </div>
+      </div>
+    </DialogShell>
+  {/if}
+
   {#if isImportModalOpen}
-    <div
-      class="modal-backdrop"
-      use:modalFocusTrap={{ onEscape: closeImportModal }}
-      use:modalBackdropDismiss={{ onDismiss: closeImportModal }}
-    >
-      <div class="panel save-dialog" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="import-collection-title">
+    <DialogShell ariaLabelledby="import-collection-title" onDismiss={closeImportModal}>
         <div class="editor-header import-dialog-header">
           <h2 id="import-collection-title">Import</h2>
           <span class="history-meta">
@@ -334,7 +537,7 @@
         <div class="editor-block modal-scroll-body">
           <div class="import-format-toggle" role="tablist" aria-label="Choose collection import format">
             <button
-              class={["system-button", importFormat === "postman" && "toggle-active"]}
+              class={["button-secondary", "button-compact", importFormat === "postman" && "toggle-active"]}
               type="button"
               role="tab"
               aria-selected={importFormat === "postman"}
@@ -346,7 +549,7 @@
               Postman
             </button>
             <button
-              class={["system-button", importFormat === "openapi" && "toggle-active"]}
+              class={["button-secondary", "button-compact", importFormat === "openapi" && "toggle-active"]}
               type="button"
               role="tab"
               aria-selected={importFormat === "openapi"}
@@ -395,15 +598,15 @@
           />
 
           {#if importErrorText}
-            <div class="response-error">{importErrorText}</div>
+            <div class="feedback feedback-error">{importErrorText}</div>
           {/if}
 
           <div class="collections-page-actions">
-            <button class="ghost-button" type="button" onclick={() => importFileInput?.click()}>
+            <button class="button-secondary" type="button" onclick={() => importFileInput?.click()}>
               {importFormat === "postman" ? "Open JSON file" : "Open file"}
             </button>
             <button
-              class="send-button"
+              class="button-primary"
               type="button"
               onclick={async () => {
                 await handleImportRequests();
@@ -415,11 +618,10 @@
             >
               {isImporting ? "Importing..." : "Import"}
             </button>
-            <button class="ghost-button" type="button" onclick={closeImportModal}>
+            <button class="button-secondary" type="button" onclick={closeImportModal}>
               Cancel
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </DialogShell>
   {/if}

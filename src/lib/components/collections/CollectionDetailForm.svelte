@@ -115,7 +115,7 @@
   </details>
 
   <div class="collections-page-actions">
-    <button class="send-button" type="submit" disabled={isSavingCollection}>
+    <button class="button-primary" type="submit" disabled={isSavingCollection}>
       {isSavingCollection ? "Saving..." : "Save collection"}
     </button>
     <button

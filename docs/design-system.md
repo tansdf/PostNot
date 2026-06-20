@@ -1,0 +1,386 @@
+# PostNot Design System
+
+Implementation guide for maintaining and extending PostNot's application UI. This document describes the system that exists in the product today, the conventions new work must follow, and the known areas where the system should become more consistent.
+
+This is an internal product and engineering reference. Customer-facing visual language belongs in [README.md](../README.md) and the public site.
+
+## 1. Design Direction
+
+PostNot should feel like a focused desktop workbench: warm rather than clinical, dense enough for technical work, and calm even when the request or response data is complex.
+
+The interface follows these principles:
+
+1. **Clarity before decoration.** Request state, hierarchy, and the next action must be obvious without relying on ornament.
+2. **Consistency over novelty.** Reuse existing tokens, controls, panels, and interaction patterns before adding a new variant.
+3. **Compact, not cramped.** Preserve the current desktop density while keeping labels, focus states, and click targets usable.
+4. **Progressive disclosure.** Keep common request work visible and move advanced settings, scripts, raw details, and destructive choices behind explicit controls.
+5. **Local-first confidence.** Explain persistence, secret handling, imports, exports, and irreversible actions at the point where they matter.
+6. **State must not depend on color alone.** Pair color with text, icons, shape, or position for status and selection.
+7. **Light and dark are one system.** New UI is incomplete until both themes have been considered.
+
+## 2. Source of Truth
+
+Use this order when implementation and documentation disagree:
+
+1. [`src/lib/styles/tokens.css`](../src/lib/styles/tokens.css) for semantic visual values and theme overrides.
+2. [`src/lib/styles/app.css`](../src/lib/styles/app.css) for shared components, layouts, states, and responsive behavior.
+3. Shared Svelte components under [`src/lib/components`](../src/lib/components) for structure and behavior.
+4. This guide for intent, usage rules, and how to extend the system.
+
+Feature-local `<style>` blocks are allowed for genuinely feature-specific composition. They must use shared tokens and should not recreate a shared control, panel, status, modal, or feedback pattern.
+
+## 3. Foundations
+
+### 3.1 Color
+
+Always consume semantic tokens. Do not choose a literal color based only on its appearance in one theme.
+
+| Intent | Token | Use |
+|---|---|---|
+| Application canvas | `--bg-app` | Root window background |
+| Panel | `--bg-panel` | Standard panels and notification surfaces |
+| Strong panel | `--bg-panel-strong` | Inputs and surfaces needing separation |
+| Sidebar | `--bg-sidebar` | Primary navigation background |
+| Primary action | `--bg-accent` | Send, save, and other dominant actions |
+| Primary action hover | `--bg-accent-strong` | Hover and stronger accent emphasis |
+| Accent tint | `--bg-accent-soft` | Selected or highlighted surfaces |
+| Subtle/quiet surface | `--surface-subtle`, `--surface-muted` | Nested cards and low-emphasis grouping |
+| Control surface | `--control-bg`, `--control-hover-bg` | Secondary controls and interactive rows |
+| Selected control | `--control-selected-bg`, `--control-selected-text` | Active tabs and selected toggles |
+| Primary text | `--text-primary` | Titles and main content |
+| Secondary text | `--text-secondary` | Labels, descriptions, and metadata |
+| Muted text | `--text-muted` | Tertiary details; never essential information alone |
+| Inverse text | `--text-inverse` | Text on the sidebar and other dark surfaces |
+| Borders | `--border-soft`, `--border-strong` | Default and emphasized boundaries |
+| Success | `--success` | Completed or valid state |
+| Warning | `--warning` | Caution and recoverable risk |
+| Danger | `--danger` | Failures, destructive actions, and invalid state |
+| Code surface | `--bg-code` | JSON, scripts, raw bodies, paths, and logs |
+| Overlay | `--overlay-backdrop`, `--shadow-overlay` | Dialog backdrops and floating-layer elevation |
+| HTTP methods | `--method-*`, `--method-*-inverse` | Method labels on normal and dark/sidebar surfaces |
+| Syntax | `--syntax-*` | JSON, scripts, and variable highlighting |
+
+The light palette uses cream surfaces, deep teal text/navigation, and burnt orange action color. The dark palette preserves those relationships with higher-luminance text and accent values. Never copy a resolved light-theme value into component CSS.
+
+HTTP method colors are a special categorical palette. Use the existing `.method-get`, `.method-post`, `.method-put`, `.method-patch`, `.method-delete`, `.method-head`, and `.method-options` classes. Do not use those colors for semantic success or failure.
+
+### 3.2 Typography
+
+| Role | Token | Current size |
+|---|---|---|
+| Page title | `--font-page-title` | `1.45rem` |
+| Panel title | `--font-panel-title` | `1.05rem` |
+| Section title | `--font-section-title` | `0.95rem` |
+| Label | `--font-label` | `0.8rem` |
+| Body/control | `--font-body` | `0.9rem` |
+| Metadata | `--font-meta` | `0.8rem` |
+| Code/data | `--font-code` | `0.86rem` |
+
+- Use `--font-sans` for interface copy and `--font-mono` for code, URLs when scanning benefits, paths, JSON, scripts, and raw payloads.
+- Use sentence case for headings, labels, actions, tabs, and menu items.
+- Buttons should begin with a verb: “Save request”, “Create environment”, “Clear history”.
+- Keep help text direct and explain consequences, not the control label again.
+- Use an ellipsis only when an action opens a flow requiring more input.
+
+### 3.3 Spacing and Density
+
+Use the compact spacing scale for shared primitives and new layouts:
+
+| Token | Value | Typical use |
+|---|---:|---|
+| `--space-1` | `4px` | Icon/text gaps and micro-adjustments |
+| `--space-2` | `8px` | Tightly related content |
+| `--space-3` | `12px` | Controls in a row and compact lists |
+| `--space-4` | `16px` | Cards, form groups, and dialog gaps |
+| `--space-5` | `20px` | Panel and dialog padding |
+| `--space-6` | `24px` | Major internal separation |
+
+Existing intermediate values may remain where density or geometry requires them. Do not introduce another spacing value without a concrete layout constraint.
+
+The application supports a UI scale from `0.6` to `1.5` through `--ui-scale`. Validate fixed, sticky, and overlay UI at the default and at both extremes.
+
+### 3.4 Shape, Border, and Elevation
+
+| Role | Token |
+|---|---|
+| Large container | `--radius-lg` (`14px`) |
+| Standard group | `--radius-md` (`10px`) |
+| Input/small surface | `--radius-sm` (`8px`) |
+| Panel | `--radius-panel` (`12px`) |
+| Card/control | `--radius-card`, `--radius-control` (`8px`) |
+| Compact icon control | `--radius-compact` (`6px`) |
+| Chip/pill | `--radius-pill` |
+
+Use `--border-soft` for structure and `--border-strong` for selection or emphasis. Prefer borders and subtle surface shifts to shadows for hierarchy. Reserve `--shadow-soft` and overlay shadows for floating layers such as dialogs and notifications.
+
+### 3.5 Motion
+
+Use `--motion-fast` (`140ms`) for small state changes and `--motion-base` (`180ms`) for controls and overlays, with `--ease-standard`. Motion should explain state change, not delay work. Do not animate large data regions or introduce looping animation except for active progress/loading feedback.
+
+The shared reduced-motion rule removes decorative transitions and pulse/slide animations while preserving static loading state and notification expiry. `NotificationHost.svelte` also disables its JavaScript fly/fade movement when reduced motion is requested; future JavaScript transitions must make the same explicit check because CSS alone does not control them.
+
+## 4. Layout and Information Hierarchy
+
+### Application shell
+
+`AppShell.svelte` owns the two-column desktop frame: a `320px` sidebar and a flexible workspace. At widths below `980px`, it becomes a single flowing column. New top-level destinations belong in the primary `<nav>` and require an explicit active state.
+
+### Pages
+
+Use this hierarchy:
+
+1. Page heading and optional short description.
+2. Primary actions aligned with the heading where space allows.
+3. Panels for major work areas.
+4. Cards or field groups only when they clarify a relationship.
+
+Avoid nesting decorative panels more than two levels deep. A border, section title, or spacing change is often sufficient.
+
+### Responsive behavior
+
+The application is desktop-first but must remain operable in a narrow window. Existing shared breakpoints are `1720`, `1500`, `1220`, `980`, `900`, and `720px`; feature-local layouts may use a nearby constraint only when their content requires it.
+
+- Collapse multi-column detail and form layouts to one column before controls become compressed.
+- Allow toolbars to wrap.
+- Keep primary actions visible and avoid horizontal page scrolling.
+- Give code/data regions their own bounded scrolling rather than expanding the entire page without limit.
+- Dialogs must use `dvh` fallbacks and retain reachable headers/actions.
+
+## 5. Shared Components
+
+### 5.1 Buttons
+
+| Class/variant | Use when |
+|---|---|
+| `.button-primary` | The single dominant action in a section or dialog |
+| `.button-secondary` | A supporting action with visible affordance |
+| `.button-ghost` | Low-emphasis or tertiary action |
+| `.button-danger` | An action is destructive or difficult to reverse |
+| `.button-compact` | Dense list or toolbar context |
+| `.icon-button` / `.row-action-button` | Familiar action where text would add clutter |
+| `.tab-button` | Switches a local view; active state uses `.active` |
+
+Rules:
+
+- Prefer one primary action per visible action group.
+- Pair destructive styling with a clear verb; use confirmation for deletion of durable user data.
+- Icon-only buttons require an `aria-label` and usually a `title`.
+- Disabled controls must remain understandable from nearby context. Use a loading label when the action is in progress.
+- Use shared heights: `--control-height-sm`, `--control-height-md`, and `--control-height-lg`.
+- Preserve the global `:focus-visible` ring. Custom compound controls must provide an equivalent inset or outer ring.
+
+### 5.2 Inputs and Forms
+
+Use `.text-input`, `.method-select`, `.body-mode-select`, and `.body-textarea` rather than creating new base input styling.
+
+- Every input needs a visible label or an accessible name.
+- Put `.field-help` after the label and before or after the control consistently within a section.
+- Mark optional fields in supporting text; do not mark every required field if most of the form is required.
+- Show validation near the affected field when recovery is local. Use a page-level `.feedback.feedback-error` block only for submission or loading failures affecting the whole surface.
+- Do not erase user input after a failed action.
+- Secret fields must support masking and must not expose their resolved values in previews, history, notifications, or default exports.
+
+Key/value editing uses `.row-list`, `.kv-row`, `.row-toggle`, `VariableField.svelte`, and row action controls. Reuse that composition for new header-like or variable-like data.
+
+### 5.3 Panels and Cards
+
+Use `.panel` for a major workspace region. Use a subtle surface plus a border for nested cards, as demonstrated by `.request-script-card` and `.multipart-file-card`.
+
+A panel should have:
+
+- a concise title;
+- an action area only when the action applies to the whole panel;
+- a clear loading, error, empty, or content state;
+- no duplicate page-level title.
+
+### 5.4 Tabs and Segmented Views
+
+Use tabs only when views are peers and switching does not submit or navigate through a workflow. Implement `role="tablist"`, `role="tab"`, and `aria-selected`. The request workspace uses `RequestTabs.svelte`; local panel tabs use `.panel-tabs` and `.tab-button`.
+
+Selection must remain visible without hover and should not rely on text color alone.
+
+### 5.5 Dialogs
+
+Use `DialogShell.svelte` with the standard `save-dialog` size or a purpose-specific size class. Its public properties are `ariaLabelledby`, `onDismiss`, optional `sizeClass`, optional `dismissible`, and the content snippet. It owns the backdrop, dialog role, focus trap/restore, Escape handling, and backdrop dismissal. Every dialog's content must include:
+
+- a heading whose id matches `ariaLabelledby`;
+- Escape and backdrop dismissal unless a critical operation sets `dismissible={false}`;
+- a visible close/cancel action;
+- `.modal-scroll-body` when content can exceed the viewport.
+
+Primary confirmation belongs last in the action row. A destructive confirmation should name the affected object and explain whether recovery is possible.
+
+### 5.6 Notifications and Inline Feedback
+
+Use the `notifications` store for transient confirmation or failure following a user action. Supported tones are info, success, warning, and error. Notifications expose polite live updates and `alert` semantics for errors. Their progress bar controls expiry, pauses while the notification is hovered, and becomes visually static under reduced motion without changing the expiry duration.
+
+Use inline feedback when the message:
+
+- blocks progress in the current form;
+- needs to remain until the user fixes something;
+- explains an empty or partial state;
+- is tied to a specific field or result.
+
+Avoid showing the same message both inline and as a notification unless one communicates global impact and the other gives local recovery guidance.
+
+Block feedback uses `.feedback` plus exactly one tone class: `.feedback-info`, `.feedback-success`, `.feedback-warning`, or `.feedback-error`. Add `role="alert"` only when an error appears dynamically and requires immediate attention. Keep field-level validation text local to its control.
+
+### 5.7 Empty, Loading, and Error States
+
+Every async or data-dependent surface must design all four states: initial/loading, populated, empty, and error.
+
+- `.empty-state` should explain what is absent and, when useful, provide the next action.
+- Loading copy should identify what is loading. Use progress indicators for operations with measurable progress.
+- `.feedback.feedback-error` is the shared prominent error treatment. Put technical details in a disclosure when the user-facing explanation can be clearer.
+- Preserve partial or stale content when it remains useful, and label its state rather than blanking the screen.
+
+### 5.8 Navigation, Trees, and Drag-and-Drop
+
+Primary navigation is route-based and uses `.sidebar-link` plus `.sidebar-link-active`. Collections use a shared folder glyph/path implementation across the sidebar and Collections page.
+
+- Tree rows need a clear selected, expanded, hover, and drop-target state.
+- Expand/collapse controls require `aria-expanded` and an accessible name.
+- Drag-and-drop must have a non-drag alternative for essential movement or ordering work. Collection folders and saved requests use the Collections-page **Move…** dialog, which exposes destination collection, folder/root, and first/after-sibling position to keyboard users. Destination contents load only when that collection is selected; keep the folder, position, and confirmation controls disabled while loading and guard stale completions when users change destinations quickly.
+- Do not invent a second folder icon or tree-guide geometry.
+
+### 5.9 Code and Data Views
+
+Use monospace type and `--bg-code`. Long values must wrap or scroll within their region. JSON should use `JsonViewer.svelte`; request/response displays should reuse existing key/value and detail patterns.
+
+- Do not truncate the only available copy of a value.
+- Provide copy actions for high-value identifiers, URLs, paths, tokens, and payload fragments where appropriate.
+- Keep secrets masked by default.
+- Syntax color is categorical decoration and may not be the only way to identify invalid content.
+
+## 6. Accessibility Contract
+
+New UI must meet these minimum requirements:
+
+- All actions and fields are reachable and operable by keyboard.
+- Focus is always visible.
+- DOM order matches visual and interaction order.
+- Icon-only controls have accessible names; decorative icons use `aria-hidden="true"`.
+- Dynamic status uses an appropriate live region without repeatedly interrupting the user.
+- Dialog focus is trapped and restored.
+- Tabs, listboxes, trees, disclosures, and progress controls expose their state semantically.
+- Information is not communicated by color alone.
+- Text and interactive elements retain sufficient contrast in light and dark themes.
+- Click targets should normally be at least `32px`; use `36–40px` for common actions.
+- Zoom/UI scale and a narrow window do not hide essential controls or content.
+
+For a complex custom interaction, document keyboard behavior alongside its implementation. Native elements are preferred when they provide the needed semantics.
+
+## 7. Content and UX Conventions
+
+- Name objects consistently: request, saved request, collection, folder, environment, variable, playbook, step, run, and history entry.
+- Use “request” for the editable/sendable HTTP object; use “saved request” when persistence matters.
+- Confirm successful persistence with the object name when helpful.
+- Error messages should say what failed and what the user can do next. Preserve raw backend details in an expandable technical section when needed.
+- State when a value is saved locally, stored in the OS credential store, redacted, unresolved, or exported in full.
+- Never imply that previewing a request sends traffic. Preview surfaces must clearly remain read-only.
+- For long-running operations, show current activity and expose cancellation when cancellation is safe.
+
+## 8. Adding a New Feature
+
+Before implementation, write down:
+
+1. The user's goal and the primary action.
+2. Where the feature fits in the existing page/navigation hierarchy.
+3. Which existing panels, controls, form rows, dialogs, notifications, and data views it reuses.
+4. Its loading, empty, error, success, disabled, and cancellation states.
+5. Keyboard and screen-reader behavior.
+6. Light/dark, UI-scale, narrow-window, long-content, and secret-data behavior.
+
+Implementation sequence:
+
+1. Compose existing shared classes and components.
+2. Add a semantic token only when an intent is reused or needs theme-specific values.
+3. Add a shared class/component when the pattern will recur or already appears more than once.
+4. Keep truly local layout rules beside the feature, using tokens for all visual decisions.
+5. Validate the state matrix below and run `npm test` and `npm run check`.
+6. Update this guide when a new reusable pattern or rule is introduced.
+
+### Feature state matrix
+
+| Area | Questions |
+|---|---|
+| Default | Is the main task and primary action obvious? |
+| Hover/focus/active | Are mouse and keyboard states equally clear? |
+| Disabled/loading | Is the reason or current activity understandable? |
+| Empty | Does the surface explain what to do next? |
+| Error | Is the failure actionable and user input preserved? |
+| Success | Is confirmation proportional and non-disruptive? |
+| Long content | Do names, URLs, code, and errors wrap or scroll safely? |
+| Themes | Does it work in light, dark, and system preference? |
+| Scale/layout | Does it work at `0.6`, `1`, `1.5`, and a narrow window? |
+| Accessibility | Are semantics, names, focus, keyboard, and announcements correct? |
+| Privacy | Are secrets masked and exports explicit? |
+
+## 9. Design System Audit
+
+Audit date: 2026-06-21. Scope: 17 shared frontend components, shared tokens/styles, application shell, and route-level UI patterns after the `0.20.13` remediation.
+
+### Summary
+
+**Components reviewed: 17 | Remaining issue groups: 4 | Score: 88/100**
+
+The system now has semantic method/syntax/overlay tokens, a compact spacing scale, canonical text-button names, a shared dialog shell, reduced-motion behavior, standardized block feedback, and a keyboard alternative for collection drag-and-drop. Follow-up review confirmed that notification hover expiry, sidebar method contrast, cross-platform tests, and lazy/race-safe move destinations are aligned with the system contract. Remaining work is mostly opportunistic migration of feature-local values and continued tree/status accessibility review.
+
+### Naming consistency
+
+| Issue | Current examples | Direction |
+|---|---|---|
+| Multiple radius names resolve to the same value | `--radius-sm`, `--radius-card`, `--radius-control` | Keep semantic names; do not replace them with literal `8px` |
+| Legacy feature-specific validation names | `.auth-error-text`, `.error-text`, `.run-error-text` | Keep local text errors near fields; use `.feedback-*` for message blocks |
+| Shared and route-local component styling coexist | global `app.css` plus Playbooks route styles | Promote a pattern once it is used by a second feature |
+
+### Token coverage
+
+| Category | Coverage | Known gap |
+|---|---|---|
+| Theme colors | Strong | `app.css` has no hardcoded hex colors, but 38 `rgb`/`rgba` occurrences remain, mostly sidebar translucency and a few legacy state surfaces |
+| Typography | Good | The Playbooks route retains 4 literal feature-local font sizes |
+| Radius | Strong | Several legacy literal pill radii remain |
+| Control height | Good | Specialized controls use fixed heights where composition demands it |
+| Spacing | Partial | Shared scale exists; the Playbooks route retains 18 literal gaps and 9 literal padding declarations |
+| Elevation | Good | Standard and overlay elevation are tokenized |
+| Motion | Good | Shared durations, static reduced-motion expiry, hover pause, and JS notification transition handling are implemented |
+
+### Component completeness
+
+| Pattern | Variants/states | Accessibility | Documentation | Score |
+|---|---|---|---|---:|
+| Buttons and icon actions | Good | Visible focus; labels depend on call site | Complete | 9/10 |
+| Inputs and key/value rows | Good | Mostly native controls and visible labels | Complete | 8/10 |
+| Tabs | Good | ARIA implemented in main tab surfaces | Complete | 8/10 |
+| Dialogs | Good | Shared `DialogShell`, focus trap, Escape, backdrop, focus restore | Complete | 9/10 |
+| Notifications | Good | Live regions, tone roles, reduced motion, hover pause | Complete | 9/10 |
+| Panels/cards | Good visually | Semantic structure depends on call site | Complete | 8/10 |
+| Empty/loading/error states | Block feedback standardized | Announcements still vary by feature | Partial | 7/10 |
+| Trees and drag-and-drop | Pointer drag plus lazy keyboard move dialog | Search/tree navigation semantics still need review | Partial | 7/10 |
+
+### Priority actions
+
+1. Migrate Playbooks' repeated spacing and typography literals to the shared scale when that route is next changed.
+2. Review sidebar tree semantics and keyboard navigation independently of the completed move/reorder alternative.
+3. Standardize live-region behavior for async loading, empty, and error states where announcements still vary.
+4. Tokenize recurring sidebar translucency or state surfaces only when a reusable semantic intent is clear.
+
+These are improvement directions, not permission for an unrelated sweeping refactor. Feature changes should improve the code they touch while preserving recognizable behavior.
+
+## 10. Review Checklist
+
+Before merging a UI change:
+
+- [ ] Existing tokens and patterns were reused before new ones were added.
+- [ ] The UI has intentional loading, empty, error, success, and disabled states.
+- [ ] Light, dark, and system themes were checked.
+- [ ] Default, minimum, and maximum UI scale were considered.
+- [ ] Narrow-window and long-content behavior were checked.
+- [ ] Keyboard navigation and visible focus were checked.
+- [ ] Accessible names, roles, states, and live announcements are correct.
+- [ ] Secrets and credential-looking values remain masked by default.
+- [ ] Destructive actions explain impact and require appropriate confirmation.
+- [ ] New reusable behavior is documented here.
+- [ ] `npm test` passes when shared behavior or interaction helpers change.
+- [ ] `npm run check` passes.

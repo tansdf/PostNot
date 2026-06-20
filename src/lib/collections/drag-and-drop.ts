@@ -18,6 +18,12 @@ export type CollectionDropIndicator = {
   placement: CollectionDropPlacement | "root";
 };
 
+export type AccessibleCollectionMoveTarget = {
+  targetCollectionId: string;
+  targetParentId: string | null;
+  afterItemId: string | null;
+};
+
 type CollectionItemLocation = {
   item: CollectionItemSummary;
   parentId: string | null;
@@ -125,6 +131,57 @@ export function buildItemMoveInput(args: {
   };
 }
 
+export function buildAccessibleMoveInput(args: {
+  dragged: DraggedCollectionItem;
+  sourceItems: CollectionItemSummary[];
+  targetItems: CollectionItemSummary[];
+  target: AccessibleCollectionMoveTarget;
+}): MoveCollectionItemInput | null {
+  const sourceLocation = findCollectionItemLocation(args.sourceItems, args.dragged.itemId);
+  if (!sourceLocation) {
+    return null;
+  }
+
+  if (sourceLocation.item.kind === "folder" && args.target.targetParentId) {
+    if (
+      args.target.targetParentId === sourceLocation.item.id ||
+      isCollectionItemDescendant(sourceLocation.item, args.target.targetParentId)
+    ) {
+      return null;
+    }
+  }
+
+  const targetSiblings = findCollectionItemChildren(args.targetItems, args.target.targetParentId);
+  if (!targetSiblings) {
+    return null;
+  }
+
+  const destinationSiblings = targetSiblings.filter((item) => item.id !== args.dragged.itemId);
+  let targetIndex = 0;
+
+  if (args.target.afterItemId) {
+    const afterIndex = destinationSiblings.findIndex((item) => item.id === args.target.afterItemId);
+    if (afterIndex < 0) {
+      return null;
+    }
+    targetIndex = afterIndex + 1;
+  }
+
+  if (
+    sourceLocation.item.collectionId === args.target.targetCollectionId &&
+    sourceLocation.parentId === args.target.targetParentId &&
+    sourceLocation.index === targetIndex
+  ) {
+    return null;
+  }
+
+  return {
+    targetCollectionId: args.target.targetCollectionId,
+    targetParentId: args.target.targetParentId,
+    targetIndex
+  };
+}
+
 function isCollectionItemDescendant(item: CollectionItemSummary, maybeDescendantId: string): boolean {
   if (item.kind !== "folder") {
     return false;
@@ -163,4 +220,16 @@ function findCollectionItemLocation(
   }
 
   return null;
+}
+
+function findCollectionItemChildren(
+  items: CollectionItemSummary[],
+  parentId: string | null
+): CollectionItemSummary[] | null {
+  if (parentId === null) {
+    return items;
+  }
+
+  const parent = findCollectionItemLocation(items, parentId)?.item;
+  return parent?.kind === "folder" ? parent.children : null;
 }

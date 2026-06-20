@@ -44,12 +44,12 @@
     createRequestDraft
   } from "$lib/api/types";
   import HistoryPanel from "$lib/components/history/HistoryPanel.svelte";
+  import DialogShell from "$lib/components/layout/DialogShell.svelte";
   import RequestEditor from "$lib/components/request/RequestEditor.svelte";
   import RequestTabs from "$lib/components/request/RequestTabs.svelte";
   import JsonViewer from "$lib/components/response/JsonViewer.svelte";
   import ResponseViewer from "$lib/components/response/ResponseViewer.svelte";
   import { createStaleGuard } from "$lib/async-stale-guard";
-  import { modalBackdropDismiss, modalFocusTrap } from "$lib/modal-focus-trap";
   import {
     createEmptyRequestScriptExecution,
     type InheritedRequestScripts,
@@ -1694,7 +1694,7 @@ paths:
   />
 
   {#if activeTabErrorText}
-    <div class="response-error">{activeTabErrorText}</div>
+    <div class="feedback feedback-error">{activeTabErrorText}</div>
   {/if}
 
   <ResponseViewer
@@ -1727,18 +1727,7 @@ paths:
 <svelte:window onkeydown={handleWindowKeydown} />
 
 {#if isSaveDialogOpen}
-  <div
-    class="modal-backdrop"
-    use:modalFocusTrap={{ onEscape: closeSaveDialog }}
-    use:modalBackdropDismiss={{ onDismiss: closeSaveDialog }}
-  >
-    <div
-      class="panel save-dialog request-save-dialog"
-      role="dialog"
-      tabindex="-1"
-      aria-modal="true"
-      aria-labelledby="save-request-title"
-    >
+  <DialogShell ariaLabelledby="save-request-title" onDismiss={closeSaveDialog} sizeClass="save-dialog request-save-dialog">
       <div class="editor-header">
         <h2 id="save-request-title">{saveDialogMode === "save-as" ? "Save as" : "Save request"}</h2>
       </div>
@@ -1792,31 +1781,25 @@ paths:
         {/if}
 
         <div class="collections-page-actions">
-          <button class="send-button" type="button" onclick={confirmSaveRequest} disabled={collections.isSavingRequest}>
+          <button class="button-primary" type="button" onclick={confirmSaveRequest} disabled={collections.isSavingRequest}>
             {collections.isSavingRequest ? "Saving..." : saveDialogMode === "save-as" ? "Save as" : "Save request"}
           </button>
-          <button class="ghost-button" type="button" onclick={closeSaveDialog}>
+          <button class="button-secondary" type="button" onclick={closeSaveDialog}>
             Cancel
           </button>
         </div>
       </div>
-    </div>
-  </div>
+  </DialogShell>
 {/if}
 
 {#if isRequestPreviewDialogOpen}
-  <div
-    class="modal-backdrop"
-    use:modalFocusTrap={{ onEscape: closeRequestPreviewDialog }}
-    use:modalBackdropDismiss={{ onDismiss: closeRequestPreviewDialog }}
-  >
-    <div class="panel request-preview-dialog" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="request-preview-title">
+  <DialogShell ariaLabelledby="request-preview-title" onDismiss={closeRequestPreviewDialog} sizeClass="request-preview-dialog">
       <div class="editor-header import-dialog-header">
         <div>
           <h2 id="request-preview-title">Resolved Request Preview</h2>
           <span class="history-meta">Read-only · secrets masked · no network call</span>
         </div>
-        <button class="ghost-button" type="button" onclick={closeRequestPreviewDialog}>
+        <button class="button-secondary" type="button" onclick={closeRequestPreviewDialog}>
           Close
         </button>
       </div>
@@ -1824,12 +1807,12 @@ paths:
       {#if isRequestPreviewLoading}
         <div class="empty-state">Calculating the resolved request...</div>
       {:else if requestPreviewErrorText}
-        <div class="response-error">{requestPreviewErrorText}</div>
+        <div class="feedback feedback-error">{requestPreviewErrorText}</div>
       {:else if requestPreview}
         {#if requestPreview.warnings.length}
           <div class="request-preview-callouts">
             {#each requestPreview.warnings as warning}
-              <div class="response-error request-preview-callout">{warning}</div>
+              <div class="feedback feedback-warning request-preview-callout">{warning}</div>
             {/each}
           </div>
         {/if}
@@ -2006,17 +1989,11 @@ paths:
           {/if}
         </div>
       {/if}
-    </div>
-  </div>
+  </DialogShell>
 {/if}
 
 {#if isRequestExportDialogOpen}
-  <div
-    class="modal-backdrop"
-    use:modalFocusTrap={{ onEscape: closeRequestExportDialog }}
-    use:modalBackdropDismiss={{ onDismiss: closeRequestExportDialog }}
-  >
-    <div class="panel save-dialog" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="request-export-title">
+  <DialogShell ariaLabelledby="request-export-title" onDismiss={closeRequestExportDialog}>
       <div class="editor-header import-dialog-header">
         <h2 id="request-export-title">Export Request</h2>
         <span class="history-meta">
@@ -2028,7 +2005,7 @@ paths:
       <div class="editor-block modal-scroll-body">
         <div class="import-format-toggle" role="tablist" aria-label="Choose request export format">
           <button
-            class={["system-button", requestExportFormat === "curl" && "toggle-active"]}
+            class={["button-secondary", "button-compact", requestExportFormat === "curl" && "toggle-active"]}
             type="button"
             role="tab"
             aria-selected={requestExportFormat === "curl"}
@@ -2037,7 +2014,7 @@ paths:
             cURL
           </button>
           <button
-            class={["system-button", requestExportFormat === "json" && "toggle-active"]}
+            class={["button-secondary", "button-compact", requestExportFormat === "json" && "toggle-active"]}
             type="button"
             role="tab"
             aria-selected={requestExportFormat === "json"}
@@ -2088,25 +2065,19 @@ paths:
         </label>
 
         <div class="collections-page-actions">
-          <button class="send-button" type="button" onclick={handleCopyRequestExport}>
+          <button class="button-primary" type="button" onclick={handleCopyRequestExport}>
             Copy
           </button>
-          <button class="ghost-button" type="button" onclick={closeRequestExportDialog}>
+          <button class="button-secondary" type="button" onclick={closeRequestExportDialog}>
             Close
           </button>
         </div>
       </div>
-    </div>
-  </div>
+  </DialogShell>
 {/if}
 
 {#if isRequestImportDialogOpen}
-  <div
-    class="modal-backdrop"
-    use:modalFocusTrap={{ onEscape: closeRequestImportDialog }}
-    use:modalBackdropDismiss={{ onDismiss: closeRequestImportDialog }}
-  >
-    <div class="panel save-dialog" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="request-import-title">
+  <DialogShell ariaLabelledby="request-import-title" onDismiss={closeRequestImportDialog}>
       <div class="editor-header import-dialog-header">
         <h2 id="request-import-title">Import Request</h2>
         <span class="history-meta">
@@ -2117,7 +2088,7 @@ paths:
       <div class="editor-block modal-scroll-body">
         <div class="import-format-toggle" role="tablist" aria-label="Choose request import format">
           <button
-            class={["system-button", requestImportFormat === "curl" && "toggle-active"]}
+            class={["button-secondary", "button-compact", requestImportFormat === "curl" && "toggle-active"]}
             type="button"
             role="tab"
             aria-selected={requestImportFormat === "curl"}
@@ -2129,7 +2100,7 @@ paths:
             cURL
           </button>
           <button
-            class={["system-button", requestImportFormat === "openapi" && "toggle-active"]}
+            class={["button-secondary", "button-compact", requestImportFormat === "openapi" && "toggle-active"]}
             type="button"
             role="tab"
             aria-selected={requestImportFormat === "openapi"}
@@ -2182,23 +2153,22 @@ paths:
         {/if}
 
         {#if requestImportErrorText}
-          <div class="response-error">{requestImportErrorText}</div>
+          <div class="feedback feedback-error">{requestImportErrorText}</div>
         {/if}
 
         <div class="collections-page-actions">
           {#if requestImportFormat === "openapi"}
-            <button class="ghost-button" type="button" onclick={() => openApiImportFileInput?.click()}>
+            <button class="button-secondary" type="button" onclick={() => openApiImportFileInput?.click()}>
               Open file
             </button>
           {/if}
-          <button class="send-button" type="button" onclick={handleImportRequest} disabled={isImportingRequest}>
+          <button class="button-primary" type="button" onclick={handleImportRequest} disabled={isImportingRequest}>
             {isImportingRequest ? "Importing..." : "Import request"}
           </button>
-          <button class="ghost-button" type="button" onclick={closeRequestImportDialog}>
+          <button class="button-secondary" type="button" onclick={closeRequestImportDialog}>
             Cancel
           </button>
         </div>
       </div>
-    </div>
-  </div>
+  </DialogShell>
 {/if}

@@ -31,6 +31,7 @@ Do not use malformed WindowsApps-style paths if they appear in broken thread con
 When onboarding into a fresh task, read these first:
 
 - [docs/tech-design.md](docs/tech-design.md): current architecture and implementation state
+- [docs/design-system.md](docs/design-system.md): application design language, reusable UI patterns, accessibility contract, and feature design checklist
 - [src/routes/+page.svelte](src/routes/+page.svelte): main request runner UI
 - [src/routes/settings/+page.svelte](src/routes/settings/+page.svelte): persisted settings UI and updater surface
 - [src-tauri/src/lib.rs](src-tauri/src/lib.rs): Tauri startup and command registration

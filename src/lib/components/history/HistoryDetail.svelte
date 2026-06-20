@@ -50,11 +50,11 @@
       <h3>History Detail</h3>
       <div class="history-detail-actions">
         {#if detail}
-          <button class="system-button" type="button" onclick={() => onRestore(detail.id)} disabled={isRestoring}>
+          <button class="button-secondary button-compact" type="button" onclick={() => onRestore(detail.id)} disabled={isRestoring}>
             {isRestoring ? "Restoring..." : "Restore"}
           </button>
         {/if}
-        <button class="ghost-button" type="button" onclick={() => onClose()} disabled={!detail && !errorText}>
+        <button class="button-secondary" type="button" onclick={() => onClose()} disabled={!detail && !errorText}>
           Close
         </button>
       </div>
@@ -63,7 +63,7 @@
     {#if isLoading}
       <div class="empty-state">Loading stored request details...</div>
     {:else if errorText}
-      <div class="response-error">{errorText}</div>
+      <div class="feedback feedback-error">{errorText}</div>
     {:else if detail}
       <div class="detail-grid">
         <section class="detail-card detail-card-span">
@@ -206,7 +206,7 @@
           <h4 class="detail-section-title">Stored Response</h4>
 
           {#if detail.errorText}
-            <div class="response-error">{detail.errorText}</div>
+            <div class="feedback feedback-error">{detail.errorText}</div>
           {/if}
 
           <div class="detail-response-columns">

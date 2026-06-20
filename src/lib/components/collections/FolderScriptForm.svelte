@@ -75,7 +75,7 @@
     </div>
 
     <div class="collections-page-actions">
-      <button class="send-button" type="submit" disabled={isSaving}>
+      <button class="button-primary" type="submit" disabled={isSaving}>
         {isSaving ? "Saving..." : "Save folder"}
       </button>
     </div>

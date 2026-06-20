@@ -6,6 +6,23 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.20.13] - 2026-06-21
+
+### Added
+
+- Added a keyboard-accessible collection item move dialog for moving and reordering folders or saved requests across collections without drag-and-drop.
+- Added focused frontend tests for collection move positioning, cross-collection moves, no-op handling, and descendant protection.
+
+### Changed
+
+- Consolidated dialogs, text buttons, inline feedback, spacing, motion, HTTP method colors, and syntax colors around shared design-system components and semantic tokens.
+- Added reduced-motion behavior for transitions, progress indicators, collection reveal effects, and notifications while preserving notification expiry and hover pausing.
+
+### Fixed
+
+- Improved HTTP method color contrast throughout the collections sidebar.
+- Made destination collection loading in the keyboard move flow lazy and race-safe.
+
 ## [0.20.12] - 2026-06-18
 
 ### Fixed

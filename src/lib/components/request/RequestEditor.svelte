@@ -730,9 +730,9 @@
   <div class="request-section-header">
     <div class="request-section-title">
       <h2>Request</h2>
-      <button class="system-button" type="button" onclick={handleNewRequest}>New</button>
-      <button class="system-button" type="button" onclick={handleOpenImport}>Import</button>
-      <button class="system-button" type="button" onclick={handleOpenExport}>Export</button>
+      <button class="button-secondary button-compact" type="button" onclick={handleNewRequest}>New</button>
+      <button class="button-secondary button-compact" type="button" onclick={handleOpenImport}>Import</button>
+      <button class="button-secondary button-compact" type="button" onclick={handleOpenExport}>Export</button>
     </div>
   </div>
 
@@ -873,7 +873,7 @@
     <div class="editor-block">
       <div class="editor-header">
         <h2>Query Parameters</h2>
-        <button class="ghost-button" type="button" onclick={() => addRow("queryParams")}>Add row</button>
+        <button class="button-secondary" type="button" onclick={() => addRow("queryParams")}>Add row</button>
       </div>
 
       <div class="row-list">
@@ -920,7 +920,7 @@
     <div class="editor-block">
       <div class="editor-header">
         <h2>Headers</h2>
-        <button class="ghost-button" type="button" onclick={() => addRow("headers")}>Add row</button>
+        <button class="button-secondary" type="button" onclick={() => addRow("headers")}>Add row</button>
       </div>
 
       <div class="row-list">
@@ -995,7 +995,7 @@
           </select>
         </label>
         {#if request.body.mode === "json"}
-          <button class="ghost-button" type="button" onclick={formatJsonBody}>Format</button>
+          <button class="button-secondary" type="button" onclick={formatJsonBody}>Format</button>
         {/if}
       </div>
 
@@ -1072,7 +1072,7 @@
             </div>
           {/each}
 
-          <button class="ghost-button" type="button" onclick={addFormRow}>Add field</button>
+          <button class="button-secondary" type="button" onclick={addFormRow}>Add field</button>
         </div>
       {/if}
 
@@ -1081,7 +1081,7 @@
           <section class="multipart-section">
             <div class="editor-header">
               <h3>Fields</h3>
-              <button class="ghost-button" type="button" onclick={addFormRow}>Add field</button>
+              <button class="button-secondary" type="button" onclick={addFormRow}>Add field</button>
             </div>
 
             <div class="row-list">
@@ -1127,8 +1127,8 @@
             <div class="editor-header">
               <h3>Files</h3>
               <div class="multipart-actions">
-                <button class="ghost-button" type="button" onclick={addFileRow}>Add path</button>
-                <button class="ghost-button" type="button" onclick={handlePickMultipartFiles} disabled={isPickingMultipartFiles}>
+                <button class="button-secondary" type="button" onclick={addFileRow}>Add path</button>
+                <button class="button-secondary" type="button" onclick={handlePickMultipartFiles} disabled={isPickingMultipartFiles}>
                   {isPickingMultipartFiles ? "Picking..." : "Pick files"}
                 </button>
               </div>
@@ -1193,7 +1193,7 @@
           </section>
 
           {#if multipartErrorText}
-            <div class="response-error">{multipartErrorText}</div>
+            <div class="feedback feedback-error">{multipartErrorText}</div>
           {/if}
         </div>
       {/if}
@@ -1389,7 +1389,7 @@
           <div class="auth-action-row">
             <div class="oauth2-actions">
               <button
-                class="send-button"
+                class="button-primary"
                 type="button"
                 onclick={fetchOAuth2Token}
                 disabled={!handleFetchOAuth2Token || isFetchingOAuth2Token}

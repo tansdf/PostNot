@@ -111,7 +111,7 @@
 
   {#if response}
     {#if response.errorText}
-      <div class="response-error">
+      <div class="feedback feedback-error">
         <strong>{responseErrorSummary}</strong>
         <details class="response-error-details">
           <summary>Details</summary>
@@ -121,11 +121,11 @@
     {/if}
 
     {#if scriptExecution?.preRequestErrorText}
-      <div class="response-error">{scriptExecution.preRequestErrorText}</div>
+      <div class="feedback feedback-error">{scriptExecution.preRequestErrorText}</div>
     {/if}
 
     {#if scriptExecution?.testScriptErrorText}
-      <div class="response-error">{scriptExecution.testScriptErrorText}</div>
+      <div class="feedback feedback-error">{scriptExecution.testScriptErrorText}</div>
     {/if}
 
     {#if scriptExecution && scriptExecution.tests.length > 0}

@@ -60,7 +60,7 @@
     <div class="history-heading">
       <h2>History</h2>
       <button
-        class="system-button"
+        class="button-secondary button-compact"
         type="button"
         aria-expanded={!isCollapsed}
         onclick={() => onToggleCollapse(!isCollapsed)}
@@ -76,14 +76,14 @@
         <span class="history-meta">{items.length} entries</span>
       {/if}
 
-      <button class="ghost-button" type="button" disabled={isClearing || items.length === 0} onclick={() => onClear()}>
+      <button class="button-secondary" type="button" disabled={isClearing || items.length === 0} onclick={() => onClear()}>
         {isClearing ? "Clearing..." : "Clear history"}
       </button>
     </div>
   </div>
 
   {#if !isCollapsed && errorText}
-    <div class="response-error">{errorText}</div>
+    <div class="feedback feedback-error">{errorText}</div>
   {:else if !isCollapsed && items.length === 0 && !isLoading}
     <div class="empty-state">Request history will appear here after the first send.</div>
   {:else if !isCollapsed}
@@ -120,7 +120,7 @@
                   {selectedId === item.id ? "Inspecting" : "Inspect"}
                 </button>
                 <button
-                  class="ghost-button"
+                  class="button-secondary"
                   type="button"
                   onclick={() => onRestore(item.id)}
                   disabled={restoringId === item.id}

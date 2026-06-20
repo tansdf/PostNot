@@ -1,6 +1,17 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { fly, fade } from "svelte/transition";
   import { notifications } from "$lib/stores/notifications.svelte";
+
+  let prefersReducedMotion = $state(false);
+
+  onMount(() => {
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = () => (prefersReducedMotion = query.matches);
+    sync();
+    query.addEventListener("change", sync);
+    return () => query.removeEventListener("change", sync);
+  });
 </script>
 
 {#if notifications.items.length > 0}
@@ -10,8 +21,8 @@
         class={`notification-card notification-${notification.tone}`}
         role={notification.tone === "error" ? "alert" : "status"}
         style={`--notification-duration: ${notification.durationMs}ms;`}
-        in:fly={{ y: 18, duration: 180 }}
-        out:fade={{ duration: 140 }}
+        in:fly={{ y: prefersReducedMotion ? 0 : 18, duration: prefersReducedMotion ? 0 : 180 }}
+        out:fade={{ duration: prefersReducedMotion ? 0 : 140 }}
       >
         <div class="notification-body">
           {#if notification.title}

@@ -23,7 +23,7 @@
     updateEnvironment
   } from "$lib/api/commands";
   import { createStaleGuard } from "$lib/async-stale-guard";
-  import { modalBackdropDismiss, modalFocusTrap } from "$lib/modal-focus-trap";
+  import DialogShell from "$lib/components/layout/DialogShell.svelte";
   import { notifications } from "$lib/stores/notifications.svelte";
   import { readCachedJson, writeCachedJson, UI_CACHE_KEYS } from "$lib/ui-cache";
 
@@ -682,20 +682,20 @@
       <div class="request-section-header">
         <div class="request-section-title">
           <h1>Environments</h1>
-          <button class="system-button" type="button" onclick={handleExportEnvironment} disabled={!environmentDetail || isExporting}>
+          <button class="button-secondary button-compact" type="button" onclick={handleExportEnvironment} disabled={!environmentDetail || isExporting}>
             {isExporting ? "Exporting..." : "Export"}
           </button>
-          <button class="system-button" type="button" onclick={openImportModal}>
+          <button class="button-secondary button-compact" type="button" onclick={openImportModal}>
             Import
           </button>
-          <button class="system-button" type="button" onclick={handleCreateEnvironment} disabled={isCreating}>
+          <button class="button-secondary button-compact" type="button" onclick={handleCreateEnvironment} disabled={isCreating}>
             {isCreating ? "Creating..." : "New"}
           </button>
         </div>
       </div>
 
       {#if errorText}
-        <div class="response-error">{errorText}</div>
+        <div class="feedback feedback-error">{errorText}</div>
       {/if}
 
       {#if environments.length === 0 && !isLoading}
@@ -781,7 +781,7 @@
 
           <div class="editor-header">
             <h2>Variables</h2>
-            <button class="ghost-button" type="button" onclick={addVariable}>Add variable</button>
+            <button class="button-secondary" type="button" onclick={addVariable}>Add variable</button>
           </div>
 
           <div class="row-list">
@@ -889,7 +889,7 @@
           </div>
 
           <div class="collections-page-actions">
-            <button class="send-button" type="button" onclick={handleSave} disabled={isSaving}>
+            <button class="button-primary" type="button" onclick={handleSave} disabled={isSaving}>
               {isSaving ? "Saving..." : settings.environmentAutosave ? "Save now" : "Save environment"}
             </button>
           </div>
@@ -901,12 +901,7 @@
   <svelte:window onkeydown={handleWindowKeydown} onbeforeunload={handleBeforeUnload} />
 
   {#if isImportModalOpen}
-    <div
-      class="modal-backdrop"
-      use:modalFocusTrap={{ onEscape: closeImportModal }}
-      use:modalBackdropDismiss={{ onDismiss: closeImportModal }}
-    >
-      <div class="panel save-dialog" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="import-environment-title">
+    <DialogShell ariaLabelledby="import-environment-title" onDismiss={closeImportModal}>
         <div class="editor-header import-dialog-header">
           <h2 id="import-environment-title">Import</h2>
           <span class="history-meta">Postman Environment JSON</span>
@@ -946,15 +941,15 @@
           />
 
           {#if importErrorText}
-            <div class="response-error">{importErrorText}</div>
+            <div class="feedback feedback-error">{importErrorText}</div>
           {/if}
 
           <div class="collections-page-actions">
-            <button class="ghost-button" type="button" onclick={() => importFileInput?.click()}>
+            <button class="button-secondary" type="button" onclick={() => importFileInput?.click()}>
               Open JSON file
             </button>
             <button
-              class="send-button"
+              class="button-primary"
               type="button"
               onclick={async () => {
                 await handleImportEnvironment();
@@ -966,11 +961,10 @@
             >
               {isImporting ? "Importing..." : "Import"}
             </button>
-            <button class="ghost-button" type="button" onclick={closeImportModal}>
+            <button class="button-secondary" type="button" onclick={closeImportModal}>
               Cancel
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </DialogShell>
   {/if}

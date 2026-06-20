@@ -237,7 +237,7 @@
                 </div>
 
                 <button
-                  class="system-button"
+                  class="button-secondary button-compact"
                   type="button"
                   disabled={updater.isChecking || updater.isInstalling}
                   onclick={() => updater.checkManually()}
@@ -329,7 +329,7 @@
               {#if updater.availableUpdate}
                 <div class="settings-inline-actions">
                   <button
-                    class="send-button"
+                    class="button-primary"
                     type="button"
                     disabled={updater.isChecking || updater.isInstalling}
                     onclick={() => updater.installAvailableUpdate()}
@@ -418,7 +418,7 @@
         </div>
 
         <div class="settings-actions">
-          <button class="send-button" type="submit" disabled={isSaving}>
+          <button class="button-primary" type="submit" disabled={isSaving}>
             {isSaving ? "Saving..." : "Save settings"}
           </button>
         </div>
@@ -426,6 +426,6 @@
     {/if}
 
     {#if errorText}
-      <div class="response-error">{errorText}</div>
+      <div class="feedback feedback-error">{errorText}</div>
     {/if}
   </section>
