@@ -25,6 +25,13 @@
   --sidebar-card-muted-bg: rgba(255, 250, 241, 0.08);
   --sidebar-link-bg: rgba(255, 250, 241, 0.08);
   --sidebar-link-hover-bg: rgba(255, 250, 241, 0.14);
+  --sidebar-active-bg: rgba(255, 250, 241, 0.16);
+  --sidebar-control-border: rgba(248, 243, 231, 0.16);
+  --sidebar-control-bg: rgba(248, 243, 231, 0.08);
+  --sidebar-control-hover-bg: rgba(248, 243, 231, 0.12);
+  --sidebar-text-secondary: rgba(248, 243, 231, 0.74);
+  --sidebar-text-muted: rgba(248, 243, 231, 0.58);
+  --sidebar-text-strong: rgba(248, 243, 231, 0.86);
   --control-bg: rgba(255, 250, 241, 0.9);
   --control-hover-bg: rgba(255, 250, 241, 1);
   --control-selected-bg: #172c2b;
@@ -119,6 +126,13 @@
   --sidebar-card-muted-bg: rgba(255, 250, 241, 0.05);
   --sidebar-link-bg: rgba(255, 250, 241, 0.06);
   --sidebar-link-hover-bg: rgba(255, 250, 241, 0.12);
+  --sidebar-active-bg: rgba(255, 250, 241, 0.14);
+  --sidebar-control-border: rgba(248, 243, 231, 0.14);
+  --sidebar-control-bg: rgba(248, 243, 231, 0.06);
+  --sidebar-control-hover-bg: rgba(248, 243, 231, 0.1);
+  --sidebar-text-secondary: rgba(248, 243, 231, 0.76);
+  --sidebar-text-muted: rgba(248, 243, 231, 0.6);
+  --sidebar-text-strong: rgba(248, 243, 231, 0.88);
   --control-bg: #16211f;
   --control-hover-bg: #1c2926;
   --control-selected-bg: #de7c4f;

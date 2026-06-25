@@ -476,6 +476,49 @@
     }
   }
 
+  function handleTreeKeydown(
+    event: KeyboardEvent,
+    options?: { expanded: boolean; toggle: () => Promise<void> | void }
+  ) {
+    const current = event.currentTarget;
+    if (!(current instanceof HTMLButtonElement)) {
+      return;
+    }
+
+    if (event.key === "ArrowRight" && options && !options.expanded) {
+      event.preventDefault();
+      void options.toggle();
+      return;
+    }
+
+    if (event.key === "ArrowLeft" && options && options.expanded) {
+      event.preventDefault();
+      void options.toggle();
+      return;
+    }
+
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+      return;
+    }
+
+    const rows = Array.from(
+      current.closest(".sidebar-section")?.querySelectorAll<HTMLButtonElement>("[data-sidebar-tree-row='true']") ?? []
+    ).filter((row) => row.offsetParent !== null && !row.disabled);
+    const currentIndex = rows.indexOf(current);
+    if (currentIndex === -1) {
+      return;
+    }
+
+    event.preventDefault();
+    const nextIndex =
+      event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? rows.length - 1
+          : Math.max(0, Math.min(rows.length - 1, currentIndex + (event.key === "ArrowDown" ? 1 : -1)));
+    rows[nextIndex]?.focus();
+  }
+
   function handleWindowKeydown(event: KeyboardEvent) {
     const key = event.key.toLowerCase();
     const isSearchShortcut =
@@ -592,15 +635,15 @@
 
   <div class="sidebar-section-scroll scrollbar-invisible">
     {#if collections.errorText}
-      <div class="sidebar-inline-error">{collections.errorText}</div>
+      <div class="sidebar-inline-error" role="alert">{collections.errorText}</div>
     {/if}
 
     {#if collectionSearch.errorText}
-      <div class="sidebar-inline-error">{collectionSearch.errorText}</div>
+      <div class="sidebar-inline-error" role="alert">{collectionSearch.errorText}</div>
     {/if}
 
     {#if collectionSearch.isActive}
-      <div class="sidebar-search-status">
+      <div class="sidebar-search-status" role="status" aria-live="polite">
         {#if collectionSearch.isSearching}
           <span>Searching...</span>
         {:else}
@@ -716,7 +759,7 @@
     {:else if collections.collections.length === 0 && !collections.isCollectionsLoading}
       <div class="sidebar-empty-state">Create a collection to keep saved requests close at hand.</div>
     {:else}
-      <div class="sidebar-collection-stack">
+      <div class="sidebar-collection-stack" aria-label="Collection tree">
         {#each collections.collections as collection (collection.id)}
           <article
             class={[
@@ -732,6 +775,14 @@
                 class="sidebar-collection-button"
                 type="button"
                 onclick={() => openCollection(collection.id)}
+                onkeydown={(event) =>
+                  handleTreeKeydown(event, {
+                    expanded: expandedCollectionIds.has(collection.id),
+                    toggle: () => toggleCollection(collection.id)
+                  })}
+                aria-expanded={expandedCollectionIds.has(collection.id)}
+                aria-current={collections.selectedCollectionId === collection.id ? "page" : undefined}
+                data-sidebar-tree-row="true"
                 data-collection-drop="root"
                 data-collection-id={collection.id}
               >
@@ -761,7 +812,7 @@
             {#if expandedCollectionIds.has(collection.id)}
               <div class="sidebar-request-stack">
                 {#if collections.isCollectionItemsLoading && !(collections.collectionItemsByCollection[collection.id]?.length)}
-                  <span class="sidebar-collection-meta">Loading items...</span>
+                  <span class="sidebar-collection-meta" role="status" aria-live="polite">Loading collection items...</span>
                 {:else if (collections.collectionItemsByCollection[collection.id] ?? []).length === 0}
                   <span class="sidebar-collection-meta">No saved requests yet.</span>
                 {:else}
@@ -782,8 +833,15 @@
                               ]}
                               type="button"
                               onclick={() => toggleFolder(item.id)}
+                              onkeydown={(event) =>
+                                handleTreeKeydown(event, {
+                                  expanded: expandedFolderIds.has(item.id),
+                                  toggle: () => toggleFolder(item.id)
+                                })}
                               onpointerdown={(event) => handleItemPointerDown(event, item)}
                               aria-expanded={expandedFolderIds.has(item.id)}
+                              aria-label={`${item.name}, ${item.children.length === 0 ? "empty" : `${item.children.length} item${item.children.length === 1 ? "" : "s"}`}`}
+                              data-sidebar-tree-row="true"
                               style={`--tree-depth:${depth};`}
                               data-collection-drop="item"
                               data-collection-id={collection.id}
@@ -822,6 +880,9 @@
                             ]}
                             type="button"
                             onclick={() => openSavedRequest(collection.id, item.id)}
+                            onkeydown={handleTreeKeydown}
+                            aria-current={page.url.searchParams.get("savedRequestId") === item.id ? "page" : undefined}
+                            data-sidebar-tree-row="true"
                             style={`--tree-depth:${depth};`}
                             onpointerdown={(event) => handleItemPointerDown(event, item)}
                             data-collection-drop="item"

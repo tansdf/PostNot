@@ -708,11 +708,11 @@
     </div>
 
     {#if isLoading}
-      <p class="muted-text">Loading playbooks...</p>
+      <p class="muted-text" role="status" aria-live="polite">Loading playbooks...</p>
     {:else if errorText}
-      <p class="error-text">{errorText}</p>
+      <div class="feedback feedback-error" role="alert">{errorText}</div>
     {:else if playbooks.length === 0}
-      <div class="empty-state">
+      <div class="empty-state" role="status">
         <h3>No playbooks yet</h3>
         <p>Create a playbook to run saved requests in order.</p>
       </div>
@@ -742,7 +742,23 @@
         </div>
         <div class="playbook-header-actions">
           <button class="button-secondary button-compact" type="button" onclick={handleDuplicatePlaybook} disabled={isRunning}>Duplicate</button>
-          <button class="button-danger button-compact" type="button" onclick={handleDeletePlaybook} disabled={isRunning}>Delete</button>
+          <button
+            class="icon-button row-action-button row-action-danger button-compact"
+            type="button"
+            title={`Delete ${selectedPlaybook.name}`}
+            aria-label={`Delete ${selectedPlaybook.name}`}
+            onclick={handleDeletePlaybook}
+            disabled={isRunning}
+          >
+            <svg viewBox="0 0 20 20" aria-hidden="true">
+              <path d="M3 5h14" />
+              <path d="M8 5V3h4v2" />
+              <path d="M6 8v8" />
+              <path d="M10 8v8" />
+              <path d="M14 8v8" />
+              <path d="M5 5l1 12h8l1-12" />
+            </svg>
+          </button>
           <button class="button-primary button-compact" type="button" onclick={handleSavePlaybook} disabled={isSavingPlaybook || isRunning}>
             {isSavingPlaybook ? "Saving..." : "Save"}
           </button>
@@ -783,7 +799,7 @@
           />
         </label>
         {#if isSearching}
-          <p class="muted-text">Searching...</p>
+          <p class="muted-text" role="status" aria-live="polite">Searching saved requests...</p>
         {:else if addSearchResults.length > 0}
           <div class="search-results">
             {#each addSearchResults as result}
@@ -878,7 +894,7 @@
               <div class="step-actions">
                 <button class="button-secondary button-compact" type="button" onclick={() => openSavedRequest(step)} disabled={!step.savedRequestId}>Open</button>
                 <button
-                  class="icon-button row-action-button row-action-danger"
+                  class="icon-button row-action-button row-action-danger button-compact"
                   type="button"
                   title={`Remove ${displayStepName(step)} from playbook`}
                   aria-label={`Remove ${displayStepName(step)} from playbook`}
@@ -936,7 +952,7 @@
     </div>
 
     {#if liveSteps.length > 0}
-      <div class="live-steps">
+      <div class="live-steps" aria-live="polite" aria-relevant="additions text" aria-atomic="false">
         {#each liveSteps as step}
           <div class={["live-step", `live-step-${step.status}`]}>
             <div>
@@ -997,7 +1013,7 @@
   .playbooks-page {
     display: grid;
     grid-template-columns: minmax(210px, 0.72fr) minmax(420px, 1.7fr) minmax(300px, 0.95fr);
-    gap: 18px;
+    gap: calc(var(--space-4) + var(--space-1) / 2);
     height: 100%;
     max-height: 100%;
     min-height: 0;
@@ -1007,13 +1023,13 @@
   .playbook-list-panel,
   .playbook-editor-panel,
   .playbook-run-panel {
-    padding: 16px;
+    padding: var(--space-4);
     min-height: 0;
     height: 100%;
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: var(--space-3);
   }
 
   .playbook-section-header,
@@ -1023,7 +1039,7 @@
   .step-actions {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: calc(var(--space-2) + var(--space-1) / 2);
   }
 
   .playbook-section-header,
@@ -1051,7 +1067,7 @@
   .playbook-list {
     display: grid;
     align-content: start;
-    gap: 6px;
+    gap: calc(var(--space-1) + var(--space-1) / 2);
   }
 
   .steps-list {
@@ -1077,18 +1093,18 @@
     border: 1px solid var(--border-soft);
     background: var(--surface-subtle);
     border-radius: var(--radius-sm);
-    padding: 8px 10px;
+    padding: var(--space-2) calc(var(--space-2) + var(--space-1) / 2);
     display: grid;
-    gap: 2px;
+    gap: calc(var(--space-1) / 2);
   }
 
   .playbook-list-item span {
-    font-size: 0.92rem;
+    font-size: var(--font-body);
     line-height: 1.2;
   }
 
   .playbook-list-item small {
-    font-size: 0.78rem;
+    font-size: var(--font-meta);
     line-height: 1.2;
   }
 
@@ -1114,7 +1130,7 @@
   .step-fields {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 150px;
-    gap: 8px 10px;
+    gap: var(--space-2) calc(var(--space-2) + var(--space-1) / 2);
   }
 
   .step-fields {
@@ -1124,8 +1140,8 @@
 
   label {
     display: grid;
-    gap: 5px;
-    font-size: 0.82rem;
+    gap: calc(var(--space-1) + var(--space-1) / 4);
+    font-size: var(--font-label);
     color: var(--text-secondary);
   }
 
@@ -1136,7 +1152,7 @@
     background: var(--control-bg);
     color: var(--text-primary);
     border-radius: var(--radius-sm);
-    padding: 8px 10px;
+    padding: var(--space-2) calc(var(--space-2) + var(--space-1) / 2);
     min-width: 0;
   }
 
@@ -1152,7 +1168,7 @@
   .step-toggle {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
   }
 
   .playbook-checkbox {
@@ -1163,7 +1179,7 @@
     min-width: 18px;
     padding: 0;
     border: 1px solid var(--border-strong);
-    border-radius: 5px;
+    border-radius: var(--radius-compact);
     background: var(--control-bg);
     display: grid;
     place-items: center;
@@ -1198,26 +1214,26 @@
     border: 1px solid var(--border-soft);
     background: var(--surface-subtle);
     border-radius: var(--radius-sm);
-    padding: 10px;
+    padding: calc(var(--space-2) + var(--space-1) / 2);
   }
 
   .search-results {
     display: grid;
-    gap: 6px;
+    gap: calc(var(--space-1) + var(--space-1) / 2);
     max-height: 220px;
     overflow-y: auto;
   }
 
   .steps-list {
     display: grid;
-    gap: 8px;
+    gap: var(--space-2);
   }
 
   .step-row {
     display: grid;
     grid-template-columns: 34px minmax(0, 1fr) auto;
-    gap: 10px;
-    padding: 10px;
+    gap: calc(var(--space-2) + var(--space-1) / 2);
+    padding: calc(var(--space-2) + var(--space-1) / 2);
     border: 1px solid var(--border-soft);
     background: var(--surface);
     border-radius: var(--radius-sm);
@@ -1260,7 +1276,7 @@
     display: grid;
     justify-items: center;
     align-content: start;
-    gap: 4px;
+    gap: var(--space-1);
   }
 
   .step-order-button {
@@ -1304,11 +1320,11 @@
   .step-main {
     min-width: 0;
     display: grid;
-    gap: 8px;
+    gap: var(--space-2);
   }
 
   .step-main p {
-    margin: 3px 0 0;
+    margin: calc(var(--space-1) - 1px) 0 0;
     overflow-wrap: anywhere;
   }
 
@@ -1332,12 +1348,12 @@
   .run-summary {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 8px;
+    gap: var(--space-2);
   }
 
   .run-summary div {
     display: grid;
-    gap: 2px;
+    gap: calc(var(--space-1) / 2);
   }
 
   .run-summary span {
@@ -1353,14 +1369,14 @@
 
   .live-steps {
     display: grid;
-    gap: 8px;
+    gap: var(--space-2);
   }
 
   .live-step {
     border: 1px solid var(--border-soft);
     border-left: 4px solid var(--border-strong);
     border-radius: var(--radius-sm);
-    padding: 10px;
+    padding: calc(var(--space-2) + var(--space-1) / 2);
     background: var(--surface-subtle);
   }
 
@@ -1384,31 +1400,31 @@
   .live-step div {
     display: flex;
     justify-content: space-between;
-    gap: 8px;
+    gap: var(--space-2);
   }
 
   .live-step p {
-    margin: 5px 0 0;
+    margin: calc(var(--space-1) + var(--space-1) / 4) 0 0;
     overflow-wrap: anywhere;
   }
 
   .run-history {
     display: grid;
-    gap: 8px;
+    gap: var(--space-2);
   }
 
   .run-history-detail {
-    padding: 0 10px 8px;
-    font-size: 0.86rem;
+    padding: 0 calc(var(--space-2) + var(--space-1) / 2) var(--space-2);
+    font-size: var(--font-code);
   }
 
   .run-history-detail p {
-    margin: 4px 0;
+    margin: var(--space-1) 0;
   }
 
   .run-detail-step {
     margin-top: 8px;
-    padding: 8px;
+    padding: var(--space-2);
     border: 1px solid var(--border-soft);
     border-radius: var(--radius-sm);
     background: var(--surface-subtle);
@@ -1421,10 +1437,6 @@
   .run-error-text {
     color: var(--danger);
     overflow-wrap: anywhere;
-  }
-
-  .error-text {
-    color: var(--danger);
   }
 
   @media (max-width: 960px) {

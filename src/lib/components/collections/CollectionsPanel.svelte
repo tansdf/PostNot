@@ -254,11 +254,11 @@
 
               <div class="saved-request-actions">
                 {#if item.kind === "folder"}
-                  <button class="tab-button" type="button" onclick={() => onCreateChildFolder(item.id)}>
+                  <button class="tab-button button-compact" type="button" onclick={() => onCreateChildFolder(item.id)}>
                     Add subfolder
                   </button>
                 {:else}
-                  <button class="tab-button" type="button" onclick={() => handleOpenSavedRequestClick(item.id)}>
+                  <button class="tab-button button-compact" type="button" onclick={() => handleOpenSavedRequestClick(item.id)}>
                     Open in Requests
                   </button>
                 {/if}
@@ -273,12 +273,26 @@
                 </button>
 
                 <button
-                  class="icon-button"
+                  class="icon-button row-action-button row-action-danger button-compact"
                   type="button"
+                  title={`Delete ${item.name}`}
+                  aria-label={`Delete ${item.name}`}
                   onclick={() => onDeleteCollectionItem(item)}
                   disabled={pendingDeleteCollectionItemId === item.id}
                 >
-                  {pendingDeleteCollectionItemId === item.id ? "Deleting..." : "Delete"}
+                  {#if pendingDeleteCollectionItemId === item.id}
+                    <span class="sr-only">Deleting {item.name}</span>
+                    <span aria-hidden="true">...</span>
+                  {:else}
+                    <svg viewBox="0 0 20 20" aria-hidden="true">
+                      <path d="M3 5h14" />
+                      <path d="M8 5V3h4v2" />
+                      <path d="M6 8v8" />
+                      <path d="M10 8v8" />
+                      <path d="M14 8v8" />
+                      <path d="M5 5l1 12h8l1-12" />
+                    </svg>
+                  {/if}
                 </button>
               </div>
 

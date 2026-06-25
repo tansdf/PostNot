@@ -71,7 +71,7 @@
 
     <div class="history-toolbar">
       {#if isLoading}
-        <span class="history-meta">Refreshing...</span>
+        <span class="history-meta" role="status" aria-live="polite">Refreshing history...</span>
       {:else}
         <span class="history-meta">{items.length} entries</span>
       {/if}
@@ -83,9 +83,9 @@
   </div>
 
   {#if !isCollapsed && errorText}
-    <div class="feedback feedback-error">{errorText}</div>
+    <div class="feedback feedback-error" role="alert">{errorText}</div>
   {:else if !isCollapsed && items.length === 0 && !isLoading}
-    <div class="empty-state">Request history will appear here after the first send.</div>
+    <div class="empty-state" role="status">Request history will appear here after the first send.</div>
   {:else if !isCollapsed}
     <div class={["history-content", hasActiveDetail && "history-content-detail-open"]}>
       <div class="history-list-column">

@@ -156,15 +156,26 @@ The application is desktop-first but must remain operable in a narrow window. Ex
 | `.button-secondary` | A supporting action with visible affordance |
 | `.button-ghost` | Low-emphasis or tertiary action |
 | `.button-danger` | An action is destructive or difficult to reverse |
-| `.button-compact` | Dense list or toolbar context |
+| `.button-compact` | Small button size for dense lists, rows, and compact toolbars |
+| `.button-large` | Large button size for high-emphasis request or dialog actions |
 | `.icon-button` / `.row-action-button` | Familiar action where text would add clutter |
 | `.tab-button` | Switches a local view; active state uses `.active` |
+
+Button sizing is separate from action intent. The standard control scale is:
+
+| Size | Classes | Height | Use when |
+|---|---|---:|---|
+| Small | `.button-compact` or `.icon-button.button-compact` | `--control-height-sm` (`32px`) | Dense action groups, table/list rows, panel headers with several controls |
+| Medium | no size class | `--control-height-md` (`36px`) | Default forms, dialogs, and page actions |
+| Large | `.button-large` or `.icon-button.button-large` | `--control-height-lg` (`40px`) | Primary request/send/save surfaces and rare high-emphasis actions |
 
 Rules:
 
 - Prefer one primary action per visible action group.
 - Pair destructive styling with a clear verb; use confirmation for deletion of durable user data.
 - Icon-only buttons require an `aria-label` and usually a `title`.
+- Keep controls in the same action group on the same size. For example, pair `.button-secondary.button-compact` with `.icon-button.button-compact`, not a default medium icon button.
+- Do not introduce feature-local button heights or widths when one of the three shared sizes fits.
 - Disabled controls must remain understandable from nearby context. Use a loading label when the action is in progress.
 - Use shared heights: `--control-height-sm`, `--control-height-md`, and `--control-height-lg`.
 - Preserve the global `:focus-visible` ring. Custom compound controls must provide an equivalent inset or outer ring.
@@ -318,13 +329,13 @@ Implementation sequence:
 
 ## 9. Design System Audit
 
-Audit date: 2026-06-21. Scope: 17 shared frontend components, shared tokens/styles, application shell, and route-level UI patterns after the `0.20.13` remediation.
+Audit date: 2026-06-22. Scope: 17 shared frontend components, shared tokens/styles, application shell, and route-level UI patterns after the `0.20.13` remediation.
 
 ### Summary
 
-**Components reviewed: 17 | Remaining issue groups: 4 | Score: 88/100**
+**Components reviewed: 17 | Remaining issue groups: 2 | Score: 94/100**
 
-The system now has semantic method/syntax/overlay tokens, a compact spacing scale, canonical text-button names, a shared dialog shell, reduced-motion behavior, standardized block feedback, and a keyboard alternative for collection drag-and-drop. Follow-up review confirmed that notification hover expiry, sidebar method contrast, cross-platform tests, and lazy/race-safe move destinations are aligned with the system contract. Remaining work is mostly opportunistic migration of feature-local values and continued tree/status accessibility review.
+The system now has semantic method/syntax/overlay/sidebar tokens, a compact spacing scale, canonical text-button names, a shared dialog shell, reduced-motion behavior, standardized block feedback, and a keyboard alternative for collection drag-and-drop. Playbooks now consume the shared spacing and typography scale, sidebar collection disclosures support Arrow/Home/End keyboard traversal, and loading/error updates in the sidebar, Playbooks, and history surfaces use consistent status or alert semantics. Remaining work is mostly opportunistic migration of untouched feature-local values and continued live-region review as async surfaces change.
 
 ### Naming consistency
 
@@ -338,11 +349,11 @@ The system now has semantic method/syntax/overlay tokens, a compact spacing scal
 
 | Category | Coverage | Known gap |
 |---|---|---|
-| Theme colors | Strong | `app.css` has no hardcoded hex colors, but 38 `rgb`/`rgba` occurrences remain, mostly sidebar translucency and a few legacy state surfaces |
-| Typography | Good | The Playbooks route retains 4 literal feature-local font sizes |
+| Theme colors | Strong | `app.css` has no hardcoded hex colors; 21 `rgb`/`rgba` occurrences remain in isolated legacy state surfaces |
+| Typography | Strong | Playbooks' repeated text roles use the shared typography tokens; isolated component-specific sizes remain where geometry requires them |
 | Radius | Strong | Several legacy literal pill radii remain |
 | Control height | Good | Specialized controls use fixed heights where composition demands it |
-| Spacing | Partial | Shared scale exists; the Playbooks route retains 18 literal gaps and 9 literal padding declarations |
+| Spacing | Good | Shared scale exists and Playbooks' repeated gaps and padding now consume it; isolated geometry-specific values remain |
 | Elevation | Good | Standard and overlay elevation are tokenized |
 | Motion | Good | Shared durations, static reduced-motion expiry, hover pause, and JS notification transition handling are implemented |
 
@@ -356,15 +367,13 @@ The system now has semantic method/syntax/overlay tokens, a compact spacing scal
 | Dialogs | Good | Shared `DialogShell`, focus trap, Escape, backdrop, focus restore | Complete | 9/10 |
 | Notifications | Good | Live regions, tone roles, reduced motion, hover pause | Complete | 9/10 |
 | Panels/cards | Good visually | Semantic structure depends on call site | Complete | 8/10 |
-| Empty/loading/error states | Block feedback standardized | Announcements still vary by feature | Partial | 7/10 |
-| Trees and drag-and-drop | Pointer drag plus lazy keyboard move dialog | Search/tree navigation semantics still need review | Partial | 7/10 |
+| Empty/loading/error states | Block feedback standardized | Core sidebar, Playbooks, and history updates announce consistently | Partial | 8/10 |
+| Trees and drag-and-drop | Pointer drag plus lazy keyboard move dialog | Sidebar disclosures expose state and Arrow/Home/End traversal | Complete | 9/10 |
 
 ### Priority actions
 
-1. Migrate Playbooks' repeated spacing and typography literals to the shared scale when that route is next changed.
-2. Review sidebar tree semantics and keyboard navigation independently of the completed move/reorder alternative.
-3. Standardize live-region behavior for async loading, empty, and error states where announcements still vary.
-4. Tokenize recurring sidebar translucency or state surfaces only when a reusable semantic intent is clear.
+1. Continue standardizing live-region behavior when untouched async loading, empty, and error surfaces are changed.
+2. Migrate repeated feature-local visual values to shared tokens when a second use establishes reusable intent.
 
 These are improvement directions, not permission for an unrelated sweeping refactor. Feature changes should improve the code they touch while preserving recognizable behavior.
 

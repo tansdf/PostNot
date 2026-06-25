@@ -61,9 +61,9 @@
     </div>
 
     {#if isLoading}
-      <div class="empty-state">Loading stored request details...</div>
+      <div class="empty-state" role="status" aria-live="polite">Loading stored request details...</div>
     {:else if errorText}
-      <div class="feedback feedback-error">{errorText}</div>
+      <div class="feedback feedback-error" role="alert">{errorText}</div>
     {:else if detail}
       <div class="detail-grid">
         <section class="detail-card detail-card-span">

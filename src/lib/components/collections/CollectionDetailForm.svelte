@@ -119,7 +119,7 @@
       {isSavingCollection ? "Saving..." : "Save collection"}
     </button>
     <button
-      class="icon-button"
+      class="button-danger"
       type="button"
       onclick={() => onDeleteCollection(collection.id)}
       disabled={pendingDeleteCollectionId === collection.id}

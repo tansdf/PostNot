@@ -6,6 +6,20 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.20.14] - 2026-06-25
+
+### Changed
+
+- Expanded design-system token usage across Playbooks and sidebar state surfaces, including reusable sidebar translucency, text, and control tokens.
+- Improved sidebar collection tree keyboard behavior with arrow, Home, and End navigation across visible rows.
+- Standardized button sizing around the shared small, medium, and large control-height tokens, including compact icon buttons and row actions.
+
+### Fixed
+
+- Standardized loading, empty, and error announcements across Playbooks, history, and sidebar collection search with status and alert semantics.
+- Aligned destructive icon buttons with adjacent compact actions in Playbooks and Collections.
+- Centered request key/value row controls so row delete actions align vertically with their inputs.
+
 ## [0.20.13] - 2026-06-21
 
 ### Added
