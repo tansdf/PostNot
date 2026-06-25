@@ -6,6 +6,22 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.20.15] - 2026-06-25
+
+### Added
+
+- Added an optional Forest theme with a deeper green workbench palette.
+
+### Changed
+
+- Reworked Settings theme selection into accessible preview cards and improved shared control hover, focus, active, disabled, and destructive-action styling.
+- Rebuilt the Settings updater surface around explicit checking, current, available, downloading, warning, and error states.
+- Reflowed the Settings page into responsive vertical columns to avoid large gaps across mid-sized window configurations.
+
+### Fixed
+
+- Fixed Forest theme native number-input controls so spinner arrows use the correct dark browser treatment.
+
 ## [0.20.14] - 2026-06-25
 
 ### Changed

@@ -124,7 +124,10 @@ button:disabled {
 
 :root[data-theme="dark"] input,
 :root[data-theme="dark"] select,
-:root[data-theme="dark"] textarea {
+:root[data-theme="dark"] textarea,
+:root[data-theme="forest"] input,
+:root[data-theme="forest"] select,
+:root[data-theme="forest"] textarea {
   color-scheme: dark;
 }
 
@@ -598,6 +601,38 @@ button:disabled {
   background: var(--bg-panel-strong);
   color: var(--text-primary);
   padding: 10px 12px;
+  min-height: var(--control-height-md);
+  transition: background var(--motion-base) var(--ease-standard), border-color var(--motion-base) var(--ease-standard), box-shadow var(--motion-base) var(--ease-standard);
+}
+
+.text-input:hover:not(:disabled),
+.method-select:hover:not(:disabled),
+.body-mode-select:hover:not(:disabled),
+.body-textarea:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--border-strong) 76%, var(--border-soft));
+}
+
+.text-input:focus,
+.method-select:focus,
+.body-mode-select:focus,
+.body-textarea:focus {
+  outline: none;
+}
+
+.text-input:focus-visible,
+.method-select:focus-visible,
+.body-mode-select:focus-visible,
+.body-textarea:focus-visible {
+  border-color: color-mix(in srgb, var(--bg-accent) 68%, var(--border-strong));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bg-accent) 20%, transparent);
+}
+
+.text-input:disabled,
+.method-select:disabled,
+.body-mode-select:disabled,
+.body-textarea:disabled {
+  opacity: 0.64;
+  cursor: not-allowed;
 }
 
 select.text-input,
@@ -664,7 +699,7 @@ select option {
   min-height: var(--control-height-md);
   padding: 0 14px;
   font-size: var(--font-body);
-  transition: background var(--motion-base) var(--ease-standard), border-color var(--motion-base) var(--ease-standard), color var(--motion-base) var(--ease-standard), opacity var(--motion-base) var(--ease-standard);
+  transition: background var(--motion-base) var(--ease-standard), border-color var(--motion-base) var(--ease-standard), color var(--motion-base) var(--ease-standard), opacity var(--motion-base) var(--ease-standard), box-shadow var(--motion-base) var(--ease-standard), transform var(--motion-fast) var(--ease-standard);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -695,28 +730,15 @@ select option {
 
 .button-danger,
 .button-primary.cancel-button {
-  background: var(--danger);
-  border-color: var(--danger);
-  color: white;
+  background: var(--danger-bg);
+  border: 1px solid color-mix(in srgb, var(--danger) 42%, var(--border-soft));
+  color: var(--danger-text);
 }
 
 .button-danger:hover:not(:disabled),
 .button-primary.cancel-button:hover:not(:disabled) {
-  background: var(--danger-hover);
-}
-
-:root[data-theme="dark"] .button-danger,
-:root[data-theme="dark"] .button-primary.cancel-button {
-  background: var(--danger);
-  border-color: var(--danger);
-  color: var(--bg-app);
-}
-
-:root[data-theme="dark"] .button-danger:hover:not(:disabled),
-:root[data-theme="dark"] .button-primary.cancel-button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--danger) 86%, white 14%);
-  border-color: color-mix(in srgb, var(--danger) 86%, white 14%);
-  color: var(--bg-app);
+  background: var(--danger-bg-hover);
+  border-color: color-mix(in srgb, var(--danger) 54%, var(--border-soft));
 }
 
 .button-primary:disabled,
@@ -743,6 +765,15 @@ select option {
 .icon-button:hover,
 .tab-button:hover {
   background: var(--control-hover-bg);
+}
+
+.button-primary:active:not(:disabled),
+.button-secondary:active:not(:disabled),
+.button-ghost:active:not(:disabled),
+.button-danger:active:not(:disabled),
+.icon-button:active:not(:disabled),
+.tab-button:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 .button-ghost {
@@ -788,6 +819,7 @@ select option {
   background: var(--control-selected-bg);
   color: var(--control-selected-text);
   border-color: var(--control-selected-border);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--control-selected-border) 78%, transparent);
 }
 
 .panel-tabs {
@@ -2260,23 +2292,18 @@ select option {
 }
 
 .settings-layout,
-.settings-primary-grid,
-.settings-secondary-grid,
+.settings-column,
 .settings-section-card {
   display: grid;
   gap: 14px;
 }
 
 .settings-layout {
+  grid-template-columns: minmax(21rem, 1fr) minmax(21rem, 1fr);
   align-items: start;
 }
 
-.settings-primary-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.settings-secondary-grid {
-  grid-template-columns: minmax(18rem, 1.25fr) repeat(2, minmax(16rem, 0.9fr));
+.settings-column {
   align-items: start;
 }
 
@@ -2287,8 +2314,8 @@ select option {
   border: 1px solid var(--border-soft);
 }
 
-.settings-section-card-emphasis {
-  min-width: 0;
+.settings-updates-card {
+  align-content: start;
 }
 
 .settings-section-heading {
@@ -2313,6 +2340,89 @@ select option {
   line-height: 1.45;
 }
 
+.settings-theme-group {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.settings-theme-options {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(12.5rem, 1fr));
+}
+
+.settings-theme-option {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: center;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-subtle) 82%, var(--bg-panel));
+  cursor: pointer;
+  transition: background var(--motion-base) var(--ease-standard), border-color var(--motion-base) var(--ease-standard), box-shadow var(--motion-base) var(--ease-standard), transform var(--motion-fast) var(--ease-standard);
+}
+
+.settings-theme-option:hover {
+  background: color-mix(in srgb, var(--surface-muted) 78%, var(--bg-panel));
+  border-color: color-mix(in srgb, var(--border-strong) 72%, var(--border-soft));
+}
+
+.settings-theme-option input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.settings-theme-option:has(input:focus-visible) {
+  border-color: color-mix(in srgb, var(--bg-accent) 68%, var(--border-strong));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bg-accent) 20%, transparent);
+}
+
+.settings-theme-option-active {
+  border-color: var(--control-selected-border);
+  background: color-mix(in srgb, var(--bg-accent-soft) 72%, var(--bg-panel));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--control-selected-border) 72%, transparent);
+}
+
+.settings-theme-preview {
+  display: inline-grid;
+  grid-template-columns: repeat(3, 1fr);
+  width: 52px;
+  height: 34px;
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-control);
+  background: var(--bg-panel-strong);
+}
+
+.settings-theme-preview span {
+  min-width: 0;
+}
+
+.settings-theme-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.settings-theme-copy strong {
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.settings-theme-copy span {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
 .settings-field-grid {
   display: grid;
   gap: 14px;
@@ -2323,27 +2433,142 @@ select option {
   grid-template-columns: 1fr;
 }
 
-.settings-status-item,
-.settings-updates-summary,
-.settings-update-meta {
+.settings-status-item {
   display: grid;
   gap: 6px;
 }
 
-.settings-status-item strong,
-.settings-update-meta strong {
+.settings-status-item strong {
   font-size: 0.98rem;
 }
 
-.settings-updates-summary p,
-.settings-update-meta span {
+.settings-update-panel {
+  display: grid;
+  gap: var(--space-4);
+  padding: 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-panel) 74%, var(--surface-subtle));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text-inverse) 7%, transparent);
+}
+
+.settings-update-panel-current,
+.settings-update-panel-available,
+.settings-update-panel-installing,
+.settings-update-panel-checking {
+  border-color: color-mix(in srgb, var(--control-selected-border) 72%, var(--border-soft));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg-accent-soft) 34%, transparent), transparent 72%),
+    color-mix(in srgb, var(--bg-panel) 78%, var(--surface-subtle));
+}
+
+.settings-update-panel-warning {
+  border-color: color-mix(in srgb, var(--warning) 34%, var(--border-soft));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--warning) 12%, transparent), transparent 72%),
+    color-mix(in srgb, var(--bg-panel) 78%, var(--surface-subtle));
+}
+
+.settings-update-panel-error {
+  border-color: color-mix(in srgb, var(--danger) 34%, var(--border-soft));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--danger) 11%, transparent), transparent 72%),
+    color-mix(in srgb, var(--bg-panel) 78%, var(--surface-subtle));
+}
+
+.settings-update-state {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+}
+
+.settings-update-state strong,
+.settings-update-state p,
+.settings-update-published {
   margin: 0;
+}
+
+.settings-update-state strong {
+  display: block;
+  color: var(--text-primary);
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.settings-update-state p,
+.settings-update-published {
   color: var(--text-secondary);
   line-height: 1.45;
 }
 
-.settings-update-notes {
+.settings-update-state p {
   margin-top: 4px;
+}
+
+.settings-update-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 0 9px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-pill);
+  background: var(--control-bg);
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.settings-update-panel-current .settings-update-badge,
+.settings-update-panel-available .settings-update-badge,
+.settings-update-panel-installing .settings-update-badge,
+.settings-update-panel-checking .settings-update-badge {
+  border-color: color-mix(in srgb, var(--bg-accent) 34%, var(--border-soft));
+  background: color-mix(in srgb, var(--bg-accent-soft) 78%, var(--control-bg));
+  color: color-mix(in srgb, var(--bg-accent) 54%, var(--text-primary));
+}
+
+.settings-update-panel-warning .settings-update-badge {
+  border-color: color-mix(in srgb, var(--warning) 42%, var(--border-soft));
+  background: color-mix(in srgb, var(--warning) 16%, var(--control-bg));
+  color: color-mix(in srgb, var(--warning) 68%, var(--text-primary));
+}
+
+.settings-update-panel-error .settings-update-badge {
+  border-color: color-mix(in srgb, var(--danger) 42%, var(--border-soft));
+  background: color-mix(in srgb, var(--danger) 14%, var(--control-bg));
+  color: color-mix(in srgb, var(--danger) 72%, var(--text-primary));
+}
+
+.settings-update-facts {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+}
+
+.settings-update-facts .settings-status-item {
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--surface-subtle) 72%, var(--bg-panel));
+}
+
+.settings-update-notes {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.settings-update-notes summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.settings-update-notes .history-preview {
   max-height: 10.5rem;
 }
 
@@ -3736,14 +3961,6 @@ body.collection-dnd-active {
     grid-template-columns: 1fr;
   }
 
-  .settings-secondary-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .settings-section-card-emphasis {
-    grid-column: 1 / -1;
-  }
-
   .history-detail-column {
     position: static;
     order: -1;
@@ -3770,13 +3987,8 @@ body.collection-dnd-active {
     grid-template-columns: 1fr;
   }
 
-  .settings-primary-grid,
-  .settings-secondary-grid {
+  .settings-layout {
     grid-template-columns: 1fr;
-  }
-
-  .settings-section-card-emphasis {
-    grid-column: auto;
   }
 
   .request-script-grid {

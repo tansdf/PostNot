@@ -55,12 +55,13 @@ Always consume semantic tokens. Do not choose a literal color based only on its 
 | Success | `--success` | Completed or valid state |
 | Warning | `--warning` | Caution and recoverable risk |
 | Danger | `--danger` | Failures, destructive actions, and invalid state |
+| Destructive action | `--danger-bg`, `--danger-bg-hover`, `--danger-text` | Filled destructive buttons that need theme-specific contrast |
 | Code surface | `--bg-code` | JSON, scripts, raw bodies, paths, and logs |
 | Overlay | `--overlay-backdrop`, `--shadow-overlay` | Dialog backdrops and floating-layer elevation |
 | HTTP methods | `--method-*`, `--method-*-inverse` | Method labels on normal and dark/sidebar surfaces |
 | Syntax | `--syntax-*` | JSON, scripts, and variable highlighting |
 
-The light palette uses cream surfaces, deep teal text/navigation, and burnt orange action color. The dark palette preserves those relationships with higher-luminance text and accent values. Never copy a resolved light-theme value into component CSS.
+The light palette uses cream surfaces, deep teal text/navigation, and burnt orange action color. The dark palette preserves those relationships with higher-luminance text and accent values. The optional Forest theme uses the same semantic roles with a deeper green workbench palette and a cooler green accent. Never copy a resolved light-theme value into component CSS.
 
 HTTP method colors are a special categorical palette. Use the existing `.method-get`, `.method-post`, `.method-put`, `.method-patch`, `.method-delete`, `.method-head`, and `.method-options` classes. Do not use those colors for semantic success or failure.
 

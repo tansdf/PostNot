@@ -26,6 +26,12 @@
     { value: 1.4, label: "140%" },
     { value: 1.5, label: "150%" }
   ];
+  const themeOptions = [
+    { value: "system", label: "System", description: "Follow your desktop preference.", swatches: ["#f2efe7", "#163331", "#d96c3b"] },
+    { value: "light", label: "Light", description: "Warm cream surfaces with deep teal structure.", swatches: ["#f2efe7", "#172c2b", "#d96c3b"] },
+    { value: "dark", label: "Dark", description: "Low-glare teal surfaces with warm actions.", swatches: ["#111917", "#eaf0ea", "#de7c4f"] },
+    { value: "forest", label: "Forest", description: "A deeper green workspace with softer contrast.", swatches: ["#101713", "#eef5ed", "#2f7d55"] }
+  ];
 
   let settings: AppSettings = $state(createDefaultSettings());
   let isLoading = $state(true);
@@ -85,37 +91,6 @@
   }
 
   const currentVersion = __APP_VERSION__;
-  const updatesStatusText = $derived.by(() => {
-    if (updater.phase === "installing") {
-      if (updater.installProgress?.finished) {
-        return "Download complete. Handing the update to the installer...";
-      }
-
-      return "Downloading the available update...";
-    }
-
-    if (updater.availableUpdate) {
-      return `Version ${updater.availableUpdate.version} is available and ready to install.`;
-    }
-
-    if (updater.phase === "checking") {
-      return "Checking GitHub Releases for a newer signed build...";
-    }
-
-    if (updater.errorText) {
-      return updater.errorText;
-    }
-
-    if (updater.configured === null) {
-      return "Check manually whenever you want to look for a newer desktop build.";
-    }
-
-    if (!updater.configured) {
-      return "Updater support is not configured for this build yet.";
-    }
-
-    return `You're already on the latest signed release (${currentVersion}).`;
-  });
   const updatesSecondaryText = $derived.by(() => {
     if (!updater.errorText || !updater.availableUpdate) {
       return "";
@@ -127,6 +102,70 @@
     return formatDateTime(updater.lastCheckedAt);
   });
   const parsedUpdateNotes = $derived.by(() => parseUpdateNotes(updater.availableUpdate?.body));
+  const updateState = $derived.by(() => {
+    if (updater.phase === "installing") {
+      return {
+        tone: "installing",
+        label: "Downloading",
+        title: "Installing v" + (updater.availableUpdate?.version ?? "next"),
+        description: "PostNot will hand the signed update to the installer when the download finishes."
+      };
+    }
+
+    if (updater.errorText && !updater.availableUpdate) {
+      return {
+        tone: "error",
+        label: "Needs attention",
+        title: "Update check failed",
+        description: "The last check could not reach the signed release feed. Try again when your connection is ready."
+      };
+    }
+
+    if (updater.availableUpdate) {
+      return {
+        tone: updater.errorText ? "warning" : "available",
+        label: updater.errorText ? "Retry available" : "Ready",
+        title: "Version " + updater.availableUpdate.version + " is available",
+        description: updater.errorText
+          ? "The saved update can still be installed, but refreshing the release information failed."
+          : "A newer signed desktop build is ready to download and install."
+      };
+    }
+
+    if (updater.phase === "checking") {
+      return {
+        tone: "checking",
+        label: "Checking",
+        title: "Checking for updates",
+        description: "PostNot is contacting the latest stable GitHub Release for a signed build."
+      };
+    }
+
+    if (updater.configured === false) {
+      return {
+        tone: "muted",
+        label: "Unavailable",
+        title: "Updater is not configured",
+        description: "This build cannot check for signed updates yet."
+      };
+    }
+
+    if (updater.configured === null) {
+      return {
+        tone: "muted",
+        label: "Manual",
+        title: "Ready to check",
+        description: "Run a manual check whenever you want to look for a newer signed build."
+      };
+    }
+
+    return {
+      tone: "current",
+      label: "Current",
+      title: "PostNot is up to date",
+      description: "You are already on the latest signed stable release."
+    };
+  });
   const installProgressText = $derived.by(() => {
     if (!updater.installProgress) {
       return "";
@@ -194,7 +233,7 @@
     {#if !isLoading}
       <form class="settings-form" onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
         <div class="settings-layout">
-          <div class="settings-primary-grid">
+          <div class="settings-column">
             <section class="settings-section-card">
               <div class="settings-section-heading">
                 <div>
@@ -203,16 +242,27 @@
                 </div>
               </div>
 
-              <div class:settings-field-grid-stacked={Boolean(updater.availableUpdate)} class="settings-field-grid">
-                <label>
-                  <span class="field-label">Theme</span>
-                  <select class="text-input" bind:value={settings.theme}>
-                    <option value="system">System</option>
-                    <option value="light">Light</option>
-                    <option value="dark">Dark</option>
-                  </select>
-                </label>
+              <fieldset class="settings-theme-group">
+                <legend class="field-label">Theme</legend>
+                <div class="settings-theme-options">
+                  {#each themeOptions as option (option.value)}
+                    <label class={["settings-theme-option", settings.theme === option.value && "settings-theme-option-active"]}>
+                      <input type="radio" name="theme" value={option.value} bind:group={settings.theme} />
+                      <span class="settings-theme-preview" aria-hidden="true">
+                        {#each option.swatches as swatch, index (`${option.value}-${index}`)}
+                          <span style:background={swatch}></span>
+                        {/each}
+                      </span>
+                      <span class="settings-theme-copy">
+                        <strong>{option.label}</strong>
+                        <span>{option.description}</span>
+                      </span>
+                    </label>
+                  {/each}
+                </div>
+              </fieldset>
 
+              <div class:settings-field-grid-stacked={Boolean(updater.availableUpdate)} class="settings-field-grid">
                 <label>
                   <span class="field-label">Interface zoom</span>
                   <select class="text-input" bind:value={settings.uiScale}>
@@ -230,119 +280,6 @@
             </section>
 
             <section class="settings-section-card">
-              <div class="settings-section-heading">
-                <div>
-                  <h2>Updates</h2>
-                  <p class="settings-section-lede">Check for newer signed PostNot builds published to the latest stable GitHub Release.</p>
-                </div>
-
-                <button
-                  class="button-secondary button-compact"
-                  type="button"
-                  disabled={updater.isChecking || updater.isInstalling}
-                  onclick={() => updater.checkManually()}
-                >
-                  {updater.checkButtonLabel}
-                </button>
-              </div>
-
-              <div class="settings-field-grid">
-                <div class="settings-status-item">
-                  <span class="field-label">Current version</span>
-                  <strong>v{currentVersion}</strong>
-                </div>
-
-                <div class="settings-status-item">
-                  <span class="field-label">Last checked</span>
-                  <strong>{checkedAtLabel || "Not checked yet"}</strong>
-                </div>
-              </div>
-
-              <div class="settings-updates-summary">
-                {#if updater.errorText && !updater.availableUpdate}
-                  <div class="settings-update-feedback settings-update-feedback-error">
-                    <strong>Update check failed</strong>
-                    <p>{updater.errorText}</p>
-                  </div>
-                {:else}
-                  <p>{updatesStatusText}</p>
-                {/if}
-
-                {#if updater.availableUpdate}
-                  <div class="settings-update-meta">
-                    <strong>Available: v{updater.availableUpdate.version}</strong>
-                    {#if formatDateTime(updater.availableUpdate.date)}
-                      <span>Published {formatDateTime(updater.availableUpdate.date)}</span>
-                    {/if}
-                  </div>
-
-                  {#if updatesSecondaryText}
-                    <div class="settings-update-feedback">
-                      <strong>Refresh issue</strong>
-                      <p>{updatesSecondaryText}</p>
-                    </div>
-                  {/if}
-
-                  {#if updater.isInstalling && updater.installProgress}
-                    <div class="settings-update-progress" aria-live="polite">
-                      <div class="settings-update-progress-header">
-                        <span>Download progress</span>
-                        <strong>{installProgressText}</strong>
-                      </div>
-
-                      {#if typeof updater.installProgressPercent === "number"}
-                        <progress
-                          max="100"
-                          value={updater.installProgressPercent}
-                          aria-label="Update download progress"
-                        >
-                          {updater.installProgressPercent}%
-                        </progress>
-                      {:else}
-                        <progress aria-label="Update download progress"></progress>
-                      {/if}
-                    </div>
-                  {/if}
-
-                  {#if updater.availableUpdate.body}
-                    <div class="history-preview settings-update-notes settings-update-markdown">
-                      {#each parsedUpdateNotes as line, lineIndex (lineIndex)}
-                        <p class="settings-update-markdown-line">
-                          {#if line.length === 0}
-                            <br />
-                          {:else}
-                            {#each line as token, tokenIndex (tokenIndex)}
-                              {#if token.kind === "text"}
-                                {token.value}
-                              {:else}
-                                <strong>{token.value}</strong>
-                              {/if}
-                            {/each}
-                          {/if}
-                        </p>
-                      {/each}
-                    </div>
-                  {/if}
-                {/if}
-              </div>
-
-              {#if updater.availableUpdate}
-                <div class="settings-inline-actions">
-                  <button
-                    class="button-primary"
-                    type="button"
-                    disabled={updater.isChecking || updater.isInstalling}
-                    onclick={() => updater.installAvailableUpdate()}
-                  >
-                    {updater.isInstalling ? "Downloading..." : "Install update"}
-                  </button>
-                </div>
-              {/if}
-            </section>
-          </div>
-
-          <div class="settings-secondary-grid">
-            <section class="settings-section-card settings-section-card-emphasis">
               <div class="settings-section-heading">
                 <div>
                   <h2>Requests</h2>
@@ -366,7 +303,123 @@
                 <input class="row-toggle settings-checkbox" type="checkbox" bind:checked={settings.validateTls} />
                 <span>Validate TLS certificates</span>
               </label>
+            </section>
+          </div>
 
+          <div class="settings-column">
+            <section class="settings-section-card settings-updates-card">
+              <div class="settings-section-heading">
+                <div>
+                  <h2>Updates</h2>
+                  <p class="settings-section-lede">Check for newer signed PostNot builds published to the latest stable GitHub Release.</p>
+                </div>
+
+                <button
+                  class="button-secondary button-compact"
+                  type="button"
+                  disabled={updater.isChecking || updater.isInstalling}
+                  onclick={() => updater.checkManually()}
+                >
+                  {updater.checkButtonLabel}
+                </button>
+              </div>
+
+              <div class={["settings-update-panel", `settings-update-panel-${updateState.tone}`]} aria-live="polite">
+                <div class="settings-update-state">
+                  <span class="settings-update-badge">{updateState.label}</span>
+                  <div>
+                    <strong>{updateState.title}</strong>
+                    <p>{updateState.description}</p>
+                  </div>
+                </div>
+
+                <div class="settings-update-facts">
+                  <div class="settings-status-item">
+                    <span class="field-label">Current version</span>
+                    <strong>v{currentVersion}</strong>
+                  </div>
+
+                  <div class="settings-status-item">
+                    <span class="field-label">Last checked</span>
+                    <strong>{checkedAtLabel || "Not checked yet"}</strong>
+                  </div>
+
+                  {#if updater.availableUpdate}
+                    <div class="settings-status-item">
+                      <span class="field-label">Available version</span>
+                      <strong>v{updater.availableUpdate.version}</strong>
+                    </div>
+                  {/if}
+                </div>
+
+                {#if updater.availableUpdate && formatDateTime(updater.availableUpdate.date)}
+                  <p class="settings-update-published">Published {formatDateTime(updater.availableUpdate.date)}</p>
+                {/if}
+
+                {#if updater.isInstalling && updater.installProgress}
+                  <div class="settings-update-progress" aria-live="polite">
+                    <div class="settings-update-progress-header">
+                      <span>Download progress</span>
+                      <strong>{installProgressText}</strong>
+                    </div>
+
+                    {#if typeof updater.installProgressPercent === "number"}
+                      <progress
+                        max="100"
+                        value={updater.installProgressPercent}
+                        aria-label="Update download progress"
+                      >
+                        {updater.installProgressPercent}%
+                      </progress>
+                    {:else}
+                      <progress aria-label="Update download progress"></progress>
+                    {/if}
+                  </div>
+                {/if}
+
+                {#if updater.errorText}
+                  <div class="settings-update-feedback settings-update-feedback-error" role="alert">
+                    <strong>{updater.availableUpdate ? "Refresh issue" : "Check failed"}</strong>
+                    <p>{updater.availableUpdate ? updatesSecondaryText : updater.errorText}</p>
+                  </div>
+                {/if}
+
+                {#if updater.availableUpdate?.body}
+                  <details class="settings-update-notes">
+                    <summary>Release notes</summary>
+                    <div class="history-preview settings-update-markdown">
+                      {#each parsedUpdateNotes as line, lineIndex (lineIndex)}
+                        <p class="settings-update-markdown-line">
+                          {#if line.length === 0}
+                            <br />
+                          {:else}
+                            {#each line as token, tokenIndex (tokenIndex)}
+                              {#if token.kind === "text"}
+                                {token.value}
+                              {:else}
+                                <strong>{token.value}</strong>
+                              {/if}
+                            {/each}
+                          {/if}
+                        </p>
+                      {/each}
+                    </div>
+                  </details>
+                {/if}
+
+                {#if updater.availableUpdate}
+                  <div class="settings-inline-actions">
+                    <button
+                      class="button-primary"
+                      type="button"
+                      disabled={updater.isChecking || updater.isInstalling}
+                      onclick={() => updater.installAvailableUpdate()}
+                    >
+                      {updater.isInstalling ? "Downloading..." : "Install update"}
+                    </button>
+                  </div>
+                {/if}
+              </div>
             </section>
 
             <section class="settings-section-card">

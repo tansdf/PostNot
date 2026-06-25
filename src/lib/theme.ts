@@ -7,7 +7,7 @@ const THEME_STORAGE_KEY = "postnot.theme";
 const UI_SCALE_STORAGE_KEY = "postnot.uiScale";
 
 function resolveTheme(theme: string) {
-  if (theme === "dark" || theme === "light") {
+  if (theme === "dark" || theme === "light" || theme === "forest") {
     return theme;
   }
 
