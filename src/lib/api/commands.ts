@@ -381,6 +381,30 @@ function createMockPlaybookRunStep(runId: string): PlaybookRunStep {
   };
 }
 
+function waitForMockLatency(ms = 450) {
+  return new Promise<void>((resolve) => {
+    globalThis.setTimeout(resolve, ms);
+  });
+}
+
+function createMockAvailableUpdate(): UpdateCheckResult {
+  return {
+    configured: true,
+    update: {
+      currentVersion: __APP_VERSION__,
+      version: "99.0.0-dev",
+      date: new Date().toISOString(),
+      body: [
+        "**Mock updater release**",
+        "",
+        "- Exercises the available update state in the dev browser.",
+        "- Runs a fake download and install without restarting PostNot.",
+        "- Leaves the real signed updater path untouched for Tauri builds."
+      ].join("\n")
+    }
+  };
+}
+
 export async function sendRequest(
   payload: RequestDraft,
   options: SendRequestOptions = {}
@@ -463,10 +487,8 @@ export async function updateSettings(settings: AppSettings): Promise<AppSettings
 
 export async function checkForUpdates(): Promise<UpdateCheckResult> {
   if (!hasTauriRuntime()) {
-    return {
-      configured: false,
-      update: null
-    };
+    await waitForMockLatency();
+    return createMockAvailableUpdate();
   }
 
   return invoke<UpdateCheckResult>("check_for_updates");
@@ -474,6 +496,7 @@ export async function checkForUpdates(): Promise<UpdateCheckResult> {
 
 export async function installUpdate(): Promise<void> {
   if (!hasTauriRuntime()) {
+    await waitForMockLatency(250);
     return;
   }
 

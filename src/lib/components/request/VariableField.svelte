@@ -62,6 +62,7 @@
 
   let fieldElement: HTMLInputElement | HTMLTextAreaElement | null = $state(null);
   let highlightOverlayElement: HTMLPreElement | null = $state(null);
+  let highlightContentElement: HTMLElement | null = $state(null);
   let mirrorElement: HTMLDivElement | null = $state(null);
   let mirrorTextElement: HTMLSpanElement | null = $state(null);
   let mirrorCaretElement: HTMLSpanElement | null = $state(null);
@@ -80,6 +81,11 @@
   let historyIndex = $state(-1);
   let isApplyingHistory = false;
   let highlightSyncFrame: number | null = null;
+  let lastTypingHistoryAt = 0;
+  let pendingLocalValue: string | null = null;
+  let lastObservedValue = "";
+  let hasInitializedHistory = false;
+  let pendingInputBaseline: FieldHistoryEntry | null = null;
 
   const variablePattern = /{{\s*(\$[A-Za-z0-9_.-]+(?:\[\d+\])?|[A-Za-z0-9_.-]+)\s*}}/g;
   const dynamicVariableOptions: VariableOption[] = [
@@ -115,6 +121,24 @@
   $effect(() => {
     const nextValue = value;
 
+    if (!hasInitializedHistory) {
+      hasInitializedHistory = true;
+      lastObservedValue = nextValue;
+      resetHistory(nextValue);
+      return;
+    }
+
+    if (nextValue === lastObservedValue) {
+      return;
+    }
+
+    lastObservedValue = nextValue;
+
+    if (pendingLocalValue === nextValue) {
+      pendingLocalValue = null;
+      return;
+    }
+
     if (isApplyingHistory) {
       isApplyingHistory = false;
       return;
@@ -135,7 +159,7 @@
     fieldElement.setAttribute('autocorrect', 'off');
   });
   $effect(() => {
-    if (!hasHighlightOverlay || !fieldElement || !highlightOverlayElement) {
+    if (!hasHighlightOverlay || !fieldElement || !highlightOverlayElement || !highlightContentElement) {
       return;
     }
 
@@ -287,10 +311,16 @@
     return null;
   }
 
-  function updateValue(nextValue: string) {
+  function updateValue(
+    nextValue: string,
+    historyMode: "typing" | "programmatic" = "programmatic",
+    baselineEntry: FieldHistoryEntry | null = null
+  ) {
+    pendingLocalValue = nextValue;
+    lastObservedValue = nextValue;
     value = nextValue;
     onValueInput(nextValue);
-    pushHistoryEntry(nextValue);
+    pushHistoryEntry(nextValue, historyMode, baselineEntry);
     scheduleHighlightOverlaySync();
   }
   function scheduleHighlightOverlaySync() {
@@ -309,7 +339,7 @@
   }
 
   function syncHighlightOverlay() {
-    if (!fieldElement || !highlightOverlayElement) {
+    if (!fieldElement || !highlightOverlayElement || !highlightContentElement) {
       return;
     }
 
@@ -318,7 +348,7 @@
     highlightOverlayElement.style.width = fieldElement.offsetWidth + 'px';
     highlightOverlayElement.style.height = fieldElement.offsetHeight + 'px';
     highlightOverlayElement.style.boxSizing = computedStyle.boxSizing;
-    highlightOverlayElement.style.padding = computedStyle.padding;
+    highlightOverlayElement.style.padding = '0';
     highlightOverlayElement.style.borderWidth = computedStyle.borderWidth;
     highlightOverlayElement.style.borderStyle = computedStyle.borderStyle;
     highlightOverlayElement.style.borderColor = 'transparent';
@@ -329,14 +359,24 @@
     highlightOverlayElement.style.textIndent = computedStyle.textIndent;
     highlightOverlayElement.style.textTransform = computedStyle.textTransform;
     highlightOverlayElement.style.tabSize = computedStyle.tabSize;
-    highlightOverlayElement.style.whiteSpace = computedStyle.whiteSpace;
-    highlightOverlayElement.style.overflowWrap = computedStyle.overflowWrap;
-    highlightOverlayElement.style.wordBreak = computedStyle.wordBreak;
     highlightOverlayElement.style.overflowX = 'hidden';
     highlightOverlayElement.style.overflowY = 'hidden';
     highlightOverlayElement.style.resize = 'none';
-    highlightOverlayElement.scrollTop = fieldElement.scrollTop;
-    highlightOverlayElement.scrollLeft = fieldElement.scrollLeft;
+
+    highlightContentElement.style.width = fieldElement.clientWidth + 'px';
+    highlightContentElement.style.boxSizing = computedStyle.boxSizing;
+    highlightContentElement.style.padding = computedStyle.padding;
+    highlightContentElement.style.font = computedStyle.font;
+    highlightContentElement.style.letterSpacing = computedStyle.letterSpacing;
+    highlightContentElement.style.lineHeight = computedStyle.lineHeight;
+    highlightContentElement.style.textAlign = computedStyle.textAlign;
+    highlightContentElement.style.textIndent = computedStyle.textIndent;
+    highlightContentElement.style.textTransform = computedStyle.textTransform;
+    highlightContentElement.style.tabSize = computedStyle.tabSize;
+    highlightContentElement.style.whiteSpace = multiline ? computedStyle.whiteSpace : 'pre';
+    highlightContentElement.style.overflowWrap = multiline ? computedStyle.overflowWrap : 'normal';
+    highlightContentElement.style.wordBreak = multiline ? computedStyle.wordBreak : 'normal';
+    highlightContentElement.style.transform = `translate(${-fieldElement.scrollLeft}px, ${-fieldElement.scrollTop}px)`;
   }
 
   function createHistoryEntry(nextValue: string): FieldHistoryEntry {
@@ -350,12 +390,28 @@
     };
   }
 
+  function createFieldHistoryEntryFromElement(target: HTMLInputElement | HTMLTextAreaElement): FieldHistoryEntry {
+    const selectionStart = target.selectionStart ?? target.value.length;
+    const selectionEnd = target.selectionEnd ?? selectionStart;
+
+    return {
+      value: target.value,
+      selectionStart,
+      selectionEnd
+    };
+  }
+
   function resetHistory(nextValue: string) {
     historyEntries = [createHistoryEntry(nextValue)];
     historyIndex = 0;
+    lastTypingHistoryAt = 0;
   }
 
-  function pushHistoryEntry(nextValue: string) {
+  function pushHistoryEntry(
+    nextValue: string,
+    historyMode: "typing" | "programmatic" = "programmatic",
+    baselineEntry: FieldHistoryEntry | null = null
+  ) {
     const nextEntry = createHistoryEntry(nextValue);
     const currentEntry = historyEntries[historyIndex];
 
@@ -368,9 +424,70 @@
       return;
     }
 
-    const nextEntries = [...historyEntries.slice(0, historyIndex + 1), nextEntry].slice(-200);
+    const now = Date.now();
+    let nextHistoryEntries = historyEntries.slice(0, historyIndex + 1);
+    let nextHistoryIndex = historyIndex;
+
+    if (
+      historyMode === "typing" &&
+      baselineEntry &&
+      currentEntry &&
+      currentEntry.value === baselineEntry.value
+    ) {
+      nextHistoryEntries = [
+        ...nextHistoryEntries.slice(0, nextHistoryIndex),
+        baselineEntry
+      ];
+      nextHistoryIndex = nextHistoryEntries.length - 1;
+    }
+
+    const effectiveCurrentEntry = nextHistoryEntries[nextHistoryIndex];
+    if (
+      historyMode === "typing" &&
+      effectiveCurrentEntry &&
+      nextHistoryIndex > 0 &&
+      now - lastTypingHistoryAt < 1400 &&
+      isCoalescableTypingEdit(effectiveCurrentEntry, nextEntry)
+    ) {
+      historyEntries = [
+        ...nextHistoryEntries.slice(0, nextHistoryIndex),
+        nextEntry,
+        ...historyEntries.slice(historyIndex + 1)
+      ];
+      lastTypingHistoryAt = now;
+      return;
+    }
+
+    const nextEntries = [...nextHistoryEntries, nextEntry].slice(-200);
     historyEntries = nextEntries;
     historyIndex = nextEntries.length - 1;
+    lastTypingHistoryAt = historyMode === "typing" ? now : 0;
+  }
+
+  function isCoalescableTypingEdit(currentEntry: FieldHistoryEntry, nextEntry: FieldHistoryEntry) {
+    if (currentEntry.selectionStart !== currentEntry.selectionEnd || nextEntry.selectionStart !== nextEntry.selectionEnd) {
+      return false;
+    }
+
+    const oldValue = currentEntry.value;
+    const nextValue = nextEntry.value;
+    const lengthDelta = nextValue.length - oldValue.length;
+
+    if (Math.abs(lengthDelta) !== 1) {
+      return false;
+    }
+
+    const editStart = lengthDelta > 0 ? nextEntry.selectionStart - 1 : nextEntry.selectionStart;
+    if (editStart < 0) {
+      return false;
+    }
+
+    const beforeEdit = oldValue.slice(0, editStart) === nextValue.slice(0, editStart);
+    const oldSuffixStart = lengthDelta > 0 ? editStart : editStart + 1;
+    const nextSuffixStart = lengthDelta > 0 ? editStart + 1 : editStart;
+    const afterEdit = oldValue.slice(oldSuffixStart) === nextValue.slice(nextSuffixStart);
+
+    return beforeEdit && afterEdit;
   }
 
   function applyHistoryEntry(nextIndex: number) {
@@ -381,6 +498,9 @@
 
     historyIndex = nextIndex;
     isApplyingHistory = true;
+    lastTypingHistoryAt = 0;
+    pendingLocalValue = nextEntry.value;
+    lastObservedValue = nextEntry.value;
     value = nextEntry.value;
     onValueInput(nextEntry.value);
 
@@ -392,15 +512,125 @@
   }
 
   function isUndoShortcut(event: KeyboardEvent) {
-    return (event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "z";
+    return (event.ctrlKey || event.metaKey) && !event.shiftKey && isShortcutKey(event, "z", "KeyZ");
   }
 
   function isRedoShortcut(event: KeyboardEvent) {
-    const key = event.key.toLowerCase();
     return (
-      ((event.ctrlKey || event.metaKey) && key === "y") ||
-      ((event.ctrlKey || event.metaKey) && event.shiftKey && key === "z")
+      ((event.ctrlKey || event.metaKey) && isShortcutKey(event, "y", "KeyY")) ||
+      ((event.ctrlKey || event.metaKey) && event.shiftKey && isShortcutKey(event, "z", "KeyZ"))
     );
+  }
+
+  function isShortcutKey(event: KeyboardEvent, key: string, code: string) {
+    return event.key.toLowerCase() === key || event.code === code;
+  }
+
+  function getSelectionRange() {
+    const selectionStart = fieldElement?.selectionStart ?? value.length;
+    const selectionEnd = fieldElement?.selectionEnd ?? selectionStart;
+
+    return {
+      selectionStart,
+      selectionEnd
+    };
+  }
+
+  function getSelectedText() {
+    const { selectionStart, selectionEnd } = getSelectionRange();
+    return value.slice(selectionStart, selectionEnd);
+  }
+
+  async function writeClipboardText(text: string) {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+
+    document.execCommand("copy");
+  }
+
+  async function readClipboardText() {
+    if (!navigator.clipboard?.readText) {
+      return null;
+    }
+
+    return navigator.clipboard.readText();
+  }
+
+  async function applyTextReplacement(insertText: string) {
+    if (!fieldElement || disabled) {
+      return;
+    }
+
+    const baselineEntry = createFieldHistoryEntryFromElement(fieldElement);
+    const { selectionStart, selectionEnd } = baselineEntry;
+    const nextValue = `${value.slice(0, selectionStart)}${insertText}${value.slice(selectionEnd)}`;
+    const nextCursor = selectionStart + insertText.length;
+
+    updateValue(nextValue, "programmatic", baselineEntry);
+    closeSuggestions();
+    await tick();
+    fieldElement?.focus();
+    fieldElement?.setSelectionRange(nextCursor, nextCursor);
+    updateAutocompleteState();
+  }
+
+  function handleSelectAllShortcut(event: KeyboardEvent) {
+    if (!(event.ctrlKey || event.metaKey) || !isShortcutKey(event, "a", "KeyA") || !fieldElement) {
+      return false;
+    }
+
+    event.preventDefault();
+    fieldElement.setSelectionRange(0, value.length);
+    closeSuggestions();
+    return true;
+  }
+
+  function handleCopyShortcut(event: KeyboardEvent) {
+    if (!(event.ctrlKey || event.metaKey) || !isShortcutKey(event, "c", "KeyC")) {
+      return false;
+    }
+
+    const selectedText = getSelectedText();
+    if (!selectedText) {
+      return false;
+    }
+
+    event.preventDefault();
+    void writeClipboardText(selectedText).catch(() => {});
+    return true;
+  }
+
+  function handleCutShortcut(event: KeyboardEvent) {
+    if (!(event.ctrlKey || event.metaKey) || !isShortcutKey(event, "x", "KeyX") || disabled) {
+      return false;
+    }
+
+    const selectedText = getSelectedText();
+    if (!selectedText) {
+      return false;
+    }
+
+    event.preventDefault();
+    void writeClipboardText(selectedText).then(() => {
+      void applyTextReplacement("");
+    }).catch(() => {});
+    return true;
+  }
+
+  function handlePasteShortcut(event: KeyboardEvent) {
+    if (!(event.ctrlKey || event.metaKey) || !isShortcutKey(event, "v", "KeyV") || disabled) {
+      return false;
+    }
+
+    event.preventDefault();
+    void readClipboardText().catch(() => null).then((clipboardText) => {
+      if (clipboardText !== null) {
+        void applyTextReplacement(clipboardText);
+      }
+    });
+    return true;
   }
 
   function getTokenContext(fieldValue: string, cursor: number) {
@@ -553,9 +783,15 @@
 
   function handleInput(event: Event) {
     const target = event.currentTarget as HTMLInputElement | HTMLTextAreaElement;
-    updateValue(target.value);
+    const baselineEntry = pendingInputBaseline;
+    pendingInputBaseline = null;
+    updateValue(target.value, "typing", baselineEntry);
     updateAutocompleteState();
     scheduleHighlightOverlaySync();
+  }
+
+  function handleBeforeInput(event: InputEvent) {
+    pendingInputBaseline = createFieldHistoryEntryFromElement(event.currentTarget as HTMLInputElement | HTMLTextAreaElement);
   }
 
   function handleFocus() {
@@ -575,6 +811,15 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
+    if (
+      handleSelectAllShortcut(event) ||
+      handleCopyShortcut(event) ||
+      handleCutShortcut(event) ||
+      handlePasteShortcut(event)
+    ) {
+      return;
+    }
+
     if (isUndoShortcut(event)) {
       if (historyIndex > 0) {
         event.preventDefault();
@@ -680,7 +925,7 @@
         aria-hidden="true"
         spellcheck={false}
         bind:this={highlightOverlayElement}
-      >{#each highlightTokens as token, index (index)}{#if getHighlightTokenClass(token.type)}<span class={getHighlightTokenClass(token.type)}>{token.value}</span>{:else}{token.value}{/if}{/each}</pre>
+      ><code class="variable-highlight-content" bind:this={highlightContentElement}>{#each highlightTokens as token, index (index)}{#if getHighlightTokenClass(token.type)}<span class={getHighlightTokenClass(token.type)}>{token.value}</span>{:else}{token.value}{/if}{/each}</code></pre>
     {/if}
 
     {#if multiline}
@@ -693,7 +938,8 @@
         autocapitalize=off
         autocomplete=off
         {disabled}
-        bind:value={value}
+        value={value}
+        onbeforeinput={handleBeforeInput}
         onblur={handleBlur}
         onclick={handleCursorMovement}
         onfocus={handleFocus}
@@ -713,7 +959,8 @@
         {disabled}
         {type}
         {list}
-        bind:value={value}
+        value={value}
+        onbeforeinput={handleBeforeInput}
         onblur={handleBlur}
         onclick={handleCursorMovement}
         onfocus={handleFocus}

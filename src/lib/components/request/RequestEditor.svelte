@@ -444,7 +444,7 @@
       if (json.startsWith("false", i)) { tokens.push({ type: "bool", value: "false" }); i += 5; continue; }
       if (json.startsWith("null", i)) { tokens.push({ type: "null", value: "null" }); i += 4; continue; }
       if ('{}[]'.includes(ch)) { tokens.push({ type: "bracket", value: ch }); i++; continue; }
-      if (ch === ':') { tokens.push({ type: "colon", value: ": " }); i++; if (json[i] === ' ') i++; continue; }
+      if (ch === ':') { tokens.push({ type: "colon", value: ":" }); i++; continue; }
       if (ch === ',') { tokens.push({ type: "comma", value: "," }); i++; continue; }
       if (ch === '\n') { tokens.push({ type: "newline", value: "\n" }); i++; continue; }
       if (ch === ' ' || ch === '\t') {

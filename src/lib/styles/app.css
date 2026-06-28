@@ -4161,6 +4161,13 @@ iframe.large-response-viewer {
   z-index: 0;
 }
 
+.variable-highlight-content {
+  display: block;
+  min-height: 100%;
+  margin: 0;
+  transform-origin: top left;
+}
+
 .json-editor-overlay {
   font-family: var(--font-mono);
 }

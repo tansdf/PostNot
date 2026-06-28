@@ -61,6 +61,10 @@ class UpdaterStore {
     return this.phase === "checking" && !!this.availableUpdate;
   }
 
+  get isMockRuntime() {
+    return browser && !hasTauriRuntime();
+  }
+
   get checkButtonLabel() {
     if (this.phase !== "checking") {
       return this.availableUpdate ? "Refresh" : "Check now";
@@ -113,27 +117,43 @@ class UpdaterStore {
     }
 
     const targetVersion = this.availableUpdate.version;
+    const isMockRuntime = this.isMockRuntime;
     this.phase = "installing";
     this.errorText = "";
     this.installProgress = {
       downloadedBytes: 0,
-      contentLength: null,
+      contentLength: isMockRuntime ? MOCK_INSTALL_SIZE_BYTES : null,
       finished: false
     };
 
     try {
-      notifications.info(
-        `Downloading v${targetVersion}. PostNot will close when the installer takes over.`,
-        "Downloading update"
-      );
-      await installUpdate();
+      if (isMockRuntime) {
+        notifications.info(
+          `Downloading fake v${targetVersion}. The dev browser will stay open.`,
+          "Mock update"
+        );
+        await this.runMockInstall();
+      } else {
+        notifications.info(
+          `Downloading v${targetVersion}. PostNot will close when the installer takes over.`,
+          "Downloading update"
+        );
+        await installUpdate();
+      }
 
       this.availableUpdate = null;
       this.installProgress = null;
-      notifications.success(
-        `The update installer for v${targetVersion} has been handed off. If PostNot is still open, you can close it and let the installer finish.`,
-        "Installer started"
-      );
+      if (isMockRuntime) {
+        notifications.success(
+          `Fake v${targetVersion} installed. The mock updater finished without restarting PostNot.`,
+          "Mock update installed"
+        );
+      } else {
+        notifications.success(
+          `The update installer for v${targetVersion} has been handed off. If PostNot is still open, you can close it and let the installer finish.`,
+          "Installer started"
+        );
+      }
     } catch (error) {
       this.errorText = error instanceof Error ? error.message : String(error);
       this.installProgress = null;
@@ -147,7 +167,7 @@ class UpdaterStore {
   }
 
   private async runCheck(mode: UpdateCheckMode) {
-    if (!browser || !hasTauriRuntime() || this.isChecking || this.isInstalling) {
+    if (!browser || this.isChecking || this.isInstalling) {
       return;
     }
 
@@ -219,9 +239,31 @@ class UpdaterStore {
       }
     );
   }
+
+  private async runMockInstall() {
+    for (const downloadedBytes of MOCK_INSTALL_STEPS_BYTES) {
+      this.installProgress = {
+        downloadedBytes,
+        contentLength: MOCK_INSTALL_SIZE_BYTES,
+        finished: downloadedBytes >= MOCK_INSTALL_SIZE_BYTES
+      };
+      await sleep(180);
+    }
+
+    await installUpdate();
+  }
 }
 
 export const updater = new UpdaterStore();
+
+const MOCK_INSTALL_SIZE_BYTES = 24 * 1024 * 1024;
+const MOCK_INSTALL_STEPS_BYTES = [0, 3, 8, 14, 20, 24].map((value) => value * 1024 * 1024);
+
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => {
+    globalThis.setTimeout(resolve, ms);
+  });
+}
 
 function formatBytes(bytes: number) {
   if (!Number.isFinite(bytes) || bytes <= 0) {

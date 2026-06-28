@@ -108,7 +108,9 @@
         tone: "installing",
         label: "Downloading",
         title: "Installing v" + (updater.availableUpdate?.version ?? "next"),
-        description: "PostNot will hand the signed update to the installer when the download finishes."
+        description: updater.isMockRuntime
+          ? "PostNot is running a fake update in the dev browser and will stay open when it finishes."
+          : "PostNot will hand the signed update to the installer when the download finishes."
       };
     }
 
@@ -128,7 +130,9 @@
         title: "Version " + updater.availableUpdate.version + " is available",
         description: updater.errorText
           ? "The saved update can still be installed, but refreshing the release information failed."
-          : "A newer signed desktop build is ready to download and install."
+          : updater.isMockRuntime
+            ? "A fake desktop build is ready to exercise the update flow in the dev browser."
+            : "A newer signed desktop build is ready to download and install."
       };
     }
 

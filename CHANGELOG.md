@@ -6,6 +6,17 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.20.16] - 2026-06-28
+
+### Added
+
+- Added browser-dev updater mocks so the Settings update block can exercise available-update, download-progress, and no-restart completion states without a packaged Tauri updater.
+
+### Fixed
+
+- Fixed layered URL and JSON request editors so syntax-highlight overlays match the editable text layer horizontally and while scrolling selected text.
+- Restored reliable undo, redo, copy, cut, paste, and select-all behavior in layered request editor fields, including non-English keyboard layouts and cursor restoration after undo.
+
 ## [0.20.15] - 2026-06-25
 
 ### Added
