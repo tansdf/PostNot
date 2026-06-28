@@ -6,6 +6,12 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.20.17] - 2026-06-29
+
+### Fixed
+
+- Removed the custom clipboard-read paste fallback from layered request editor fields so Windows WebView no longer shows a clipboard permission prompt.
+
 ## [0.20.16] - 2026-06-28
 
 ### Added

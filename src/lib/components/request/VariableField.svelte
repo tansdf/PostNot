@@ -550,14 +550,6 @@
     document.execCommand("copy");
   }
 
-  async function readClipboardText() {
-    if (!navigator.clipboard?.readText) {
-      return null;
-    }
-
-    return navigator.clipboard.readText();
-  }
-
   async function applyTextReplacement(insertText: string) {
     if (!fieldElement || disabled) {
       return;
@@ -616,20 +608,6 @@
     void writeClipboardText(selectedText).then(() => {
       void applyTextReplacement("");
     }).catch(() => {});
-    return true;
-  }
-
-  function handlePasteShortcut(event: KeyboardEvent) {
-    if (!(event.ctrlKey || event.metaKey) || !isShortcutKey(event, "v", "KeyV") || disabled) {
-      return false;
-    }
-
-    event.preventDefault();
-    void readClipboardText().catch(() => null).then((clipboardText) => {
-      if (clipboardText !== null) {
-        void applyTextReplacement(clipboardText);
-      }
-    });
     return true;
   }
 
@@ -814,8 +792,7 @@
     if (
       handleSelectAllShortcut(event) ||
       handleCopyShortcut(event) ||
-      handleCutShortcut(event) ||
-      handlePasteShortcut(event)
+      handleCutShortcut(event)
     ) {
       return;
     }
