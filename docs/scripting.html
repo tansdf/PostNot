@@ -6,7 +6,7 @@
     <title>PostNot scripting documentation</title>
     <meta
       name="description"
-      content="Documentation for PostNot pre-request and test scripts, including inheritance order, current pn APIs, examples, and current scripting limits."
+      content="Documentation for PostNot pre-request and test scripts, including inheritance order, pn APIs, examples, and scripting runtime boundaries."
     />
     <meta property="og:title" content="PostNot scripting documentation" />
     <meta
@@ -73,7 +73,7 @@
               <a href="#test-api">Test API</a>
               <a href="#failure-behavior">Failure behavior</a>
               <a href="#examples">Common scripts</a>
-              <a href="#limits">Current limits</a>
+              <a href="#limits">Runtime boundaries</a>
               <a href="#postman-events">Postman portability</a>
             </nav>
           </div>
@@ -570,20 +570,22 @@ pn.test('response has an id', () => {
 
       <section aria-labelledby="limits">
         <div class="section-heading">
-          <p class="eyebrow">Current limits</p>
-          <h2 id="limits">Current async-helper limits</h2>
+          <p class="eyebrow">Runtime boundaries</p>
+          <h2 id="limits">Async helper boundaries</h2>
         </div>
         <div class="status-callout">
           <p>
-            Scripts can now await helper HTTP requests, but PostNot still allows only one native
+            Scripts can await helper HTTP requests, but PostNot allows only one native
             request in flight at a time. Await helper calls sequentially instead of firing parallel
             <span class="code-inline">Promise.all(...)</span> request batches, and note that helper
-            requests reuse the native sender without creating separate history entries.
+            requests reuse the native sender without creating separate history entries. Unawaited
+            helper requests are treated as script errors so the main request cannot race a helper
+            request that is still running.
           </p>
         </div>
         <div class="status-callout status-callout--spaced">
           <p>
-            The scripting runtime is intentionally small and worker-backed right now. The stable contract is the
+            The scripting runtime is intentionally small and worker-backed. The stable contract is the
             <span class="code-inline">pn</span> surface documented here; browser globals or Postman
             <span class="code-inline">pm</span> helpers should not be treated as supported compatibility
             APIs.

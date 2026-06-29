@@ -40,6 +40,10 @@ const Function = undefined;
 const self = undefined;
 const globalThis = undefined;
 `;
+const CONCURRENT_HELPER_REQUEST_ERROR =
+  "pn.http.send helper requests must be awaited sequentially. Await the previous pn.http.send(...) call before starting another one.";
+const UNAWAITED_HELPER_REQUEST_ERROR =
+  "Unawaited pn.http.send call detected. Use await pn.http.send(...) so the script waits for the helper request before continuing.";
 
 type VariableMap = Map<string, string>;
 
@@ -482,16 +486,79 @@ function bridgeToMain<T>(
 }
 
 function createHttpFacade(requestId: string) {
-  return {
-    async send(input: unknown) {
-      const preparedRequest = normalizeScriptRequestInput(input);
-      const response = await bridgeToMain<ResponsePayload>(requestId, {
-        type: "http-send",
-        request: preparedRequest
-      });
-      return createResponseFacade(response);
+  let activeSend: Promise<ResponsePayload> | null = null;
+
+  async function waitForActiveSend() {
+    if (!activeSend) {
+      return;
     }
+
+    try {
+      await activeSend;
+    } catch {
+      // The original awaited call reports its own failure. This wait only prevents
+      // the script phase from racing the native single-request boundary.
+    }
+  }
+
+  return {
+    facade: {
+      async send(input: unknown) {
+        const preparedRequest = normalizeScriptRequestInput(input);
+
+        if (activeSend) {
+          await waitForActiveSend();
+          throw new Error(CONCURRENT_HELPER_REQUEST_ERROR);
+        }
+
+        activeSend = bridgeToMain<ResponsePayload>(requestId, {
+          type: "http-send",
+          request: preparedRequest
+        });
+
+        try {
+          const response = await activeSend;
+          return createResponseFacade(response);
+        } finally {
+          activeSend = null;
+        }
+      }
+    },
+    async assertNoPendingHelperRequest() {
+      if (!activeSend) {
+        return;
+      }
+
+      await waitForActiveSend();
+      throw new Error(UNAWAITED_HELPER_REQUEST_ERROR);
+    },
+    waitForPendingHelperRequest: waitForActiveSend
   };
+}
+
+type HttpFacade = ReturnType<typeof createHttpFacade>;
+
+async function settlePendingHelperRequest(http: HttpFacade) {
+  await http.waitForPendingHelperRequest();
+}
+
+async function assertNoPendingHelperRequest(http: HttpFacade) {
+  await http.assertNoPendingHelperRequest();
+}
+
+async function runScriptSource(
+  source: { label: string; script: string },
+  pn: unknown,
+  http: HttpFacade
+) {
+  try {
+    const execute = new AsyncFunction("pn", SANDBOX_PREAMBLE + source.script);
+    await execute(pn);
+    await assertNoPendingHelperRequest(http);
+  } catch (error) {
+    await settlePendingHelperRequest(http);
+    throw error;
+  }
 }
 
 function createVariableFacade(
@@ -767,18 +834,18 @@ async function runPreRequestScript(request: Extract<WorkerRequest, { kind: "pre-
 
   const preparedRequest = cloneRequestDraft(request.request);
   const variables = buildVariableMap(request.environmentVariables);
+  const http = createHttpFacade(request.id);
   const variableFacade = createVariableFacade(request.id, variables, request.activeEnvironment);
   const pn = {
     variables: variableFacade.facade,
     request: createRequestFacade(preparedRequest, variables),
     expect: createExpectation,
-    http: createHttpFacade(request.id)
+    http: http.facade
   };
 
   for (const source of scriptSources) {
     try {
-      const execute = new AsyncFunction("pn", SANDBOX_PREAMBLE + source.script);
-      await execute(pn);
+      await runScriptSource(source, pn, http);
     } catch (error) {
       return {
         request: preparedRequest,
@@ -819,6 +886,7 @@ async function runTestScript(request: Extract<WorkerRequest, { kind: "test" }>) 
   const execution = createEmptyExecution();
   const variables = buildVariableMap(request.environmentVariables);
   const tests: ScriptTestResult[] = [];
+  const http = createHttpFacade(request.id);
   const variableFacade = createVariableFacade(request.id, variables, request.activeEnvironment);
   let testChain = Promise.resolve();
 
@@ -826,7 +894,7 @@ async function runTestScript(request: Extract<WorkerRequest, { kind: "test" }>) 
     variables: variableFacade.facade,
     response: createResponseFacade(request.response),
     expect: createExpectation,
-    http: createHttpFacade(request.id),
+    http: http.facade,
     test(name: string, assertion: () => void | Promise<void>) {
       const promise = testChain.then(async () => {
         try {
@@ -857,8 +925,10 @@ async function runTestScript(request: Extract<WorkerRequest, { kind: "test" }>) 
       const execute = new AsyncFunction("pn", SANDBOX_PREAMBLE + source.script);
       await execute(pn);
       await testChain;
+      await assertNoPendingHelperRequest(http);
     } catch (error) {
       await testChain;
+      await settlePendingHelperRequest(http);
       execution.testScriptErrorText = `${source.label}: ${normalizeScriptError(error)}`;
       break;
     }

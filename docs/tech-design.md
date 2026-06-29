@@ -31,72 +31,7 @@ Why this stack:
 - SQLite gives durable local persistence without introducing a separate service
 - `reqwest` keeps request execution in the native layer, which avoids browser CORS behavior and makes TLS and redirect settings controllable
 
-## 3. Current Application State
-
-This section reflects the code currently implemented in the repository, including the shipped `0.15.0` scripting update, the `0.15.1` route/modal polish work, the `0.16.0` OpenAPI 3 import release, the `0.17.0` multitab request workspace release, the `0.17.1` history-restore patch, the `0.17.2` requests/environments workflow follow-up, the `0.17.3` hydration-flash polish release, the `0.17.4` follow-up that unifies hydration-flash handling through a shared synchronous paint cache, the `0.18.0` sidebar collection search release, the `0.18.1` scripting/workspace hardening patch, the `0.19.0` cURL/OAuth2 import-auth and request-export polish, the `0.19.2` full response body follow-up, the `0.19.3` updater download progress patch, the `0.19.4` revert of the 0.18.2 binary response preview layer, the `0.19.5` compressed-response decoding and error-details patch, the `0.19.6` OAuth2 token-fetch helper release, the `0.19.7` redacted single-request export patch, the `0.20.0` Playbooks release, the `0.20.1` Linux updater target patch, the `0.20.2` invisible scrollbar polish patch, the `0.20.3` resolved request preview release, the `0.20.5` landing-page copy refresh, the `0.20.7` Requests header autocomplete patch, and the current `0.20.8` collection folder ordering and drag-reorder patch (see [CHANGELOG.md](../CHANGELOG.md)).
-
-### Implemented
-
-- Tauri application shell with SvelteKit frontend
-- SQLite initialization on app startup
-- SQL migrations applied automatically at launch
-- Multi-tab request workspace with restored local tabs between launches
-- Supported request methods: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`
-- Request editing for:
-  - URL
-  - query parameters
-  - headers with common-name autocomplete and name-aware value suggestions
-  - auth: none, basic, bearer, API key, OAuth2 bearer with client-credentials token fetch
-  - body: none, JSON, raw, form-urlencoded, multipart with file uploads
-- Read-only resolved request preview before send, built by the native environment/settings pipeline, including outgoing URL/query/header/auth/body data, active settings, validation warnings, dynamic-variable notes, and masked credential-looking values
-- Native request execution through Rust
-- Response viewer with:
-  - status
-  - duration
-  - size
-  - headers
-  - body text / JSON pretty rendering
-  - full response body reads
-- Persisted application settings in SQLite
-- Persisted request history in SQLite, including a collapsible Requests-page history panel state stored in app settings
-- Cancel in-flight request
-- Restoring stored history requests into new request tabs
-- Collections and saved requests
-- Collection folders with nested request organization
-- Sidebar collection search across collections, folders, and saved requests
-- Drag-and-drop saved-request moves across collection trees, including reorder, folder moves, and cross-collection placement
-- Playbooks for sequential saved-request execution with ordered steps, per-step/default delays, stop-on-failure policy, grouped run logs, and normal per-step request history
-- Environments and variable resolution
-- OS-backed secret storage for secret environment variables
-- Postman collection JSON import
-- Postman environment JSON import
-- OpenAPI 3 JSON/YAML import for collections and single-request drafts
-- Postman collection JSON export
-- Postman environment JSON export
-- cURL command import, including `--url`, `--get`, repeated `--data`, multipart `--form`, cookies, compression, redirect flags, and shell continuation cleanup
-- Single-request cURL and PostNot request JSON export from the Requests page, with credential-looking values redacted by default and an explicit full-export toggle
-- Multipart request composition with native file selection
-- Built-in dynamic variables at request runtime
-- App-level floating notification system for action feedback
-- Settings page wired to backend persistence
-- Environment autosave preference stored in persisted settings and enabled by default
-- Signed in-app update checks, startup refresh, download progress reporting, and install handoff
-- Static GitHub Pages landing site in `docs/`, served at `post-not.com`, with checked-in WebP product screenshots and copy aligned with the current app surface
-- History panel wired to backend persistence
-- History detail inspection from persisted snapshots
-- Restore action that opens a stored history request snapshot as a new standalone tab
-- Clear history action
-- Pre-request scripts and test scripts for collections, folders, and saved requests (executed in a short-lived worker-backed frontend sandbox before send and after response)
-- Async scripting helper requests through `await pn.http.send(...)`
-- Active-environment variable reads and writes from scripts, including persisted secret writes through the OS credential store path
-- OAuth2 bearer tokens can be fetched from the request editor through the client-credentials flow, sourced from environment variables, optionally persisted to the active environment as a secret `oauth_access_token`, and set at runtime with `pn.request.setOAuth2Token(...)`
-- Request tabs persist through the existing `app_settings` store, keeping draft state and active tab selection across restarts without persisting response bodies, script output, or transient tab errors
-- URL-driven selection for the main saved request (`savedRequestId`), collections (`collectionId`), and environments (`environmentId`) uses generation guards so overlapping async loads from rapid navigation do not apply stale UI state; clearing `savedRequestId` from the URL resets deep-link tracking so the same request can load again from the query string
-- Save-request, cURL import, collection import, and environment import modals trap focus (initial focus, Tab cycle within the dialog, Escape to close, prior focus restored on close) for keyboard and assistive technology users
-- `Ctrl+S` / `Cmd+S` shortcuts save the active request on the Requests page and the selected environment on the Environments page
-- Native `reqwest::Client` instances are reused per TLS/redirect/timeout fingerprint with a bounded in-memory cache so settings changes do not rebuild a client on every send
-
-## 4. High-Level Architecture
+## 3. High-Level Architecture
 
 The app is split into two layers.
 
@@ -160,9 +95,9 @@ Responsibilities:
 6. The frontend records grouped playbook run and step summaries in SQLite
 7. Stop-on-failure and non-2xx/3xx failure policy are enforced by the playbook runner, with remaining enabled steps recorded as skipped
 
-## 5. Actual Folder Structure
+## 4. Repository Structure
 
-This is the meaningful structure currently present in the repo.
+This is the meaningful structure for the application and documentation code.
 
 ```text
 PostNot/
@@ -191,6 +126,7 @@ PostNot/
         collections/
           CollectionDetailForm.svelte
           CollectionsPanel.svelte
+          FolderScriptForm.svelte
         icons/
           FolderGlyph.svelte
         history/
@@ -198,6 +134,8 @@ PostNot/
           HistoryPanel.svelte
         layout/
           AppShell.svelte
+          CollectionDragController.svelte
+          DialogShell.svelte
           NotificationHost.svelte
           SidebarCollections.svelte
         request/
@@ -210,13 +148,21 @@ PostNot/
           ResponseViewer.svelte
       icons/
         folderPaths.ts
+      collections/
+        drag-and-drop.ts
       request-scripts.ts
+      request-script-worker.ts
       stores/
+        collection-dnd.svelte.ts
+        collection-search.svelte.ts
         collections.svelte.ts
         notifications.svelte.ts
         request-workspace.svelte.ts
         updater.svelte.ts
+      async-stale-guard.ts
+      modal-focus-trap.ts
       theme.ts
+      ui-cache.ts
       styles/
         tokens.css
         app.css
@@ -242,6 +188,8 @@ PostNot/
       icon.png
     migrations/
       0001_init.sql
+      0002_collection_scripts.sql
+      0003_playbooks.sql
     src/
       main.rs
       lib.rs
@@ -263,25 +211,33 @@ PostNot/
         collections.rs
         environments.rs
         exports.rs
+        history.rs
         imports.rs
         playbooks.rs
-        updates.rs
         mod.rs
         requests.rs
         settings.rs
-        history.rs
+        updates.rs
+        workspace.rs
       services/
         collections_service.rs
         environments_service.rs
+        environments_service_tests.rs
         exports_service.rs
-        imports_service.rs
+        history_service.rs
         mod.rs
         http_client.rs
+        imports_service.rs
+        imports_service/
+          curl.rs
+          openapi.rs
+          postman.rs
+          shared.rs
         playbooks_service.rs
+        playbooks_service_tests.rs
         request_preview_service.rs
         secret_store_service.rs
         settings_service.rs
-        history_service.rs
         updates_service.rs
         window_state_service.rs
       storage/
@@ -296,9 +252,9 @@ PostNot/
   vite.config.ts
 ```
 
-## 6. Core Domain Model
+## 5. Core Domain Model
 
-The current implementation uses these core entities.
+The application centers on these persisted and transport entities.
 
 ### Send Request Payload
 
@@ -341,6 +297,8 @@ Fields:
 - follow redirects flag
 - validate TLS flag
 - history limit
+- Requests-page history collapsed flag
+- environment autosave flag
 - notification timeout in milliseconds
 - last successful update check timestamp
 
@@ -360,7 +318,7 @@ Fields:
 - error text
 - executed at timestamp
 
-## 7. SQLite Storage Design
+## 6. SQLite Storage Design
 
 The schema is created by the migrations in `src-tauri/migrations/`: `0001_init.sql` for the original app tables, `0002_collection_scripts.sql` for collection-level scripts, and `0003_playbooks.sql` for playbook definitions and grouped run logs.
 
@@ -370,11 +328,11 @@ The database is created under the Tauri app data directory:
 
 - database file: `<app_data_dir>/postnot.sqlite`
 
-### Tables Currently Used
+### Core Tables
 
 #### `app_settings`
 
-Used actively by the application.
+Stores key/value application preferences and serialized UI state.
 
 ```sql
 CREATE TABLE app_settings (
@@ -384,7 +342,7 @@ CREATE TABLE app_settings (
 );
 ```
 
-Current keys written by the app:
+Keys written by the app:
 
 - `theme`
 - `ui_scale`
@@ -392,15 +350,16 @@ Current keys written by the app:
 - `follow_redirects`
 - `validate_tls`
 - `history_limit`
+- `is_history_collapsed`
+- `environment_autosave`
 - `notification_timeout_ms`
 - `last_update_checked_at`
 - `collection_sidebar_state`
 - `request_workspace_state`
-- `environment_autosave`
 
 #### `history_entries`
 
-Used actively by the application.
+Stores request execution summaries and links to full response-body files.
 
 ```sql
 CREATE TABLE history_entries (
@@ -426,7 +385,7 @@ Implementation notes:
 - failed requests are also persisted with `error_text`
 - history is pruned based on the persisted `history_limit` setting
 
-### Other Actively Used Tables
+### Other Tables
 
 #### `collections`
 
@@ -458,7 +417,7 @@ Stores ordered saved-request references for a Playbook, including per-step enabl
 
 Store grouped Playbook execution summaries and per-step outcomes. Individual step sends still go through the normal request execution path and write normal request history entries.
 
-## 8. Runtime Behavior
+## 7. Runtime Behavior
 
 ### Startup
 
@@ -474,7 +433,7 @@ At startup, the Tauri app:
 
 ### Request Execution
 
-For each request send, Rust currently applies these persisted settings:
+For each request send, Rust applies these persisted settings:
 
 - `request_timeout_ms`
 - `follow_redirects`
@@ -485,6 +444,8 @@ This means the settings page already changes actual network behavior, not just U
 Rust builds or reuses a `reqwest::Client` for the active combination of `validate_tls`, `follow_redirects`, and `request_timeout_ms` (cached up to a fixed number of distinct fingerprints) instead of constructing a new client on every request.
 
 For each saved request send, the frontend may first run the collection pre-request script, then each ancestor folder pre-request script from root to leaf, and then the saved request's pre-request script against a draft copy (with the active environment's variables) to mutate headers, query params, URL, and related fields. Those scripts can also await helper HTTP calls through `pn.http.send(...)` and persist active-environment variable changes before the main request continues. Errors from that step surface in the UI without calling Rust.
+
+Helper HTTP calls are guarded by the script runtime: only one `pn.http.send(...)` helper request may be active at a time, and helper calls must be awaited before a script source finishes. This keeps scripts aligned with the native single-request boundary and prevents the main request from racing an unfinished helper request.
 
 For each request send, Rust then:
 
@@ -528,9 +489,9 @@ On canceled request execution:
 - the in-flight native request is aborted
 - no history entry is written
 
-## 9. Current Tauri Command Boundary
+## 8. Tauri Command Boundary
 
-Commands currently exposed to the frontend:
+Commands exposed to the frontend:
 
 - `send_request`
 - `preview_request`
@@ -652,11 +613,11 @@ Commands currently exposed to the frontend:
 - `import_curl_request_to_draft`: parses a cURL command into an editable request draft without saving it yet
 - `import_openapi_request_to_draft`: parses one OpenAPI operation into an editable request draft without saving it yet
 
-## 10. Frontend Screens
+## 9. Frontend Screens
 
 ### Main Page
 
-Current UI sections:
+UI responsibilities:
 
 - request profile summary using persisted settings
 - active environment selector
@@ -674,7 +635,7 @@ Current UI sections:
 
 ### Settings Page
 
-Current UI sections:
+UI responsibilities:
 
 - theme selector
 - interface zoom selector
@@ -690,7 +651,7 @@ Current UI sections:
 
 ### Collections Page
 
-Current UI sections:
+UI responsibilities:
 
 - collection browser with nested folders and saved requests
 - dedicated collection editor view (`CollectionDetailForm.svelte` for metadata drafts)
@@ -703,7 +664,7 @@ Current UI sections:
 
 ### Environments Page
 
-Current UI sections:
+UI responsibilities:
 
 - environment list
 - active/inactive environment controls
@@ -714,7 +675,7 @@ Current UI sections:
 
 ### Playbooks Page
 
-Current UI sections:
+UI responsibilities:
 
 - Playbook list and editor
 - ordered saved-request steps with enable/disable controls, per-step notes, and delay overrides
@@ -724,10 +685,10 @@ Current UI sections:
 
 ### Public Landing Site
 
-Current static site sections:
+Static site responsibilities:
 
 - GitHub Pages landing page under `docs/index.html`, served with `docs/CNAME` for `post-not.com`
-- product copy updated for the current local-first app state, including Playbooks, resolved previews, OAuth2 token fetching, redacted exports, scripting, secrets, and imports
+- product copy that describes the local-first app model, including Playbooks, resolved previews, OAuth2 token fetching, redacted exports, scripting, secrets, and imports
 - screenshot gallery using checked-in Dark-theme WebP captures under `docs/images/`
 - scripting reference page under `docs/scripting.html`
 
@@ -735,9 +696,7 @@ Screenshot workflow note:
 
 - Run `npm run docs:capture-screenshots` after visible UI releases. The script starts or reuses the Vite dev server, seeds browser-mode local data, forces the Dark theme, captures the public screenshot set with Playwright, converts PNG captures to WebP with `cwebp`, and writes the checked-in assets under `docs/images/`.
 
-## 11. Security and Persistence Notes
-
-Current state:
+## 10. Security and Persistence Notes
 
 - the app is fully local
 - requests are executed in Rust, not the browser
@@ -748,139 +707,36 @@ Current state:
 - decoded response bodies are persisted as full text history body files
 - if an environment update or delete fails after partially changing the credential store, rollback of secrets is attempted; failure to roll back is logged with `log::warn` for diagnostics (the primary error still returns to the UI)
 
-This is the current security posture: environment-backed secrets are protected in storage and history, while single-request export uses local pattern-based redaction for credential-looking values before users copy cURL or PostNot JSON.
+Environment-backed secrets are protected in storage and history, while single-request export uses local pattern-based redaction for credential-looking values before users copy cURL or PostNot JSON.
 
-## 12. Release Progress
+## 11. Design Trade-Offs
 
-### Milestone 1 Goal
+### Local-First Storage
 
-Ship a usable desktop app that can compose and execute HTTP requests locally, persist request behavior settings, and preserve request history across restarts.
+SQLite plus OS credential storage keeps the app offline-capable and avoids operating a backend service. The trade-off is that cross-device sync, collaboration, and centralized audit features are outside the core architecture.
 
-### Milestone 1 Implemented So Far
+If the product grows toward multi-device workflows, the persistence boundary should be revisited before adding sync directly into feature code.
 
-- Tauri + SvelteKit app shell
-- single request editor
-- auth support for none/basic/bearer/API key
-- request execution through Rust
-- request cancellation
-- collections and saved requests
-- collection folders with nested browsing
-- sidebar-first collection browsing and dedicated collection editing
-- environments and variable resolution
-- built-in dynamic request variables
-- Postman collection JSON import
-- Postman environment JSON import
-- Postman collection JSON export
-- Postman environment JSON export
-- cURL command import
-- multipart request composition with local file uploads
-- response viewer
-- SQLite initialization and migrations
-- persisted settings
-- persisted history
-- settings page
-- history panel
-- history detail inspection
-- clear history action
-- signed updater checks with startup refresh, Linux package-target matching, and install flow
-- pre-request and test scripts on collections, folders, and saved requests (frontend execution around the native send)
-- shipped async scripting helper requests and active-environment variable writes in `0.15.0`
-- collections sidebar and collections panel folder trees with shared `FolderGlyph` styling
-- route/query stale-load guards, modal focus trapping, bounded `reqwest` client cache, and secret rollback warning logs as in `0.15.1`
-- OpenAPI 3 collection import plus single-operation draft import, with the Rust importer split into format-focused modules, as in `0.16.0`
-- restored multitab request workspaces with tab-local drafts persisted through `app_settings`, while response bodies and script output remain session-local
-- Requests history restore, environment autosave, hydration-flash avoidance through local first-paint caches, and sidebar collection search
-- cURL/OAuth2 import-auth improvements, OAuth2 client-credentials token fetching, redacted single-request export, compressed response decoding, full response body persistence, and retryable updater progress
-- Playbooks with ordered saved-request steps, run policies, grouped logs, and normal request-history integration
-- native resolved request preview before send, with validation notes and credential masking
-- static GitHub Pages landing page and scripting reference under `docs/`, with checked-in product screenshots
-- Requests header autocomplete for common names, existing draft names, name-aware common values, and matching values from the current draft
+### Native Request Execution
 
-### Current Scripting Boundary
+Routing all HTTP traffic through Rust avoids browser CORS limits and keeps TLS, redirect, timeout, cancellation, multipart file access, response decoding, and history persistence under one native pipeline. The trade-off is that browser-mode development needs mocks or degraded behavior for desktop-only capabilities.
 
-The async scripting milestone shipped in `0.15.0`.
+The command boundary should stay narrow: frontend code prepares drafts and renders results, while native services own network and durable persistence concerns.
 
-Scripts now run as awaited frontend JavaScript inside a short-lived worker-backed sandbox around one request send. Pre-request scripts can read and write active environment variables, mutate the outgoing request draft, and call `await pn.http.send(...)` to perform helper HTTP requests before the main request runs. Test scripts can inspect the returned response, register sync or async assertions through `pn.test(...)`, and also call helper requests when needed.
+### Frontend Script Runtime
 
-Helper script requests reuse the native request pipeline and active environment resolution, but they do not write separate history entries. Active-environment variable writes are buffered while scripts run and then persisted through the normal environment update path before the main request continues. The current runtime still allows only one native request in flight at a time, so helper requests should be awaited sequentially instead of fired concurrently.
+Running pre-request and test scripts in a short-lived worker-backed frontend sandbox keeps scripting close to the request editor and Playbook orchestration. The trade-off is that scripts are intentionally scoped to the documented `pn` API instead of attempting full Postman runtime compatibility.
 
-Manual end-to-end verification via `tauri dev` remains the expected release-confidence check for scripting and request-send behavior.
+If scripting grows substantially, the runtime API, concurrency model, and isolation guarantees should be treated as an explicit subsystem design rather than as incremental helper additions.
 
-### Current Position
+### Response Body Persistence
 
-The project is no longer at the "prove the app works at all" stage. The implemented `0.20.8` surface already covers the primary local API-client workflow: request composition and execution, persisted settings, restored local request tabs, resolved previews before send, history restore, collections, nested folders, folder/request drag management, sidebar search, Playbooks, environments, secret storage, import/export, multipart, OAuth2 helpers, header autocomplete, scripting helpers, signed stable-release updater checks, and a static public landing/scripting site.
+Persisting decoded response bodies as history body files keeps detail inspection available without inflating the main SQLite rows. The trade-off is an additional file-retention responsibility tied to history pruning and app-data storage size.
 
-The remaining work is primarily about closing the last daily-driver gaps, tightening reliability, and deciding which behaviors are part of the supported `1.x` contract.
+Retention controls, migration behavior, and body-size policy should be revisited if response history becomes a storage-pressure source.
 
-## 13. v1.0.0 Criteria
+### Stable Updater Feed
 
-`v1.0.0` should mark product confidence, not just a large feature batch. It does not need to be the single biggest release in terms of visible surface area. It should be the release where PostNot can be described as a stable, trustworthy local desktop API client for the intended solo-user workflow.
+Using GitHub Releases' stable `latest` updater manifest keeps update discovery predictable for normal users. The trade-off is that prerelease discovery is not part of the default update path.
 
-### Must Be True For v1.0.0
-
-- the current core workflow remains stable: native request sending, resolved previews, auth modes, body modes, environments, secrets, history, collections, Playbooks, import/export, scripting, and updater flows
-- multi-tab workflow remains behaviorally intentional enough to stand behind as part of the product, even if future releases expand it
-- history restore and collection search stay reliable as hardening continues
-- error handling and desktop UX are hardened enough that the app feels dependable in normal daily use
-- the codebase receives a focused hardening and optimization pass rather than only feature additions
-
-### Release Gates For v1.0.0
-
-Use concrete acceptance gates instead of a vague "more polish" bar:
-
-- no known data-loss bugs in saved requests, collections, environments, or history
-- no known request-corruption bugs caused by scripting, environment resolution, drag-and-drop moves, or restore flows
-- startup, request send, navigation, and collection interactions feel consistently responsive on normal desktop hardware
-- `npm run check` passes cleanly
-- `cargo check --manifest-path src-tauri/Cargo.toml` passes cleanly
-- main workflows are re-verified through `npm run tauri dev`
-- Windows behavior that matters for release confidence receives a smoke test in a native Windows environment, not only WSLg
-
-### Explicitly Not Required For v1.0.0
-
-The following can remain post-`1.0` work unless they become necessary for the primary workflow:
-
-- full Postman scripting parity
-- a very broad `pn` runtime API
-- every possible import/export format beyond the current Postman/OpenAPI/cURL coverage
-- collaboration or cloud-sync features
-- advanced bundle/export formats for PostNot-specific interchange
-
-## 14. Versioning Strategy Toward v1.0.0
-
-The project should continue shipping meaningful pre-`1.0` minor releases while the `v1` feature set is being completed. `1.0.0` should be used as the maturity and support marker once the intended workflow is complete and hardened.
-
-This means the project does not need to hold all remaining `v1` features for one giant release. Shipping them incrementally is preferred because it keeps changes smaller, validation easier, and regressions easier to isolate.
-
-### Recommended Approach
-
-1. Ship major `v1` features as normal `0.x` minor releases when they are ready.
-2. Once the agreed `v1` scope is feature-complete, declare a short stabilization phase.
-3. Use `1.0.0` for the release that combines the completed scope with the final hardening, verification, and release-signoff pass.
-
-### Example Sequence
-
-One reasonable path from the current state is:
-
-1. `0.20.8`: current app baseline with Playbooks, resolved previews, updater progress/targeting, landing-site refresh, Requests header autocomplete, and collection folder drag/order polish
-2. `0.21.0`: hardening, optimization, and UX/error-handling improvements
-3. `1.0.0`: release-signoff build after the `v1` scope is complete and verified
-
-The exact version numbers are less important than the policy: `1.0.0` is allowed to be a smaller visible release than earlier `0.x` milestones if it represents a meaningful jump in confidence and support commitment.
-
-## 15. Open Decisions
-
-These decisions remain relevant as the app approaches `1.0.0`:
-
-- whether full response body files need retention controls, size management, or migration beyond the current history-body file storage
-- exact import/export format for PostNot bundles
-- how far pattern-based export redaction should extend beyond the current credential-looking request fields
-- whether updater discovery should remain stable-only on GitHub's `/latest` endpoint or later grow an opt-in prerelease channel
-
-## 16. Recommendation
-
-Treat the repository as being on the path from active Milestone 1 delivery to a deliberate `v1.0.0`, not as a project that still needs a broad product rethink.
-
-The current design is already grounded in a real desktop workflow: persisted settings influence request execution, history is stored in SQLite with secret-derived environment values redacted, decoded response bodies are persisted as history body files, secret environment values live in the OS credential store, environments resolve variables at send time, the Requests page can ask Rust for a masked resolved preview before send, header rows provide lightweight autocomplete, collections support nested folders in the working UI with consistent sidebar and collections-panel tree affordances, saved requests can be searched, reordered, or moved across folders and collections through a shared drag-and-drop model, Playbooks can run saved requests sequentially with grouped logs, collections, folders, and saved requests can run inherited pre-request and test scripts in the frontend before and after native execution, scripts can await helper HTTP requests through `pn.http.send(...)` without polluting history and can persist active-environment variable updates during script execution, import can pull requests in from Postman collections, OpenAPI 3 documents, and cURL, single-request exports can produce redacted-by-default cURL or PostNot JSON with explicit full export, multipart requests can attach local files, built-in dynamic variables resolve at runtime, the desktop shell can check GitHub Releases' stable `latest` feed for signed updater builds both on launch and from Settings, and the public `docs/` site reflects the current shipped workflow with static screenshot assets.
-
-The remaining `v1` work should stay focused on release-quality steps that close the last day-to-day gaps: strong hardening of correctness, UX, and performance, plus any small workflow fixes that surface during validation.
+Any prerelease channel should remain opt-in and should preserve the signed-update and target-selection guarantees already used by the stable path.

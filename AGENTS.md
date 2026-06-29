@@ -30,7 +30,7 @@ Do not use malformed WindowsApps-style paths if they appear in broken thread con
 
 When onboarding into a fresh task, read these first:
 
-- [docs/tech-design.md](docs/tech-design.md): current architecture and implementation state
+- [docs/tech-design.md](docs/tech-design.md): architecture, runtime behavior, persistence, command boundaries, and design trade-offs
 - [docs/design-system.md](docs/design-system.md): application design language, reusable UI patterns, accessibility contract, and feature design checklist
 - [src/routes/+page.svelte](src/routes/+page.svelte): main request runner UI
 - [src/routes/settings/+page.svelte](src/routes/settings/+page.svelte): persisted settings UI and updater surface
@@ -40,7 +40,7 @@ When onboarding into a fresh task, read these first:
 - [src-tauri/src/services/history_service.rs](src-tauri/src/services/history_service.rs): request history
 - [src-tauri/src/services/environments_service.rs](src-tauri/src/services/environments_service.rs): environments, secret redaction, variable resolution
 
-## Current Product State
+## Application Capabilities
 
 Implemented now:
 
@@ -73,13 +73,6 @@ Implemented now:
 - signed in-app update checks with silent startup refresh and download progress
 - window size and position restore
 - collections sidebar and collections panel share folder tree guides and `FolderGlyph` / `folderPaths` icons
-
-Still intentionally open:
-
-- multi-tab workflow decisions
-- deeper scripting beyond the shipped async helper and environment-write surface (broader runtime API, richer inherited execution controls)
-- additional UX polish and error handling
-- updater channel decision for prereleases vs stable-only discovery
 
 ## Validation
 

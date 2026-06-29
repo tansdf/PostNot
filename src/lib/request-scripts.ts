@@ -22,6 +22,10 @@ const VALID_API_KEY_PLACEMENTS = new Set(["header", "query"]);
 const AsyncFunction = Object.getPrototypeOf(async function () {
   return undefined;
 }).constructor as new (argumentName: string, body: string) => (pn: unknown) => Promise<unknown>;
+const CONCURRENT_HELPER_REQUEST_ERROR =
+  "pn.http.send helper requests must be awaited sequentially. Await the previous pn.http.send(...) call before starting another one.";
+const UNAWAITED_HELPER_REQUEST_ERROR =
+  "Unawaited pn.http.send call detected. Use await pn.http.send(...) so the script waits for the helper request before continuing.";
 
 let scriptRowCounter = 0;
 let scriptTestCounter = 0;
@@ -772,13 +776,76 @@ function normalizeScriptRequestInput(input: unknown): RequestDraft {
 }
 
 function createHttpFacade() {
-  return {
-    async send(input: unknown) {
-      const preparedRequest = normalizeScriptRequestInput(input);
-      const result = await sendRequest(preparedRequest, { persistHistory: false });
-      return createResponseFacade(result.response);
+  let activeSend: Promise<ResponsePayload> | null = null;
+
+  async function waitForActiveSend() {
+    if (!activeSend) {
+      return;
     }
+
+    try {
+      await activeSend;
+    } catch {
+      // The original awaited call reports its own failure. This wait only prevents
+      // the script phase from racing the native single-request boundary.
+    }
+  }
+
+  return {
+    facade: {
+      async send(input: unknown) {
+        const preparedRequest = normalizeScriptRequestInput(input);
+
+        if (activeSend) {
+          await waitForActiveSend();
+          throw new Error(CONCURRENT_HELPER_REQUEST_ERROR);
+        }
+
+        activeSend = sendRequest(preparedRequest, { persistHistory: false }).then((result) => result.response);
+
+        try {
+          const response = await activeSend;
+          return createResponseFacade(response);
+        } finally {
+          activeSend = null;
+        }
+      }
+    },
+    async assertNoPendingHelperRequest() {
+      if (!activeSend) {
+        return;
+      }
+
+      await waitForActiveSend();
+      throw new Error(UNAWAITED_HELPER_REQUEST_ERROR);
+    },
+    waitForPendingHelperRequest: waitForActiveSend
   };
+}
+
+type HttpFacade = ReturnType<typeof createHttpFacade>;
+
+async function settlePendingHelperRequest(http: HttpFacade) {
+  await http.waitForPendingHelperRequest();
+}
+
+async function assertNoPendingHelperRequest(http: HttpFacade) {
+  await http.assertNoPendingHelperRequest();
+}
+
+async function runScriptSource(
+  source: { label: string; script: string },
+  pn: unknown,
+  http: HttpFacade
+) {
+  try {
+    const execute = new AsyncFunction("pn", '"use strict";\n' + source.script);
+    await execute(pn);
+    await assertNoPendingHelperRequest(http);
+  } catch (error) {
+    await settlePendingHelperRequest(http);
+    throw error;
+  }
 }
 
 export function createEmptyRequestScriptExecution() {
@@ -970,13 +1037,12 @@ async function runPreRequestScriptInPage(
     variables: variableFacade.facade,
     request: createRequestFacade(preparedRequest, variables),
     expect: createExpectation,
-    http
+    http: http.facade
   };
 
   for (const source of scriptSources) {
     try {
-      const execute = new AsyncFunction("pn", '"use strict";\n' + source.script);
-      await execute(pn);
+      await runScriptSource(source, pn, http);
     } catch (error) {
       return {
         request: preparedRequest,
@@ -1075,7 +1141,7 @@ async function runTestScriptInPage(
     variables: variableFacade.facade,
     response: createResponseFacade(response),
     expect: createExpectation,
-    http,
+    http: http.facade,
     test(name: string, assertion: () => void | Promise<void>) {
       const promise = testChain.then(async () => {
         try {
@@ -1106,8 +1172,10 @@ async function runTestScriptInPage(
       const execute = new AsyncFunction("pn", '"use strict";\n' + source.script);
       await execute(pn);
       await testChain;
+      await assertNoPendingHelperRequest(http);
     } catch (error) {
       await testChain;
+      await settlePendingHelperRequest(http);
       execution.testScriptErrorText = `${source.label}: ${normalizeScriptError(error)}`;
       break;
     }

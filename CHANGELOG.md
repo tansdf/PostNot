@@ -6,6 +6,16 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.20.18] - 2026-06-29
+
+### Changed
+
+- Refocused architecture and public documentation around stable product behavior, runtime boundaries, and release history instead of embedded roadmap/status copy.
+
+### Fixed
+
+- Hardened scripting helper requests so `pn.http.send(...)` calls must be awaited sequentially and unawaited helper calls fail clearly before the main request can race an unfinished helper request.
+
 ## [0.20.17] - 2026-06-29
 
 ### Fixed

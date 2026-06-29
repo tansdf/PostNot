@@ -50,10 +50,6 @@ PostNot is built for working with HTTP APIs on your own machine, with local pers
 - Practical portability: bring data in from Postman, OpenAPI 3, or cURL and export collections and environments back out in Postman-compatible JSON
 - Safer secret handling: environment secrets are kept out of SQLite, stored history snapshots preserve unresolved secret variables, and single-request exports redact credential-looking values by default
 
-## Current Status
-
-PostNot is still pre-1.0 and evolving deliberately. The core workflow is already real and usable, including restored multi-tab request workspaces, nested collection organization, drag-and-drop request and folder management, playbooks for sequential saved-request runs, OpenAPI 3 import, and async scripting helpers (`pn.http.send`, environment writes from scripts, inherited pre-request and test scripts), but the product is still growing in areas like broader scripting depth, broader polish, and updater channel decisions.
-
 ## Privacy And Storage
 
 - SQLite-backed app data is stored under the Tauri app data directory.
