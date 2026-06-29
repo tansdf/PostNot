@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { readCachedJson, UI_CACHE_KEYS } from "$lib/ui-cache";
 import {
   type CollectionItemSummary,
   type CollectionSearchResult,
@@ -39,6 +40,7 @@ import {
   type PlaybookStep,
   type PlaybookSummary,
   type RequestWorkspaceState,
+  type RequestWorkspaceTab,
   type RequestDraft,
   type RequestPreview,
   type RecordPlaybookRunStepInput,
@@ -58,10 +60,10 @@ export type SendRequestOptions = {
 
 function createMockResponse(payload: RequestDraft): ResponsePayload {
   return {
-    statusCode: 200,
-    statusText: "Frontend mock",
-    durationMs: 42,
-    sizeBytes: payload.url.length,
+    statusCode: payload.method === "POST" ? 201 : 200,
+    statusText: payload.method === "POST" ? "Created" : "OK",
+    durationMs: 128,
+    sizeBytes: 214,
     headers: [
       {
         id: "mock-header",
@@ -72,8 +74,10 @@ function createMockResponse(payload: RequestDraft): ResponsePayload {
     ],
     bodyText: JSON.stringify(
       {
-        message: "Tauri backend is not connected yet in this environment.",
-        request: payload
+        id: "note_42",
+        title: payload.name || "Sample request",
+        status: "draft",
+        savedLocally: true
       },
       null,
       2
@@ -87,14 +91,25 @@ function createMockHistory(limit = 10): HistoryEntrySummary[] {
   return [
     {
       id: "mock-history-1",
-      requestName: "Sample request",
-      method: "GET" as const,
-      url: "https://jsonplaceholder.typicode.com/todos/1",
-      statusCode: 200,
-      durationMs: 42,
-      responseBodyPreview: '{\n  "message": "Tauri backend is not connected yet in this environment."\n}',
+      requestName: "Create onboarding note",
+      method: "POST" as const,
+      url: "{{base_url}}/notes",
+      statusCode: 201,
+      durationMs: 128,
+      responseBodyPreview: '{\n  "id": "note_42",\n  "status": "draft"\n}',
       errorText: "",
       executedAt: new Date().toISOString()
+    },
+    {
+      id: "mock-history-2",
+      requestName: "List notes",
+      method: "GET" as const,
+      url: "{{base_url}}/notes",
+      statusCode: 200,
+      durationMs: 84,
+      responseBodyPreview: '[\n  { "id": "note_42", "title": "Welcome packet" }\n]',
+      errorText: "",
+      executedAt: new Date(Date.now() - 1000 * 60 * 12).toISOString()
     }
   ].slice(0, limit);
 }
@@ -103,11 +118,20 @@ function createMockCollections(): CollectionSummary[] {
   return [
     {
       id: "mock-collection-1",
-      name: "Examples",
-      description: "Sample saved requests",
+      name: "PostNot API",
+      description: "Saved local-first API workflows",
+      preRequestScript: "await pn.variables.set('run_started_at', new Date().toISOString());",
+      testScript: "pn.test('response finished', () => pn.expect(pn.response.durationMs).toBeLessThan(1000));",
+      requestCount: 4,
+      updatedAt: new Date().toISOString()
+    },
+    {
+      id: "mock-collection-2",
+      name: "Import samples",
+      description: "Postman, OpenAPI, and cURL examples",
       preRequestScript: "",
       testScript: "",
-      requestCount: 1,
+      requestCount: 3,
       updatedAt: new Date().toISOString()
     }
   ];
@@ -119,9 +143,27 @@ function createMockSavedRequests(): SavedRequestSummary[] {
       id: "mock-saved-request-1",
       collectionId: "mock-collection-1",
       parentId: "mock-folder-1",
-      name: "Sample request",
+      name: "Create onboarding note",
+      method: "POST" as const,
+      url: "{{base_url}}/notes",
+      updatedAt: new Date().toISOString()
+    },
+    {
+      id: "mock-saved-request-2",
+      collectionId: "mock-collection-1",
+      parentId: "mock-folder-1",
+      name: "List notes",
       method: "GET" as const,
-      url: "https://jsonplaceholder.typicode.com/todos/1",
+      url: "{{base_url}}/notes",
+      updatedAt: new Date().toISOString()
+    },
+    {
+      id: "mock-saved-request-3",
+      collectionId: "mock-collection-1",
+      parentId: "mock-folder-2",
+      name: "Client credentials token",
+      method: "POST" as const,
+      url: "{{base_url}}/oauth/token",
       updatedAt: new Date().toISOString()
     }
   ];
@@ -137,7 +179,7 @@ function createMockCollectionItems(): CollectionItemSummary[] {
       name: "Examples",
       method: null,
       url: null,
-      preRequestScript: "",
+      preRequestScript: "await pn.variables.set('folder', 'notes');",
       testScript: "",
       updatedAt: new Date().toISOString(),
       children: [
@@ -146,9 +188,49 @@ function createMockCollectionItems(): CollectionItemSummary[] {
           collectionId: "mock-collection-1",
           parentId: "mock-folder-1",
           kind: "request",
-          name: "Sample request",
+          name: "Create onboarding note",
+          method: "POST",
+          url: "{{base_url}}/notes",
+          preRequestScript: "await pn.variables.set('request_nonce', 'docs-preview');",
+          testScript: "pn.test('created note', () => pn.expect(pn.response.code).toBe(201));",
+          updatedAt: new Date().toISOString(),
+          children: []
+        },
+        {
+          id: "mock-saved-request-2",
+          collectionId: "mock-collection-1",
+          parentId: "mock-folder-1",
+          kind: "request",
+          name: "List notes",
           method: "GET",
-          url: "https://jsonplaceholder.typicode.com/todos/1",
+          url: "{{base_url}}/notes",
+          preRequestScript: "",
+          testScript: "",
+          updatedAt: new Date().toISOString(),
+          children: []
+        }
+      ]
+    },
+    {
+      id: "mock-folder-2",
+      collectionId: "mock-collection-1",
+      parentId: null,
+      kind: "folder",
+      name: "Auth",
+      method: null,
+      url: null,
+      preRequestScript: "",
+      testScript: "",
+      updatedAt: new Date().toISOString(),
+      children: [
+        {
+          id: "mock-saved-request-3",
+          collectionId: "mock-collection-1",
+          parentId: "mock-folder-2",
+          kind: "request",
+          name: "Client credentials token",
+          method: "POST",
+          url: "{{base_url}}/oauth/token",
           preRequestScript: "",
           testScript: "",
           updatedAt: new Date().toISOString(),
@@ -163,9 +245,16 @@ function createMockEnvironments(): EnvironmentSummary[] {
   return [
     {
       id: "mock-environment-1",
-      name: "Local",
+      name: "Local dark demo",
       isActive: true,
-      variableCount: 2,
+      variableCount: 5,
+      updatedAt: new Date().toISOString()
+    },
+    {
+      id: "mock-environment-2",
+      name: "Staging",
+      isActive: false,
+      variableCount: 4,
       updatedAt: new Date().toISOString()
     }
   ];
@@ -176,22 +265,43 @@ function createMockEnvironmentDetail(id: string): EnvironmentDetail {
     {
       id: "env-1",
       key: "base_url",
-      value: "https://jsonplaceholder.typicode.com",
+      value: "https://api.post-not.local",
       enabled: true,
       isSecret: false
     },
     {
       id: "env-2",
-      key: "api_token",
+      key: "access_token",
       value: "demo-token",
       enabled: true,
       isSecret: true
+    },
+    {
+      id: "env-3",
+      key: "client_secret",
+      value: "demo-client-secret",
+      enabled: true,
+      isSecret: true
+    },
+    {
+      id: "env-4",
+      key: "workspace_id",
+      value: "wrk_local_docs",
+      enabled: true,
+      isSecret: false
+    },
+    {
+      id: "env-5",
+      key: "request_nonce",
+      value: "generated-by-script",
+      enabled: true,
+      isSecret: false
     }
   ];
 
   return {
     id,
-    name: "Local",
+    name: "Local dark demo",
     isActive: true,
     updatedAt: new Date().toISOString(),
     variables
@@ -260,36 +370,50 @@ function createMockSavedRequestDetail(id: string): SavedRequestDetail {
     id,
     collectionId: "mock-collection-1",
     parentId: "mock-folder-1",
-    name: "Sample request",
+    name: "Create onboarding note",
     updatedAt: new Date().toISOString(),
     request: {
-      name: "Sample request",
-      method: "GET",
-      url: "https://jsonplaceholder.typicode.com/todos/1",
-      queryParams: [],
-      headers: [],
+      name: "Create onboarding note",
+      method: "POST",
+      url: "{{base_url}}/notes",
+      queryParams: [
+        {
+          id: "mock-query-1",
+          key: "include",
+          value: "author,workspace",
+          enabled: true
+        }
+      ],
+      headers: [
+        {
+          id: "mock-header-1",
+          key: "Accept",
+          value: "application/json",
+          enabled: true
+        }
+      ],
       body: {
-        mode: "none",
-        raw: "",
+        mode: "json",
+        raw: '{\n  "title": "Welcome packet",\n  "labels": ["onboarding", "local-first"],\n  "published": false\n}',
         form: [],
         files: []
       },
       auth: {
-        type: "none",
+        type: "oauth2",
         basicUsername: "",
         basicPassword: "",
         bearerToken: "",
         apiKeyName: "",
         apiKeyValue: "",
         apiKeyIn: "header",
-        oauth2AccessToken: "",
-        oauth2TokenUrl: "",
-        oauth2ClientId: "",
-        oauth2ClientSecret: "",
-        oauth2Scope: ""
+        oauth2AccessToken: "{{access_token}}",
+        oauth2TokenUrl: "{{base_url}}/oauth/token",
+        oauth2ClientId: "postnot-desktop",
+        oauth2ClientSecret: "{{client_secret}}",
+        oauth2Scope: "notes:write"
       },
-      preRequestScript: "",
-      testScript: ""
+      preRequestScript: "await pn.variables.set('request_nonce', 'docs-preview');",
+      testScript: "pn.test('created note', () => {\n  pn.expect(pn.response.code).toBe(201);\n});"
     }
   };
 }
@@ -338,7 +462,21 @@ function createMockPlaybookDetail(id = "mock-playbook-1"): PlaybookDetail {
     defaultDelayMs: summary.defaultDelayMs,
     stopOnFailure: summary.stopOnFailure,
     failOnHttpError: summary.failOnHttpError,
-    steps: [createMockPlaybookStep(id)],
+    steps: [
+      createMockPlaybookStep(id),
+      {
+        ...createMockPlaybookStep(id),
+        id: "mock-playbook-step-2",
+        savedRequestId: "mock-saved-request-2",
+        savedRequestName: "List notes",
+        method: "GET",
+        url: "{{base_url}}/notes",
+        nameOverride: "Verify note listing",
+        notes: "Runs after the create step to check the collection endpoint.",
+        sortOrder: 1,
+        delayAfterMs: 500
+      }
+    ],
     updatedAt: summary.updatedAt
   };
 }
@@ -471,7 +609,10 @@ export async function pickMultipartFiles(): Promise<string[]> {
 
 export async function getSettings(): Promise<AppSettings> {
   if (!hasTauriRuntime()) {
-    return createDefaultSettings();
+    return {
+      ...createDefaultSettings(),
+      ...(readCachedJson<Partial<AppSettings>>(UI_CACHE_KEYS.settings) ?? {})
+    };
   }
 
   return invoke<AppSettings>("get_settings");
@@ -529,7 +670,43 @@ export async function clearHistory(): Promise<void> {
 
 export async function getRequestWorkspaceState(): Promise<RequestWorkspaceState | null> {
   if (!hasTauriRuntime()) {
-    return null;
+    const cachedTabs = readCachedJson<RequestWorkspaceTab[]>(UI_CACHE_KEYS.workspaceTabs);
+    const cachedActiveTabId = readCachedJson<string>(UI_CACHE_KEYS.workspaceActiveTabId);
+
+    if (cachedTabs?.length) {
+      return {
+        tabs: cachedTabs,
+        activeTabId: cachedActiveTabId && cachedTabs.some((tab) => tab.id === cachedActiveTabId)
+          ? cachedActiveTabId
+          : cachedTabs[0].id
+      };
+    }
+
+    const savedRequest = createMockSavedRequestDetail("mock-saved-request-1");
+    return {
+      tabs: [
+        {
+          id: "mock-workspace-tab-1",
+          source: "saved",
+          savedRequestId: savedRequest.id,
+          collectionId: savedRequest.collectionId,
+          parentId: savedRequest.parentId ?? null,
+          request: savedRequest.request,
+          baselineRequest: savedRequest.request,
+          response: createMockResponse(savedRequest.request),
+          scriptExecution: {
+            preRequestErrorText: "",
+            testScriptErrorText: "",
+            tests: [
+              { id: "mock-test-1", name: "created note", status: "passed", errorText: "" },
+              { id: "mock-test-2", name: "response is JSON", status: "passed", errorText: "" }
+            ]
+          },
+          errorText: ""
+        }
+      ],
+      activeTabId: "mock-workspace-tab-1"
+    };
   }
 
   return invoke<RequestWorkspaceState | null>("get_request_workspace_state");

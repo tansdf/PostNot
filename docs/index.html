@@ -11,7 +11,7 @@
     <meta property="og:title" content="PostNot - local-first desktop API client" />
     <meta
       property="og:description"
-      content="Post APIs. Not your data. Free desktop API work with local persistence, Playbooks, imports from Postman, OpenAPI, and cURL, OS-backed secrets, environments, and scriptable helper HTTP requests."
+      content="Post APIs. Not your data. Free desktop API work with local persistence, Dark and Forest themes, Playbooks, imports, OS-backed secrets, environments, and scriptable helper HTTP requests."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -22,6 +22,7 @@
     />
     <link rel="stylesheet" href="site.css" />
     <link rel="icon" type="image/svg+xml" href="icon.svg" />
+    <script src="site.js" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -34,6 +35,7 @@
         <nav aria-label="Primary">
           <ul class="nav-links">
             <li><a href="#features">Features</a></li>
+            <li><a href="#design">Design</a></li>
             <li><a href="#screenshots">Screenshots</a></li>
             <li><a href="scripting.html">Scripting</a></li>
             <li><a href="#privacy">Privacy</a></li>
@@ -67,7 +69,8 @@
             PostNot is a free, local-first API client for focused HTTP workflows: native request
             execution, restored request tabs, resolved previews before send, collections, Playbooks,
             environments, OS-backed secrets, imports from Postman, OpenAPI, and cURL, redacted export
-            flows, OAuth2 helpers, and saved request scripting.
+            flows, OAuth2 helpers, saved request scripting, and a tokenized light/dark/Forest design
+            system built for dense desktop work.
           </p>
           <div class="hero__highlights" aria-label="Key product highlights">
             <span>Rust-native sending</span>
@@ -100,15 +103,24 @@
               <span>Request workspace</span>
               <span>Desktop UI</span>
             </div>
-            <img
-              src="images/requests-page.webp"
-              width="1995"
-              height="1179"
-              alt="PostNot request workspace showing request tabs, a request editor, response panel, and history"
-            />
+            <button
+              class="screenshot-trigger screenshot-trigger--hero"
+              type="button"
+              data-screenshot-src="images/requests-page.webp"
+              data-screenshot-title="Request workspace"
+              data-screenshot-alt="PostNot request workspace showing request tabs, a request editor, response panel, and history"
+            >
+              <img
+                src="images/requests-page.webp"
+                width="1995"
+                height="1179"
+                alt="PostNot request workspace showing request tabs, a request editor, response panel, and history"
+              />
+              <span class="screenshot-trigger__label">View larger</span>
+            </button>
           </div>
           <div class="preview-caption">
-            Local-first by default, with the same warm-paper and deep-green UI used in the desktop app.
+            Captured in the Dark theme used by the current desktop app screenshot set.
           </div>
         </div>
       </section>
@@ -202,57 +214,142 @@
         </div>
       </section>
 
+      <section id="design" aria-labelledby="design-heading">
+        <div class="section-heading">
+          <p class="eyebrow">Design system</p>
+          <h2 id="design-heading">Theme-aware, compact, and desktop-native</h2>
+        </div>
+        <p class="section-lead">
+          The current PostNot UI uses semantic tokens, shared controls, accessible dialogs, keyboard
+          fallbacks for drag-and-drop movement, and synchronized theme bootstrapping so the app opens
+          directly into the selected look without a flash.
+        </p>
+        <div class="theme-grid" aria-label="Available interface themes">
+          <button class="theme-card" type="button" data-site-theme="light" aria-pressed="false">
+            <div class="theme-card__swatches" aria-hidden="true">
+              <span style="background: #f2efe7"></span>
+              <span style="background: #172c2b"></span>
+              <span style="background: #d96c3b"></span>
+            </div>
+            <h3>Light</h3>
+            <p>Cream surfaces, deep teal structure, and warm action color for daytime work.</p>
+          </button>
+          <button class="theme-card theme-card--active" type="button" data-site-theme="dark" aria-pressed="true">
+            <div class="theme-card__swatches" aria-hidden="true">
+              <span style="background: #111917"></span>
+              <span style="background: #eaf0ea"></span>
+              <span style="background: #de7c4f"></span>
+            </div>
+            <h3>Dark</h3>
+            <p>Low-glare teal surfaces with the same hierarchy and controls used in these screenshots.</p>
+          </button>
+          <button class="theme-card" type="button" data-site-theme="forest" aria-pressed="false">
+            <div class="theme-card__swatches" aria-hidden="true">
+              <span style="background: #101713"></span>
+              <span style="background: #eef5ed"></span>
+              <span style="background: #2f7d55"></span>
+            </div>
+            <h3>Forest</h3>
+            <p>A deeper green workbench palette with softer contrast for long API sessions.</p>
+          </button>
+        </div>
+        <div class="status-callout status-callout--spaced">
+          <p>
+            The implementation guide lives in
+            <a href="https://github.com/tansdf/PostNot/blob/master/docs/design-system.md" rel="noopener noreferrer">docs/design-system.md</a>.
+            It documents tokens, shared controls, panels, dialogs, notification states, tree affordances,
+            and release checks for light, dark, system, and Forest theme behavior.
+          </p>
+        </div>
+      </section>
+
       <section id="screenshots" aria-labelledby="screenshots-heading">
         <div class="section-heading">
           <p class="eyebrow">Interface</p>
           <h2 id="screenshots-heading">Current product screenshots</h2>
         </div>
         <p class="section-lead">
-          A quick look at the current UI across collections, Playbooks, environments, and settings.
-          The request workspace is shown above.
+          A quick look at the current Dark-theme UI across collections, Playbooks, environments, and
+          settings. The request workspace is shown above.
         </p>
         <div class="gallery">
           <figure class="figure-card">
-            <img
-              src="images/collections-page.webp"
-              width="1995"
-              height="1179"
-              alt="PostNot collections view with sidebar navigation and nested request folders"
-              loading="lazy"
-            />
+            <button
+              class="screenshot-trigger"
+              type="button"
+              data-screenshot-src="images/collections-page.webp"
+              data-screenshot-title="Collections"
+              data-screenshot-alt="PostNot collections view with sidebar navigation and nested request folders"
+            >
+              <img
+                src="images/collections-page.webp"
+                width="1995"
+                height="1179"
+                alt="PostNot collections view with sidebar navigation and nested request folders"
+                loading="lazy"
+              />
+              <span class="screenshot-trigger__label">View larger</span>
+            </button>
             <figcaption>Collections - nested folders, search, and drag-and-drop saved requests.</figcaption>
           </figure>
           <figure class="figure-card">
-            <img
-              src="images/playbooks-page.webp"
-              width="1995"
-              height="1179"
-              alt="PostNot playbooks view with ordered saved-request steps and run logs"
-              loading="lazy"
-            />
+            <button
+              class="screenshot-trigger"
+              type="button"
+              data-screenshot-src="images/playbooks-page.webp"
+              data-screenshot-title="Playbooks"
+              data-screenshot-alt="PostNot playbooks view with ordered saved-request steps and run logs"
+            >
+              <img
+                src="images/playbooks-page.webp"
+                width="1995"
+                height="1179"
+                alt="PostNot playbooks view with ordered saved-request steps and run logs"
+                loading="lazy"
+              />
+              <span class="screenshot-trigger__label">View larger</span>
+            </button>
             <figcaption>Playbooks - sequential saved-request runs with delays, scripts, and grouped logs.</figcaption>
           </figure>
           <figure class="figure-card">
-            <img
-              src="images/environments-page.webp"
-              width="1995"
-              height="1179"
-              alt="PostNot environments editor with variable names, values, and secret handling"
-              loading="lazy"
-            />
+            <button
+              class="screenshot-trigger"
+              type="button"
+              data-screenshot-src="images/environments-page.webp"
+              data-screenshot-title="Environments"
+              data-screenshot-alt="PostNot environments editor with variable names, values, and secret handling"
+            >
+              <img
+                src="images/environments-page.webp"
+                width="1995"
+                height="1179"
+                alt="PostNot environments editor with variable names, values, and secret handling"
+                loading="lazy"
+              />
+              <span class="screenshot-trigger__label">View larger</span>
+            </button>
             <figcaption>
               Environments - <span class="code-inline">{{variable}}</span> substitution and secret
               storage.
             </figcaption>
           </figure>
           <figure class="figure-card">
-            <img
-              src="images/settings-page.webp"
-              width="1995"
-              height="1179"
-              alt="PostNot settings surface with preferences and update information"
-              loading="lazy"
-            />
+            <button
+              class="screenshot-trigger"
+              type="button"
+              data-screenshot-src="images/settings-page.webp"
+              data-screenshot-title="Settings and updates"
+              data-screenshot-alt="PostNot settings surface with preferences and update information"
+            >
+              <img
+                src="images/settings-page.webp"
+                width="1995"
+                height="1179"
+                alt="PostNot settings surface with preferences and update information"
+                loading="lazy"
+              />
+              <span class="screenshot-trigger__label">View larger</span>
+            </button>
             <figcaption>Settings and updates - persisted preferences, signed checks, and download progress.</figcaption>
           </figure>
         </div>
@@ -318,8 +415,9 @@
           <p>
             The core workflow is already real and usable, including restored multi-tab request
             workspaces, nested collections, Playbooks, OpenAPI 3 import, OAuth2 token fetching,
-            resolved request previews, redacted exports, and async scripting helpers. Current work is
-            focused on broader scripting depth, additional polish, and updater channel decisions. Follow
+            resolved request previews, redacted exports, inherited scripts, async helper requests,
+            environment variable writes, Dark/Light/Forest themes, and accessible theme preview cards.
+            Current work is focused on broader scripting depth, additional polish, and updater channel decisions. Follow
             <a
               href="https://github.com/tansdf/PostNot/blob/master/CHANGELOG.md"
               rel="noopener noreferrer"
@@ -349,5 +447,16 @@
         </div>
       </div>
     </footer>
+
+    <div class="screenshot-modal" role="dialog" aria-modal="true" aria-labelledby="screenshot-modal-title" hidden>
+      <button class="screenshot-modal__backdrop" type="button" data-modal-close aria-label="Close screenshot viewer"></button>
+      <div class="screenshot-modal__panel">
+        <div class="screenshot-modal__header">
+          <h2 id="screenshot-modal-title">Screenshot</h2>
+          <button class="screenshot-modal__close" type="button" data-modal-close aria-label="Close screenshot viewer">Close</button>
+        </div>
+        <img class="screenshot-modal__image" src="" alt="" />
+      </div>
+    </div>
   </body>
 </html>

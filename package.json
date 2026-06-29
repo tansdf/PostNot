@@ -9,6 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "docs:capture-screenshots": "node scripts/capture-docs-screenshots.mjs",
     "test": "node scripts/run-tests.mjs",
     "tauri": "tauri"
   },

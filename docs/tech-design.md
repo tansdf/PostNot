@@ -728,12 +728,12 @@ Current static site sections:
 
 - GitHub Pages landing page under `docs/index.html`, served with `docs/CNAME` for `post-not.com`
 - product copy updated for the current local-first app state, including Playbooks, resolved previews, OAuth2 token fetching, redacted exports, scripting, secrets, and imports
-- screenshot gallery using checked-in WebP captures under `docs/images/`
+- screenshot gallery using checked-in Dark-theme WebP captures under `docs/images/`
 - scripting reference page under `docs/scripting.html`
 
 Screenshot workflow note:
 
-- There is no checked-in screenshot automation script in the current repository. Public screenshots are static WebP assets committed under `docs/images/`; when the UI changes visibly, refresh those assets manually or add a documented capture workflow before relying on automated screenshot updates.
+- Run `npm run docs:capture-screenshots` after visible UI releases. The script starts or reuses the Vite dev server, seeds browser-mode local data, forces the Dark theme, captures the public screenshot set with Playwright, converts PNG captures to WebP with `cwebp`, and writes the checked-in assets under `docs/images/`.
 
 ## 11. Security and Persistence Notes
 
