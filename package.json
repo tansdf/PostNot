@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "docs:capture-screenshots": "node scripts/capture-docs-screenshots.mjs",
+    "docs:check-screenshots": "node scripts/capture-docs-screenshots.mjs --check",
     "test": "node scripts/run-tests.mjs",
     "tauri": "tauri"
   },

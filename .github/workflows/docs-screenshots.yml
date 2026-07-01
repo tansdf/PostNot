@@ -1,0 +1,49 @@
+name: Docs Screenshots
+
+on:
+  pull_request:
+    paths:
+      - "docs/**"
+      - "src/lib/components/**"
+      - "src/lib/styles/**"
+      - "src/routes/**"
+      - "scripts/capture-docs-screenshots.mjs"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/docs-screenshots.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "docs/**"
+      - "src/lib/components/**"
+      - "src/lib/styles/**"
+      - "src/routes/**"
+      - "scripts/capture-docs-screenshots.mjs"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/docs-screenshots.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  freshness:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Check docs screenshot freshness
+        run: npm run docs:check-screenshots

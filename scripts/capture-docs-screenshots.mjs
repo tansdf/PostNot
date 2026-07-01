@@ -1,6 +1,8 @@
 import { spawn } from "node:child_process";
-import { mkdir, rm } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
+import { mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { chromium } from "playwright";
@@ -9,8 +11,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(__dirname, "..");
 const baseUrl = process.env.POSTNOT_SCREENSHOT_URL ?? "http://127.0.0.1:1420";
 const imageDir = join(repoRoot, "docs", "images");
+const manifestPath = join(imageDir, "screenshot-manifest.json");
 const tempDir = join(repoRoot, ".tmp", "docs-screenshots");
 const viewport = { width: 1995, height: 1179 };
+const manifestVersion = 1;
+const checkOnly = process.argv.includes("--check");
 
 const now = new Date("2026-06-29T12:00:00.000Z").toISOString();
 
@@ -311,6 +316,157 @@ const captures = [
   { path: "/settings", file: "settings-page.webp", waitFor: ".settings-page" }
 ];
 
+const freshnessInputs = [
+  { path: "scripts/capture-docs-screenshots.mjs" },
+  { path: "docs/index.html" },
+  { path: "docs/site.css" },
+  { path: "docs/site.js" },
+  { path: "src/routes", extensions: [".svelte"] },
+  { path: "src/lib/components", extensions: [".svelte"] },
+  { path: "src/lib/styles", extensions: [".css"] }
+];
+
+function toRepoPath(path) {
+  return relative(repoRoot, path).replaceAll("\\", "/");
+}
+
+async function collectFreshnessFiles() {
+  const files = [];
+
+  async function visit(path, extensions) {
+    const entry = await stat(path);
+    if (entry.isDirectory()) {
+      const children = await readdir(path);
+      for (const child of children) {
+        await visit(join(path, child), extensions);
+      }
+      return;
+    }
+
+    if (!extensions || extensions.some((extension) => path.endsWith(extension))) {
+      files.push(path);
+    }
+  }
+
+  for (const input of freshnessInputs) {
+    await visit(join(repoRoot, input.path), input.extensions);
+  }
+
+  return files.sort((a, b) => toRepoPath(a).localeCompare(toRepoPath(b)));
+}
+
+async function hashFile(path) {
+  const content = await readFile(path);
+  return createHash("sha256").update(content).digest("hex");
+}
+
+async function buildScreenshotManifest() {
+  const inputs = [];
+  const inputHash = createHash("sha256");
+
+  for (const path of await collectFreshnessFiles()) {
+    const repoPath = toRepoPath(path);
+    const sha256 = await hashFile(path);
+    inputs.push({ path: repoPath, sha256 });
+    inputHash.update(`${repoPath}\0${sha256}\0`);
+  }
+
+  return {
+    version: manifestVersion,
+    generatedAt: new Date().toISOString(),
+    viewport,
+    captures: captures.map(({ path, file, waitFor }) => ({ path, file, waitFor })),
+    inputHash: inputHash.digest("hex"),
+    inputs
+  };
+}
+
+async function readManifest() {
+  try {
+    return JSON.parse(await readFile(manifestPath, "utf8"));
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  }
+}
+
+function comparableManifest(manifest) {
+  if (!manifest) {
+    return null;
+  }
+
+  return {
+    version: manifest.version,
+    viewport: manifest.viewport,
+    captures: manifest.captures,
+    inputHash: manifest.inputHash
+  };
+}
+
+function describeFreshnessIssue(current, recorded) {
+  if (!recorded) {
+    return "docs/images/screenshot-manifest.json is missing.";
+  }
+
+  const currentComparable = comparableManifest(current);
+  const recordedComparable = comparableManifest(recorded);
+  if (JSON.stringify(currentComparable) === JSON.stringify(recordedComparable)) {
+    return null;
+  }
+
+  if (recorded.version !== current.version) {
+    return `screenshot manifest version changed from ${recorded.version ?? "unknown"} to ${current.version}.`;
+  }
+
+  if (JSON.stringify(recorded.viewport) !== JSON.stringify(current.viewport)) {
+    return "screenshot viewport changed.";
+  }
+
+  if (JSON.stringify(recorded.captures) !== JSON.stringify(current.captures)) {
+    return "screenshot capture targets changed.";
+  }
+
+  return "tracked UI or docs inputs changed since the screenshots were last captured.";
+}
+
+async function checkScreenshotFreshness() {
+  const current = await buildScreenshotManifest();
+  const recorded = await readManifest();
+  const missingAssets = captures
+    .map((capture) => capture.file)
+    .filter((file) => !existsSync(join(imageDir, file)));
+  const issue = describeFreshnessIssue(current, recorded);
+
+  if (!issue && missingAssets.length === 0) {
+    console.log("Docs screenshots are fresh.");
+    return;
+  }
+
+  if (issue) {
+    console.error(`Docs screenshots are stale: ${issue}`);
+  }
+
+  if (missingAssets.length > 0) {
+    console.error(`Missing screenshot assets: ${missingAssets.map((file) => `docs/images/${file}`).join(", ")}`);
+  }
+
+  console.error("Run `npm run docs:capture-screenshots` and commit the updated docs/images assets.");
+  process.exit(1);
+}
+
+async function writeScreenshotManifest() {
+  const manifest = await buildScreenshotManifest();
+  const recorded = await readManifest();
+
+  if (JSON.stringify(comparableManifest(manifest)) === JSON.stringify(comparableManifest(recorded))) {
+    manifest.generatedAt = recorded.generatedAt;
+  }
+
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+}
+
 async function canReachServer() {
   try {
     const response = await fetch(baseUrl, { signal: AbortSignal.timeout(1000) });
@@ -360,6 +516,11 @@ async function convertToWebp(pngPath, webpPath) {
 }
 
 async function main() {
+  if (checkOnly) {
+    await checkScreenshotFreshness();
+    return;
+  }
+
   await mkdir(imageDir, { recursive: true });
   await mkdir(tempDir, { recursive: true });
 
@@ -408,6 +569,9 @@ async function main() {
       await convertToWebp(pngPath, webpPath);
       console.log(`Captured docs/images/${capture.file}`);
     }
+
+    await writeScreenshotManifest();
+    console.log("Updated docs/images/screenshot-manifest.json");
   } finally {
     await browser.close();
     await rm(tempDir, { recursive: true, force: true });

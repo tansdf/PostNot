@@ -695,6 +695,7 @@ Static site responsibilities:
 Screenshot workflow note:
 
 - Run `npm run docs:capture-screenshots` after visible UI releases. The script starts or reuses the Vite dev server, seeds browser-mode local data, forces the Dark theme, captures the public screenshot set with Playwright, converts PNG captures to WebP with `cwebp`, and writes the checked-in assets under `docs/images/`.
+- Run `npm run docs:check-screenshots` to verify the checked-in screenshots are fresh enough for release. The guard compares the screenshot manifest against tracked UI/docs inputs and expected asset names; it intentionally avoids pixel diffs so normal rendering differences do not make CI brittle. The dedicated docs screenshot workflow can fail on PRs or `main` pushes, while the tag-triggered release workflow treats the check as advisory so a stale screenshot warning does not require tag recreation.
 
 ## 10. Security and Persistence Notes
 

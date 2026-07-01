@@ -1,0 +1,159 @@
+{
+  "version": 1,
+  "generatedAt": "2026-07-01T18:24:30.943Z",
+  "viewport": {
+    "width": 1995,
+    "height": 1179
+  },
+  "captures": [
+    {
+      "path": "/",
+      "file": "requests-page.webp",
+      "waitFor": ".workspace-grid"
+    },
+    {
+      "path": "/",
+      "file": "request-preview.webp",
+      "waitFor": ".workspace-grid"
+    },
+    {
+      "path": "/collections?collectionId=mock-collection-1",
+      "file": "collections-page.webp",
+      "waitFor": ".collections-page-panel"
+    },
+    {
+      "path": "/playbooks",
+      "file": "playbooks-page.webp",
+      "waitFor": ".playbooks-page"
+    },
+    {
+      "path": "/environments?environmentId=env-local",
+      "file": "environments-page.webp",
+      "waitFor": ".environment-list"
+    },
+    {
+      "path": "/settings",
+      "file": "settings-page.webp",
+      "waitFor": ".settings-page"
+    }
+  ],
+  "inputHash": "cee50e095c12b7bfe7bffaaaeec0309966db73c1a9b5568cd106b2dfb95276f9",
+  "inputs": [
+    {
+      "path": "docs/index.html",
+      "sha256": "db4b912c27bbacb7b247b3f5a1d6e8f457b3b3cc55e249db31d7699ff18fcaec"
+    },
+    {
+      "path": "docs/site.css",
+      "sha256": "00184bbfb041de9480127ba3c8cb71e94112469736e9fb318cfbea5f8cc2c3f0"
+    },
+    {
+      "path": "docs/site.js",
+      "sha256": "ce06d2037b682fd6a5d3c93d1cbf9b0df38707671340fae67b80a0aac060e44f"
+    },
+    {
+      "path": "scripts/capture-docs-screenshots.mjs",
+      "sha256": "6d120bcb81233119678292789bf040cb95311886f1b4ae749bb4ad4e33144620"
+    },
+    {
+      "path": "src/lib/components/collections/CollectionDetailForm.svelte",
+      "sha256": "e047dbeaa0c146934a107236e5d2a1fac627e3665334042020573604c1296caa"
+    },
+    {
+      "path": "src/lib/components/collections/CollectionsPanel.svelte",
+      "sha256": "4211820e7504c4d539829f4725fdf4c436f63feebc0cee32ba92124337997723"
+    },
+    {
+      "path": "src/lib/components/collections/FolderScriptForm.svelte",
+      "sha256": "333eddecfaf3387ef250a8c1a5d70c768fd71a79073f006a50d57569199bffea"
+    },
+    {
+      "path": "src/lib/components/history/HistoryDetail.svelte",
+      "sha256": "4c12c5f50c409c0d76ab4eeaaf2354234c5f27a7a557e90d8d7376514ac58693"
+    },
+    {
+      "path": "src/lib/components/history/HistoryPanel.svelte",
+      "sha256": "562f0a7d94f96f85f2be3a985fba9b5d756c185d77658d45fa4312dfa05a75c0"
+    },
+    {
+      "path": "src/lib/components/icons/FolderGlyph.svelte",
+      "sha256": "173cd0a69f531e1deef3583d7d688721657110c3ee9229b94cec15089119ae9e"
+    },
+    {
+      "path": "src/lib/components/layout/AppShell.svelte",
+      "sha256": "c7372a7308748fa72e21249a2b29e443ea236f72d21bace874e99e1b699fba03"
+    },
+    {
+      "path": "src/lib/components/layout/CollectionDragController.svelte",
+      "sha256": "5913823c051bcfac084641628b10a75859077e3b12b9eb2c199cbc8fd6df2b46"
+    },
+    {
+      "path": "src/lib/components/layout/DialogShell.svelte",
+      "sha256": "e6405ed7b118548e549da59b045691c0525f3e677085ae2cf0a8bcb0c5aef5e0"
+    },
+    {
+      "path": "src/lib/components/layout/NotificationHost.svelte",
+      "sha256": "b7cf98194b505e31e832bd0274c010e54294f60c56579655bfa349a802f3e9cf"
+    },
+    {
+      "path": "src/lib/components/layout/SidebarCollections.svelte",
+      "sha256": "c11f72f5dfe62544d95508e2be813277d114506b4a0999c337644c49f03cf6ad"
+    },
+    {
+      "path": "src/lib/components/request/RequestEditor.svelte",
+      "sha256": "ecf48f872a877a773a9c658bee4efa1554480313adec95e55434302c35359587"
+    },
+    {
+      "path": "src/lib/components/request/RequestTabs.svelte",
+      "sha256": "b024c868682700f93cf7941aef89a1de21cf7ea489a33ae9a92aafc2e8f05c42"
+    },
+    {
+      "path": "src/lib/components/request/ScriptEditor.svelte",
+      "sha256": "a052a3bc4f41e5c4fba0e71f6653c1825d6a979aed1231d53b86c83b39ec2737"
+    },
+    {
+      "path": "src/lib/components/request/VariableField.svelte",
+      "sha256": "d8ff36738c86930562280183dca64f6116a0c68fd55802bd7229d5dbb6ccc23a"
+    },
+    {
+      "path": "src/lib/components/response/JsonViewer.svelte",
+      "sha256": "34f4c4b8338b801b20936c27f45cef7e4a06e8610c898314caa9ecd15af94a95"
+    },
+    {
+      "path": "src/lib/components/response/ResponseViewer.svelte",
+      "sha256": "e0dd91d4bd6fd9602d86f9de1ac35df3586c8558bad35c437151968b15166896"
+    },
+    {
+      "path": "src/lib/styles/app.css",
+      "sha256": "8006247f2dc906fa5bf744530deb581772441f1d4ed3e4169ea6b9a04177d6c1"
+    },
+    {
+      "path": "src/lib/styles/tokens.css",
+      "sha256": "f98aae015085717a9c15c699793cd0e9a8a793d3a24a33b7b2b7dc2c133b4388"
+    },
+    {
+      "path": "src/routes/+layout.svelte",
+      "sha256": "a5316fd1f3149e05708e49bb52c441d4618e15cfca85245928a5bbaf83026274"
+    },
+    {
+      "path": "src/routes/+page.svelte",
+      "sha256": "591ec4b1970167a2f644b0de7a546dac5f596f6d5a480d38467ee82843d9364b"
+    },
+    {
+      "path": "src/routes/collections/+page.svelte",
+      "sha256": "63785b3bee2cdf8a611fa1e34e042f1be821af5ad93b4416073b48f24e0c92ba"
+    },
+    {
+      "path": "src/routes/environments/+page.svelte",
+      "sha256": "b5cd44feb91a645fbcac299c0ea10983a811ecdadb738dd314b9f632ddae5cbb"
+    },
+    {
+      "path": "src/routes/playbooks/+page.svelte",
+      "sha256": "7c72682b88c07f6ff81f0a3756e7453b6d2fca876e6c8dd6b9b5d4ec190ab57c"
+    },
+    {
+      "path": "src/routes/settings/+page.svelte",
+      "sha256": "bd6f9da0f321a61b40fe209bcba42732aa6fc825983fc82ef641888c13e028a0"
+    }
+  ]
+}
