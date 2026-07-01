@@ -6,6 +6,13 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.20.20] - 2026-07-01
+
+### Fixed
+
+- Allowed cURL imports to accept bare `localhost` URLs, such as `curl localhost:3000/health`, while keeping schemeless non-localhost URLs rejected.
+- Kept the response receive progress total stable while downloading response bodies.
+
 ## [0.20.19] - 2026-07-01
 
 ### Changed

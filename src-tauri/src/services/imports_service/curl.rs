@@ -9,7 +9,7 @@ use crate::{
         requests::{FileRow, KeyValueRow, RequestAuth, RequestBody, SendRequestPayload},
     },
     error::{AppError, AppResult},
-    services::collections_service,
+    services::{collections_service, request_url_service::normalize_request_url},
 };
 
 use super::shared::{empty_auth, empty_kv, normalize_method};
@@ -242,11 +242,14 @@ fn next_value<'a>(parts: &'a [String], index: &mut usize) -> Option<&'a str> {
 }
 
 fn is_request_url(value: &str) -> bool {
-    value.starts_with("http://") || value.starts_with("https://")
+    value.starts_with("http://")
+        || value.starts_with("https://")
+        || normalize_request_url(value) != value.trim()
 }
 
 fn split_url_query_params(url: &str) -> (String, Vec<KeyValueRow>) {
-    let Ok(mut parsed_url) = Url::parse(url) else {
+    let normalized_url = normalize_request_url(url);
+    let Ok(mut parsed_url) = Url::parse(&normalized_url) else {
         return (url.to_string(), Vec::new());
     };
 
@@ -352,6 +355,40 @@ mod tests {
         assert_eq!(request.query_params[0].value, "10");
         assert_eq!(request.query_params[1].key, "q");
         assert_eq!(request.query_params[1].value, "rust");
+    }
+
+    #[test]
+    fn parses_bare_localhost_url_and_splits_query_params() {
+        let request = parse_curl_command("curl localhost:3000/health?ready=true").unwrap();
+
+        assert_eq!(request.method, "GET");
+        assert_eq!(request.url, "http://localhost:3000/health");
+        assert_eq!(request.query_params.len(), 1);
+        assert_eq!(request.query_params[0].key, "ready");
+        assert_eq!(request.query_params[0].value, "true");
+    }
+
+    #[test]
+    fn parses_bare_localhost_url_flag() {
+        let request = parse_curl_command("curl --url localhost/status").unwrap();
+
+        assert_eq!(request.method, "GET");
+        assert_eq!(request.url, "http://localhost/status");
+    }
+
+    #[test]
+    fn keeps_scheme_relaxation_limited_to_localhost() {
+        let error = parse_curl_command("curl api.example.com/items").unwrap_err();
+
+        assert!(error
+            .to_string()
+            .contains("Could not find a request URL in the cURL command."));
+
+        let error = parse_curl_command("curl localhost.example.com/items").unwrap_err();
+
+        assert!(error
+            .to_string()
+            .contains("Could not find a request URL in the cURL command."));
     }
 
     #[test]

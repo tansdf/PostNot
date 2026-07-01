@@ -252,7 +252,13 @@ pub async fn send_request(
         });
     }
 
-    let body_bytes = read_full_body(&mut response, &mut cancel_rx, progress_sink.as_ref()).await?;
+    let body_bytes = read_full_body(
+        &mut response,
+        &mut cancel_rx,
+        progress_sink.as_ref(),
+        content_length,
+    )
+    .await?;
     let body_size = content_length
         .and_then(|value| usize::try_from(value).ok())
         .unwrap_or(body_bytes.len());
@@ -282,6 +288,7 @@ async fn read_full_body(
     response: &mut Response,
     cancel_rx: &mut watch::Receiver<bool>,
     progress_sink: Option<&ResponseProgressSink>,
+    content_length: Option<u64>,
 ) -> AppResult<Vec<u8>> {
     let mut bytes = Vec::new();
 
@@ -300,7 +307,7 @@ async fn read_full_body(
         if let Some(progress_sink) = progress_sink {
             progress_sink(ResponseDownloadProgress {
                 downloaded_bytes: bytes.len(),
-                content_length: response.content_length(),
+                content_length,
                 finished: false,
             });
         }
@@ -325,7 +332,7 @@ async fn wait_for_cancellation(cancel_rx: &mut watch::Receiver<bool>) {
 
 #[cfg(test)]
 mod tests {
-    use super::send_request;
+    use super::{send_request, ResponseDownloadProgress, ResponseProgressSink};
     use crate::domain::{
         requests::{KeyValueRow, RequestAuth, RequestBody, SendRequestPayload},
         settings::AppSettings,
@@ -333,7 +340,7 @@ mod tests {
     use std::{
         io::{Read, Write},
         net::{TcpListener, TcpStream},
-        sync::mpsc,
+        sync::{mpsc, Arc, Mutex},
         thread,
         time::Duration,
     };
@@ -483,6 +490,62 @@ mod tests {
         assert_eq!(response.body_text.len(), body.len());
         assert!(response.body_text.starts_with("{\"data\":\"xxx"));
         assert!(response.body_text.ends_with("\"}"));
+    }
+
+    #[tokio::test]
+    async fn send_request_keeps_response_progress_total_stable() {
+        let body = "x".repeat(512 * 1024);
+        let response_message = format!(
+            "HTTP/1.1 200 OK\r\ncontent-type: text/plain\r\ncontent-length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        let (url, _captured_rx) = spawn_test_server(&response_message);
+        let (_cancel_tx, cancel_rx) = watch::channel(false);
+        let progress_events = Arc::new(Mutex::new(Vec::<ResponseDownloadProgress>::new()));
+        let captured_progress_events = Arc::clone(&progress_events);
+        let progress_sink: ResponseProgressSink = Arc::new(move |progress| {
+            captured_progress_events
+                .lock()
+                .expect("progress events lock")
+                .push(progress);
+        });
+
+        let response = send_request(
+            &SendRequestPayload {
+                name: "Progress".to_string(),
+                method: "GET".to_string(),
+                url: format!("{url}/progress"),
+                query_params: Vec::new(),
+                headers: Vec::new(),
+                body: RequestBody {
+                    mode: "none".to_string(),
+                    raw: String::new(),
+                    form: Vec::new(),
+                    files: Vec::new(),
+                },
+                auth: empty_auth(),
+                pre_request_script: String::new(),
+                test_script: String::new(),
+            },
+            &default_settings(),
+            cancel_rx,
+            Some(progress_sink),
+        )
+        .await
+        .expect("response should succeed");
+
+        let events = progress_events.lock().expect("progress events lock");
+        assert_eq!(response.size_bytes, body.len());
+        assert!(
+            events.len() >= 2,
+            "expected initial and finished progress events"
+        );
+        assert_eq!(events.first().unwrap().content_length, Some(body.len() as u64));
+        assert!(events.last().unwrap().finished);
+        assert!(events
+            .iter()
+            .all(|event| event.content_length == Some(body.len() as u64)));
     }
 
     #[tokio::test]
