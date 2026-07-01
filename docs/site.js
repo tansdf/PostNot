@@ -1,5 +1,8 @@
 (function () {
   const root = document.documentElement;
+  const themeStorageKey = "postnot-docs-theme";
+  const fallbackTheme = "dark";
+  const supportedThemes = new Set(["light", "dark", "forest"]);
   const themeButtons = Array.from(document.querySelectorAll("[data-site-theme]"));
   const screenshotButtons = Array.from(document.querySelectorAll("[data-screenshot-src]"));
   const modal = document.querySelector(".screenshot-modal");
@@ -8,13 +11,35 @@
   const closeButtons = Array.from(document.querySelectorAll("[data-modal-close]"));
   let lastFocusedElement = null;
 
-  function setTheme(theme) {
-    root.dataset.siteTheme = theme;
+  function readStoredTheme() {
+    try {
+      const storedTheme = window.localStorage.getItem(themeStorageKey);
+      return supportedThemes.has(storedTheme) ? storedTheme : fallbackTheme;
+    } catch (_error) {
+      return fallbackTheme;
+    }
+  }
+
+  function persistTheme(theme) {
+    try {
+      window.localStorage.setItem(themeStorageKey, theme);
+    } catch (_error) {
+      // The visual theme still updates if storage is unavailable.
+    }
+  }
+
+  function setTheme(theme, options = {}) {
+    const nextTheme = supportedThemes.has(theme) ? theme : fallbackTheme;
+    root.dataset.siteTheme = nextTheme;
 
     for (const button of themeButtons) {
-      const isActive = button.dataset.siteTheme === theme;
+      const isActive = button.dataset.siteTheme === nextTheme;
       button.classList.toggle("theme-card--active", isActive);
       button.setAttribute("aria-pressed", String(isActive));
+    }
+
+    if (options.persist !== false) {
+      persistTheme(nextTheme);
     }
   }
 
@@ -69,5 +94,5 @@
     }
   });
 
-  setTheme("dark");
+  setTheme(readStoredTheme(), { persist: false });
 })();
