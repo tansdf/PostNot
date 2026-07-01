@@ -27,6 +27,7 @@
     AppSettings,
     CollectionItemSummary,
     EnvironmentDetail,
+    EnvironmentVariable,
     EnvironmentSummary,
     HistoryEntryDetail,
     HistoryEntrySummary,
@@ -112,7 +113,7 @@
   let requestPreviewErrorText = $state("");
   let isRequestExportDialogOpen = $state(false);
   let requestExportFormat = $state<"curl" | "json">("curl");
-  let requestExportSafety = $state<"redacted" | "full">("redacted");
+  let requestExportVariableMode = $state<RequestExportVariableMode>("parameters");
   let isImportingRequest = $state(false);
   let isHistoryCollapseSaving = $state(false);
   let requestImportErrorText = $state("");
@@ -161,9 +162,19 @@ paths:
     redactions: RedactionDetail[];
   };
 
-  const REDACTED_EXPORT_VALUE = "{{redacted}}";
+  type RequestExportVariableMode = "parameters" | "resolved";
 
-  let requestExportBuild = $derived(buildRequestExportSource(request, requestExportFormat, requestExportSafety));
+  const REDACTED_EXPORT_VALUE = "***";
+  const EXPORT_VARIABLE_TOKEN_PATTERN = /{{\s*(\$[A-Za-z0-9_.-]+(?:\[\d+\])?|[A-Za-z0-9_.-]+)\s*}}/g;
+
+  let requestExportBuild = $derived(
+    buildRequestExportSource(
+      request,
+      requestExportFormat,
+      requestExportVariableMode,
+      (activeEnvironmentDetail as EnvironmentDetail | null)?.variables ?? []
+    )
+  );
   let requestExportSource = $derived(requestExportBuild.source);
   let requestExportRedactions = $derived(requestExportBuild.redactions);
 
@@ -181,8 +192,8 @@ paths:
     );
   }
 
-  function buildUrlWithQueryParams(requestDraft: RequestDraft, redactions?: RedactionDetail[]) {
-    const baseUrl = redactions ? redactUrlQueryString(requestDraft.url, redactions) : requestDraft.url;
+  function buildUrlWithQueryParams(requestDraft: RequestDraft) {
+    const baseUrl = requestDraft.url;
     const activeQueryRows = requestDraft.queryParams.filter((row) => row.enabled && row.key.trim());
     const apiKeyQueryRows =
       requestDraft.auth.type === "api-key" &&
@@ -191,18 +202,14 @@ paths:
         ? [
             {
               key: requestDraft.auth.apiKeyName,
-              value: redactions
-                ? redactValue(requestDraft.auth.apiKeyValue, "API key query parameter", "API key values are credentials.", redactions)
-                : requestDraft.auth.apiKeyValue
+              value: requestDraft.auth.apiKeyValue
             }
           ]
         : [];
     const queryRows = [
       ...activeQueryRows.map((row) => ({
         key: row.key,
-        value: redactions && isSensitiveKey(row.key)
-          ? redactValue(row.value, `Query parameter "${row.key.trim()}"`, "The parameter name looks like a token, key, secret, or password.", redactions)
-          : row.value
+        value: row.value
       })),
       ...apiKeyQueryRows
     ];
@@ -229,12 +236,109 @@ paths:
   }
 
   function redactValue(value: string, field: string, reason: string, redactions: RedactionDetail[]) {
-    if (value.length === 0) {
+    if (value.length === 0 || hasExportVariableToken(value)) {
       return value;
     }
 
     addRedaction(redactions, field, reason);
     return REDACTED_EXPORT_VALUE;
+  }
+
+  function hasExportVariableToken(value: string) {
+    EXPORT_VARIABLE_TOKEN_PATTERN.lastIndex = 0;
+    return EXPORT_VARIABLE_TOKEN_PATTERN.test(value);
+  }
+
+  function buildExportVariableLookup(variables: EnvironmentVariable[]) {
+    const lookup = new Map<string, EnvironmentVariable>();
+
+    for (const variable of variables) {
+      const key = variable.key.trim();
+      if (variable.enabled && key) {
+        lookup.set(key, variable);
+      }
+    }
+
+    return lookup;
+  }
+
+  function resolveExportStringVariables(
+    value: string,
+    variables: Map<string, EnvironmentVariable>,
+    redactions: RedactionDetail[],
+    field: string
+  ) {
+    return value.replace(EXPORT_VARIABLE_TOKEN_PATTERN, (token, variableName: string) => {
+      if (variableName.startsWith("$")) {
+        return token;
+      }
+
+      const variable = variables.get(variableName.trim());
+      if (!variable) {
+        return token;
+      }
+
+      if (variable.isSecret) {
+        addRedaction(redactions, field, `Environment variable "${variable.key.trim()}" is marked secret.`);
+        return REDACTED_EXPORT_VALUE;
+      }
+
+      return variable.value;
+    });
+  }
+
+  function applyExportVariables(
+    requestDraft: RequestDraft,
+    variables: EnvironmentVariable[],
+    redactions: RedactionDetail[]
+  ) {
+    const lookup = buildExportVariableLookup(variables);
+    const resolved = cloneRequestDraft(requestDraft);
+
+    const resolveValue = (value: string, field: string) =>
+      resolveExportStringVariables(value, lookup, redactions, field);
+
+    resolved.name = resolveValue(resolved.name, "Request name");
+    resolved.url = resolveValue(resolved.url, "Request URL");
+    resolved.headers = resolved.headers.map((row) => ({
+      ...row,
+      key: resolveValue(row.key, `Header "${row.key.trim() || row.id}" name`),
+      value: resolveValue(row.value, `Header "${row.key.trim() || row.id}" value`)
+    }));
+    resolved.queryParams = resolved.queryParams.map((row) => ({
+      ...row,
+      key: resolveValue(row.key, `Query parameter "${row.key.trim() || row.id}" name`),
+      value: resolveValue(row.value, `Query parameter "${row.key.trim() || row.id}" value`)
+    }));
+    resolved.auth = {
+      ...resolved.auth,
+      basicUsername: resolveValue(resolved.auth.basicUsername, "Basic auth username"),
+      basicPassword: resolveValue(resolved.auth.basicPassword, "Basic auth password"),
+      bearerToken: resolveValue(resolved.auth.bearerToken, "Bearer token"),
+      apiKeyName: resolveValue(resolved.auth.apiKeyName, "API key name"),
+      apiKeyValue: resolveValue(resolved.auth.apiKeyValue, "API key value"),
+      oauth2AccessToken: resolveValue(resolved.auth.oauth2AccessToken, "OAuth2 access token"),
+      oauth2TokenUrl: resolveValue(resolved.auth.oauth2TokenUrl, "OAuth2 token URL"),
+      oauth2ClientId: resolveValue(resolved.auth.oauth2ClientId, "OAuth2 client ID"),
+      oauth2ClientSecret: resolveValue(resolved.auth.oauth2ClientSecret, "OAuth2 client secret"),
+      oauth2Scope: resolveValue(resolved.auth.oauth2Scope, "OAuth2 scope")
+    };
+    resolved.body = {
+      ...resolved.body,
+      raw: resolveValue(resolved.body.raw, "Request body"),
+      form: resolved.body.form.map((row) => ({
+        ...row,
+        key: resolveValue(row.key, `Body field "${row.key.trim() || row.id}" name`),
+        value: resolveValue(row.value, `Body field "${row.key.trim() || row.id}" value`)
+      })),
+      files: resolved.body.files.map((file) => ({
+        ...file,
+        name: resolveValue(file.name, `Multipart file "${file.name.trim() || file.id}" field`),
+        path: resolveValue(file.path, `Multipart file "${file.name.trim() || file.id}" path`)
+      }))
+    };
+
+    return resolved;
   }
 
   function normalizedSecretName(value: string) {
@@ -290,7 +394,7 @@ paths:
         const separatorIndex = part.indexOf("=");
         const key = separatorIndex >= 0 ? part.slice(0, separatorIndex) : part;
         const value = separatorIndex >= 0 ? part.slice(separatorIndex + 1) : "";
-        if (!isSensitiveKey(decodeKeyForRedaction(key)) || value.length === 0) {
+        if (!isSensitiveKey(decodeKeyForRedaction(key)) || value.length === 0 || hasExportVariableToken(value)) {
           return part;
         }
 
@@ -324,7 +428,13 @@ paths:
     if (value && typeof value === "object") {
       return Object.fromEntries(
         Object.entries(value).map(([key, item]) => {
-          if (isSensitiveKey(key) && item !== null && item !== undefined && String(item).length > 0) {
+          if (
+            isSensitiveKey(key) &&
+            item !== null &&
+            item !== undefined &&
+            String(item).length > 0 &&
+            !hasExportVariableToken(String(item))
+          ) {
             addRedaction(redactions, `${path}.${key}`, "The JSON property name looks like a token, key, secret, or password.");
             return [key, REDACTED_EXPORT_VALUE];
           }
@@ -364,7 +474,7 @@ paths:
 
         const key = part.slice(0, separatorIndex);
         const value = part.slice(separatorIndex + 1);
-        if (!isSensitiveKey(decodeKeyForRedaction(key)) || value.length === 0) {
+        if (!isSensitiveKey(decodeKeyForRedaction(key)) || value.length === 0 || hasExportVariableToken(value)) {
           return part;
         }
 
@@ -374,8 +484,8 @@ paths:
       .join("&");
   }
 
-  function buildRedactedRequestDraft(requestDraft: RequestDraft) {
-    const redactions: RedactionDetail[] = [];
+  function buildRedactedRequestDraft(requestDraft: RequestDraft, initialRedactions: RedactionDetail[] = []) {
+    const redactions: RedactionDetail[] = [...initialRedactions];
     const redacted = cloneRequestDraft(requestDraft);
     redacted.url = redactUrlQueryString(redacted.url, redactions);
 
@@ -421,41 +531,31 @@ paths:
     return { request: redacted, redactions };
   }
 
-  function buildCurlExport(requestDraft: RequestDraft, safety: "redacted" | "full", redactions: RedactionDetail[]) {
+  function buildCurlExport(requestDraft: RequestDraft) {
     const lines = ["curl"];
     lines.push(`  --request ${shellQuote(requestDraft.method)}`);
-    lines.push(`  --url ${shellQuote(buildUrlWithQueryParams(requestDraft, safety === "redacted" ? redactions : undefined))}`);
+    lines.push(`  --url ${shellQuote(buildUrlWithQueryParams(requestDraft))}`);
 
     for (const header of requestDraft.headers.filter((row) => row.enabled && row.key.trim())) {
-      const headerValue = safety === "redacted" ? redactHeaderValue(header.key, header.value, redactions) : header.value;
-      lines.push(`  --header ${shellQuote(`${header.key.trim()}: ${headerValue}`)}`);
+      lines.push(`  --header ${shellQuote(`${header.key.trim()}: ${header.value}`)}`);
     }
 
     switch (requestDraft.auth.type) {
       case "basic":
         if (requestDraft.auth.basicUsername.trim() || requestDraft.auth.basicPassword.length > 0) {
-          const password = safety === "redacted"
-            ? redactValue(requestDraft.auth.basicPassword, "Basic auth password", "Basic-auth passwords are credentials.", redactions)
-            : requestDraft.auth.basicPassword;
           lines.push(
-            `  --user ${shellQuote(`${requestDraft.auth.basicUsername}:${password}`)}`
+            `  --user ${shellQuote(`${requestDraft.auth.basicUsername}:${requestDraft.auth.basicPassword}`)}`
           );
         }
         break;
       case "bearer":
         if (requestDraft.auth.bearerToken.trim()) {
-          const token = safety === "redacted"
-            ? redactValue(requestDraft.auth.bearerToken, "Bearer token", "Bearer tokens grant API access.", redactions)
-            : requestDraft.auth.bearerToken;
-          lines.push(`  --header ${shellQuote(`Authorization: Bearer ${token}`)}`);
+          lines.push(`  --header ${shellQuote(`Authorization: Bearer ${requestDraft.auth.bearerToken}`)}`);
         }
         break;
       case "oauth2":
         if (requestDraft.auth.oauth2AccessToken.trim()) {
-          const token = safety === "redacted"
-            ? redactValue(requestDraft.auth.oauth2AccessToken, "OAuth2 access token", "OAuth2 access tokens grant API access.", redactions)
-            : requestDraft.auth.oauth2AccessToken;
-          lines.push(`  --header ${shellQuote(`Authorization: Bearer ${token}`)}`);
+          lines.push(`  --header ${shellQuote(`Authorization: Bearer ${requestDraft.auth.oauth2AccessToken}`)}`);
         }
         break;
       case "api-key":
@@ -463,11 +563,8 @@ paths:
           requestDraft.auth.apiKeyIn === "header" &&
           requestDraft.auth.apiKeyName.trim()
         ) {
-          const keyValue = safety === "redacted"
-            ? redactValue(requestDraft.auth.apiKeyValue, "API key header", "API key values are credentials.", redactions)
-            : requestDraft.auth.apiKeyValue;
           lines.push(
-            `  --header ${shellQuote(`${requestDraft.auth.apiKeyName.trim()}: ${keyValue}`)}`
+            `  --header ${shellQuote(`${requestDraft.auth.apiKeyName.trim()}: ${requestDraft.auth.apiKeyValue}`)}`
           );
         }
         break;
@@ -479,28 +576,22 @@ paths:
           lines.push(`  --header ${shellQuote("Content-Type: application/json")}`);
         }
         if (requestDraft.body.raw.length > 0) {
-          lines.push(`  --data-raw ${shellQuote(safety === "redacted" ? redactRawBody(requestDraft.body.raw, redactions) : requestDraft.body.raw)}`);
+          lines.push(`  --data-raw ${shellQuote(requestDraft.body.raw)}`);
         }
         break;
       case "raw":
         if (requestDraft.body.raw.length > 0) {
-          lines.push(`  --data-raw ${shellQuote(safety === "redacted" ? redactRawBody(requestDraft.body.raw, redactions) : requestDraft.body.raw)}`);
+          lines.push(`  --data-raw ${shellQuote(requestDraft.body.raw)}`);
         }
         break;
       case "form-urlencoded":
         for (const field of requestDraft.body.form.filter((row) => row.enabled && row.key.trim())) {
-          const value = safety === "redacted" && isSensitiveKey(field.key)
-            ? redactValue(field.value, `Body field "${field.key.trim()}"`, "The field name looks like a token, key, secret, or password.", redactions)
-            : field.value;
-          lines.push(`  --data-urlencode ${shellQuote(`${field.key}=${value}`)}`);
+          lines.push(`  --data-urlencode ${shellQuote(`${field.key}=${field.value}`)}`);
         }
         break;
       case "multipart":
         for (const field of requestDraft.body.form.filter((row) => row.enabled && row.key.trim())) {
-          const value = safety === "redacted" && isSensitiveKey(field.key)
-            ? redactValue(field.value, `Body field "${field.key.trim()}"`, "The field name looks like a token, key, secret, or password.", redactions)
-            : field.value;
-          lines.push(`  --form ${shellQuote(`${field.key}=${value}`)}`);
+          lines.push(`  --form ${shellQuote(`${field.key}=${field.value}`)}`);
         }
         for (const file of requestDraft.body.files.filter((row) => row.enabled && row.name.trim() && row.path.trim())) {
           lines.push(`  --form ${shellQuote(`${file.name}=@${file.path}`)}`);
@@ -511,19 +602,28 @@ paths:
     return lines.map((line, index) => (index === lines.length - 1 ? line : `${line} \\`)).join("\n");
   }
 
-  function buildRequestExportSource(requestDraft: RequestDraft, format: "curl" | "json", safety: "redacted" | "full"): RequestExportBuild {
-    const redactedExport = safety === "redacted" ? buildRedactedRequestDraft(requestDraft) : { request: cloneRequestDraft(requestDraft), redactions: [] };
+  function buildRequestExportSource(
+    requestDraft: RequestDraft,
+    format: "curl" | "json",
+    variableMode: RequestExportVariableMode,
+    variables: EnvironmentVariable[]
+  ): RequestExportBuild {
+    const redactedExport = buildRedactedRequestDraft(requestDraft);
+    const redactions: RedactionDetail[] = [...redactedExport.redactions];
+    const exportRequest =
+      variableMode === "resolved"
+        ? applyExportVariables(redactedExport.request, variables, redactions)
+        : redactedExport.request;
 
     if (format === "json") {
       return {
-        source: JSON.stringify(redactedExport.request, null, 2),
-        redactions: redactedExport.redactions
+        source: JSON.stringify(exportRequest, null, 2),
+        redactions
       };
     }
 
-    const redactions: RedactionDetail[] = [];
     return {
-      source: buildCurlExport(requestDraft, safety, redactions),
+      source: buildCurlExport(exportRequest),
       redactions
     };
   }
@@ -1491,7 +1591,7 @@ paths:
 
   function openRequestExportDialog() {
     requestExportFormat = "curl";
-    requestExportSafety = "redacted";
+    requestExportVariableMode = "parameters";
     isRequestExportDialogOpen = true;
   }
 
@@ -1503,7 +1603,7 @@ paths:
     try {
       await navigator.clipboard.writeText(requestExportSource);
       notifications.success(
-        requestExportSafety === "redacted" && requestExportRedactions.length > 0
+        requestExportRedactions.length > 0
           ? "The redacted export is on your clipboard."
           : "The exported request text is on your clipboard.",
         "Export copied"
@@ -1998,7 +2098,7 @@ paths:
         <h2 id="request-export-title">Export Request</h2>
         <span class="history-meta">
           {requestExportFormat === "curl" ? "cURL command" : "PostNot request JSON"}
-          {requestExportSafety === "redacted" ? " · secrets redacted" : " · full values included"}
+          {requestExportVariableMode === "resolved" ? " · variables included" : " · variables kept"}
         </span>
       </div>
 
@@ -2026,21 +2126,28 @@ paths:
 
         <label class="inline-checkbox">
           <input
+            class="row-toggle"
             type="checkbox"
-            checked={requestExportSafety === "full"}
-            onchange={(event) => (requestExportSafety = event.currentTarget.checked ? "full" : "redacted")}
+            checked={requestExportVariableMode === "resolved"}
+            onchange={(event) => (requestExportVariableMode = event.currentTarget.checked ? "resolved" : "parameters")}
           />
-          <span>Include secrets in this export</span>
+          <span>Include environment variables</span>
         </label>
 
-        {#if requestExportSafety === "full"}
-          <p class="auth-error-text">
-            Full export includes bearer tokens, OAuth2 access tokens, client secrets, API keys, cookies, and basic-auth passwords.
+        {#if requestExportVariableMode === "resolved"}
+          <p class="field-help">
+            Non-secret active environment variables are written into the export. Secret variables and credential-looking literal values stay redacted as <code>{REDACTED_EXPORT_VALUE}</code>.
           </p>
-        {:else if requestExportRedactions.length > 0}
+        {:else}
+          <p class="field-help">
+            Variables stay as <code>{'{{variable}}'}</code> parameters. Credential-looking literal values are still redacted.
+          </p>
+        {/if}
+
+        {#if requestExportRedactions.length > 0}
           <div class="request-export-redactions" aria-live="polite">
             <p class="field-help">
-              PostNot redacted credential-looking values so this export is safer to paste into chat, tickets, or docs.
+              PostNot redacted secret or credential-looking values so this export is safer to paste into chat, tickets, or docs.
             </p>
             <ul>
               {#each requestExportRedactions as redaction}
@@ -2055,7 +2162,7 @@ paths:
         <label>
           <span class="field-label">
             {requestExportFormat === "curl" ? "cURL command" : "Request JSON"}
-            {requestExportSafety === "redacted" ? " (redacted)" : " (full)"}
+            {requestExportVariableMode === "resolved" ? " (variables included)" : " (variables kept)"}
           </span>
           <textarea
             class="text-input collections-import-source"

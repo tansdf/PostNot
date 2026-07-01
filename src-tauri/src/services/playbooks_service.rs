@@ -6,11 +6,11 @@ use crate::{
     domain::{
         collections::SavedRequestDetail,
         playbooks::{
-            AddPlaybookStepInput, CreatePlaybookRunInput, FinishPlaybookRunInput,
-            PlaybookDetail, PlaybookExecutionContext, PlaybookFolderScripts,
-            PlaybookInheritedScripts, PlaybookInput, PlaybookRunDetail, PlaybookRunStep,
-            PlaybookRunSummary, PlaybookStep, PlaybookSummary, RecordPlaybookRunStepInput,
-            ReorderPlaybookStepsInput, UpdatePlaybookStepInput,
+            AddPlaybookStepInput, CreatePlaybookRunInput, FinishPlaybookRunInput, PlaybookDetail,
+            PlaybookExecutionContext, PlaybookFolderScripts, PlaybookInheritedScripts,
+            PlaybookInput, PlaybookRunDetail, PlaybookRunStep, PlaybookRunSummary, PlaybookStep,
+            PlaybookSummary, RecordPlaybookRunStepInput, ReorderPlaybookStepsInput,
+            UpdatePlaybookStepInput,
         },
         requests::SendRequestPayload,
     },
@@ -135,10 +135,7 @@ pub async fn update_playbook(
     get_playbook(pool, playbook_id).await
 }
 
-pub async fn duplicate_playbook(
-    pool: &SqlitePool,
-    playbook_id: &str,
-) -> AppResult<PlaybookDetail> {
+pub async fn duplicate_playbook(pool: &SqlitePool, playbook_id: &str) -> AppResult<PlaybookDetail> {
     let source = get_playbook(pool, playbook_id).await?;
     let duplicate = create_playbook(
         pool,
@@ -233,7 +230,8 @@ pub async fn add_playbook_step(
     ensure_playbook_exists(pool, playbook_id).await?;
     validate_delay_option(input.delay_after_ms)?;
 
-    let saved_request = collections_service::get_saved_request(pool, &input.saved_request_id).await?;
+    let saved_request =
+        collections_service::get_saved_request(pool, &input.saved_request_id).await?;
     let id = Uuid::new_v4().to_string();
     let now = now_iso();
     let sort_order = next_step_sort_order(pool, playbook_id).await?;
@@ -312,8 +310,7 @@ pub async fn reorder_playbook_steps(
 
     let existing_ids: std::collections::HashSet<String> =
         existing.into_iter().map(|step| step.id).collect();
-    let requested_ids: std::collections::HashSet<String> =
-        input.step_ids.iter().cloned().collect();
+    let requested_ids: std::collections::HashSet<String> = input.step_ids.iter().cloned().collect();
     if existing_ids != requested_ids {
         return Err(AppError::Message(
             "Reorder payload contains steps from another playbook.".to_string(),
@@ -322,14 +319,12 @@ pub async fn reorder_playbook_steps(
 
     let now = now_iso();
     for (index, step_id) in input.step_ids.iter().enumerate() {
-        sqlx::query(
-            "UPDATE playbook_steps SET sort_order = ?2, updated_at = ?3 WHERE id = ?1",
-        )
-        .bind(step_id)
-        .bind(index as i64)
-        .bind(&now)
-        .execute(pool)
-        .await?;
+        sqlx::query("UPDATE playbook_steps SET sort_order = ?2, updated_at = ?3 WHERE id = ?1")
+            .bind(step_id)
+            .bind(index as i64)
+            .bind(&now)
+            .execute(pool)
+            .await?;
     }
 
     touch_playbook(pool, playbook_id).await?;
@@ -370,9 +365,12 @@ pub async fn get_playbook_execution_context(
     };
 
     let saved_request = collections_service::get_saved_request(pool, &saved_request_id).await?;
-    let inherited_scripts =
-        get_inherited_scripts(pool, &saved_request.collection_id, saved_request.parent_id.as_deref())
-            .await?;
+    let inherited_scripts = get_inherited_scripts(
+        pool,
+        &saved_request.collection_id,
+        saved_request.parent_id.as_deref(),
+    )
+    .await?;
 
     Ok(PlaybookExecutionContext {
         step_id: step_id.to_string(),
@@ -387,7 +385,9 @@ pub async fn create_playbook_run(
 ) -> AppResult<PlaybookRunSummary> {
     ensure_playbook_exists(pool, &input.playbook_id).await?;
     if input.total_steps < 0 {
-        return Err(AppError::Message("Total steps cannot be negative.".to_string()));
+        return Err(AppError::Message(
+            "Total steps cannot be negative.".to_string(),
+        ));
     }
 
     let id = Uuid::new_v4().to_string();
@@ -417,7 +417,9 @@ pub async fn finish_playbook_run(
 ) -> AppResult<PlaybookRunSummary> {
     let status = input.status.trim();
     if !matches!(status, "passed" | "failed" | "canceled" | "running") {
-        return Err(AppError::Message("Unsupported playbook run status.".to_string()));
+        return Err(AppError::Message(
+            "Unsupported playbook run status.".to_string(),
+        ));
     }
     if input.total_duration_ms < 0 {
         return Err(AppError::Message(
@@ -458,7 +460,10 @@ pub async fn record_playbook_run_step(
     input: &RecordPlaybookRunStepInput,
 ) -> AppResult<PlaybookRunStep> {
     ensure_run_exists(pool, run_id).await?;
-    if !matches!(input.status.as_str(), "passed" | "failed" | "skipped" | "canceled") {
+    if !matches!(
+        input.status.as_str(),
+        "passed" | "failed" | "skipped" | "canceled"
+    ) {
         return Err(AppError::Message(
             "Unsupported playbook step status.".to_string(),
         ));
@@ -634,13 +639,12 @@ async fn get_inherited_scripts(
     collection_id: &str,
     parent_id: Option<&str>,
 ) -> AppResult<PlaybookInheritedScripts> {
-    let collection_row = sqlx::query(
-        "SELECT prerequest_script, test_script FROM collections WHERE id = ?1",
-    )
-    .bind(collection_id)
-    .fetch_optional(pool)
-    .await?
-    .ok_or_else(|| AppError::Message("Collection not found.".to_string()))?;
+    let collection_row =
+        sqlx::query("SELECT prerequest_script, test_script FROM collections WHERE id = ?1")
+            .bind(collection_id)
+            .fetch_optional(pool)
+            .await?
+            .ok_or_else(|| AppError::Message("Collection not found.".to_string()))?;
 
     let mut folder_scripts = Vec::new();
     if let Some(parent_id) = parent_id {

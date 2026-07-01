@@ -17,6 +17,7 @@ use crate::domain::{
     settings::AppSettings,
 };
 use crate::error::{AppError, AppResult};
+use crate::services::request_url_service::normalize_request_url;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 struct ClientCacheKey {
@@ -101,7 +102,7 @@ pub async fn send_request(
 ) -> AppResult<ResponsePayload> {
     let mut cancel_rx = cancel_rx;
     let client = client_for_settings(settings)?;
-    let mut url = Url::parse(&payload.url)?;
+    let mut url = Url::parse(&normalize_request_url(&payload.url))?;
 
     for query in payload
         .query_params
@@ -400,6 +401,46 @@ mod tests {
             String::from_utf8(captured.body).unwrap(),
             "{\"name\":\"demo\"}"
         );
+    }
+
+    #[tokio::test]
+    async fn send_request_allows_localhost_without_scheme() {
+        let (url, captured_rx) =
+            spawn_test_server("HTTP/1.1 200 OK\r\ncontent-length: 2\r\n\r\nok");
+        let port = url.rsplit_once(':').expect("test server url has port").1;
+        let (_cancel_tx, cancel_rx) = watch::channel(false);
+
+        let response = send_request(
+            &SendRequestPayload {
+                name: "Localhost".to_string(),
+                method: "GET".to_string(),
+                url: format!("localhost:{port}/health"),
+                query_params: Vec::new(),
+                headers: Vec::new(),
+                body: RequestBody {
+                    mode: "none".to_string(),
+                    raw: String::new(),
+                    form: Vec::new(),
+                    files: Vec::new(),
+                },
+                auth: empty_auth(),
+                pre_request_script: String::new(),
+                test_script: String::new(),
+            },
+            &default_settings(),
+            cancel_rx,
+            None,
+        )
+        .await
+        .expect("localhost without scheme should send");
+
+        let captured = captured_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("server captured request");
+
+        assert_eq!(response.status_code, Some(200));
+        assert_eq!(response.body_text, "ok");
+        assert!(captured.head.starts_with("GET /health HTTP/1.1"));
     }
 
     #[tokio::test]

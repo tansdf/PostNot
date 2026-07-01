@@ -6,6 +6,16 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.20.19] - 2026-07-01
+
+### Changed
+
+- Reworked single-request export so the dialog can include active non-secret environment variables while hardcoded credentials and secret variables remain redacted as `***`.
+
+### Fixed
+
+- Allowed `localhost` request URLs without an explicit `http://` or `https://` prefix.
+
 ## [0.20.18] - 2026-06-29
 
 ### Changed

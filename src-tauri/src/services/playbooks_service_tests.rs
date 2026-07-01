@@ -3,9 +3,8 @@ use sqlx::SqlitePool;
 use crate::{
     domain::{
         playbooks::{
-            AddPlaybookStepInput, CreatePlaybookRunInput, FinishPlaybookRunInput,
-            PlaybookInput, RecordPlaybookRunStepInput, ReorderPlaybookStepsInput,
-            UpdatePlaybookStepInput,
+            AddPlaybookStepInput, CreatePlaybookRunInput, FinishPlaybookRunInput, PlaybookInput,
+            RecordPlaybookRunStepInput, ReorderPlaybookStepsInput, UpdatePlaybookStepInput,
         },
         requests::{RequestAuth, RequestBody, SendRequestPayload},
     },
@@ -187,9 +186,10 @@ async fn create_collection_with_requests(pool: &SqlitePool) -> (String, String, 
     )
     .await
     .expect("create collection");
-    let first = collections_service::save_request(pool, &collection.id, None, &request("First", "/one"))
-        .await
-        .expect("save first");
+    let first =
+        collections_service::save_request(pool, &collection.id, None, &request("First", "/one"))
+            .await
+            .expect("save first");
     let second =
         collections_service::save_request(pool, &collection.id, None, &request("Second", "/two"))
             .await

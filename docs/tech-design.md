@@ -702,7 +702,7 @@ Screenshot workflow note:
 - requests are executed in Rust, not the browser
 - secret environment values are stored in the OS credential store, while SQLite keeps only non-secret environment metadata
 - history snapshots redact resolved values that came from secret environment variables
-- single-request cURL and PostNot JSON exports redact credential-looking values by default, including bearer tokens, OAuth2 access tokens, client secrets, API keys, cookies, and basic-auth passwords; full-value export requires an explicit toggle and shows a warning
+- single-request cURL and PostNot JSON exports redact credential-looking literal values, including bearer tokens, OAuth2 access tokens, client secrets, API keys, cookies, and basic-auth passwords; the export dialog can inline active non-secret environment variables, while secret variables remain parameterized or are replaced with `***`
 - resolved request preview masks credential-looking values and secret-derived environment substitutions before showing outgoing request data
 - decoded response bodies are persisted as full text history body files
 - if an environment update or delete fails after partially changing the credential store, rollback of secrets is attempted; failure to roll back is logged with `log::warn` for diagnostics (the primary error still returns to the UI)

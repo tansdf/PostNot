@@ -32,7 +32,7 @@ PostNot is built for working with HTTP APIs on your own machine, with local pers
 - Import from Postman collections and environments
 - Import collections or single requests from OpenAPI 3 JSON or YAML
 - Import from cURL, including common flags for URL selection, query/body data, multipart forms, cookies, compression, redirects, and shell continuations
-- Export the active request as redacted-by-default cURL or PostNot request JSON, with an explicit full-export option
+- Export the active request as redacted-by-default cURL or PostNot request JSON, with optional non-secret environment variable inclusion
 - Export collections and environments back to Postman-compatible JSON
 - Attach local files to multipart requests
 - Run inherited collection, folder, and saved-request pre-request and test scripts (worker-backed JavaScript around each send)
@@ -55,7 +55,7 @@ PostNot is built for working with HTTP APIs on your own machine, with local pers
 - SQLite-backed app data is stored under the Tauri app data directory.
 - Secret environment variables are stored in the operating system credential store instead of SQLite.
 - When requests use secret environment variables, PostNot keeps the unresolved `{{variable}}` references in history snapshots rather than persisting the resolved secret values.
-- Single-request cURL and PostNot JSON exports redact credential-looking values by default, including bearer tokens, OAuth2 access tokens, client secrets, API keys, cookies, and basic-auth passwords; exporting full values requires an explicit toggle in the export dialog.
+- Single-request cURL and PostNot JSON exports redact credential-looking values by default, including bearer tokens, OAuth2 access tokens, client secrets, API keys, cookies, and basic-auth passwords; the export dialog can include active non-secret environment variables while keeping secrets redacted.
 
 ## Building From Source
 

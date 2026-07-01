@@ -13,7 +13,9 @@ use crate::{
         },
         settings::AppSettings,
     },
-    services::environments_service::RequestSecretUsage,
+    services::{
+        environments_service::RequestSecretUsage, request_url_service::normalize_request_url,
+    },
 };
 
 const REDACTED_VALUE: &str = "{{redacted}}";
@@ -91,7 +93,7 @@ fn preview_final_url(
     url_used_secret: bool,
     warnings: &mut Vec<String>,
 ) -> String {
-    let Ok(mut url) = Url::parse(&resolved.url) else {
+    let Ok(mut url) = Url::parse(&normalize_request_url(&resolved.url)) else {
         warnings.push(
             "URL is invalid and cannot be sent until it parses as an absolute URL.".to_string(),
         );
