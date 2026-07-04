@@ -2,6 +2,8 @@
   import { tick } from "svelte";
 
   import type { EnvironmentVariable } from "$lib/api/types";
+  import { insertTextIntoEditableControl } from "$lib/dom-editing";
+  import { tokenizeScript, type ScriptToken } from "$lib/script-formatting";
 
   type ScriptCompletion = {
     id: string;
@@ -267,6 +269,8 @@
   } = $props();
 
   let textareaElement: HTMLTextAreaElement | null = $state(null);
+  let highlightOverlayElement: HTMLPreElement | null = $state(null);
+  let highlightContentElement: HTMLElement | null = $state(null);
   let mirrorElement: HTMLDivElement | null = $state(null);
   let mirrorCaretElement: HTMLSpanElement | null = $state(null);
   let suggestionsElement: HTMLDivElement | null = $state(null);
@@ -281,6 +285,36 @@
   let hasMeasuredSuggestionPosition = $state(false);
   let blurTimeout: ReturnType<typeof setTimeout> | null = $state(null);
   let mirrorBeforeText = $state(" ");
+  let highlightSyncFrame: number | null = null;
+  let scriptTokens = $derived(tokenizeScript(value ?? ""));
+
+  $effect(() => {
+    if (!textareaElement || !highlightOverlayElement || !highlightContentElement) {
+      return;
+    }
+
+    const activeTextarea = textareaElement;
+    const resizeObserver = new ResizeObserver(() => scheduleHighlightOverlaySync());
+
+    scheduleHighlightOverlaySync();
+    resizeObserver.observe(activeTextarea);
+    activeTextarea.addEventListener("scroll", syncHighlightOverlay);
+
+    return () => {
+      activeTextarea.removeEventListener("scroll", syncHighlightOverlay);
+      resizeObserver.disconnect();
+      if (highlightSyncFrame !== null) {
+        cancelAnimationFrame(highlightSyncFrame);
+        highlightSyncFrame = null;
+      }
+    };
+  });
+
+  $effect(() => {
+    value;
+    scriptTokens;
+    void tick().then(() => scheduleHighlightOverlaySync());
+  });
 
   function topLevelCompletionsFor(kind: ScriptEditorKind) {
     return BASE_TOP_LEVEL_COMPLETIONS.filter((item) => {
@@ -494,6 +528,62 @@
     mirrorElement.style.wordBreak = "break-word";
   }
 
+  function scheduleHighlightOverlaySync() {
+    if (!textareaElement || !highlightOverlayElement) {
+      return;
+    }
+
+    if (highlightSyncFrame !== null) {
+      cancelAnimationFrame(highlightSyncFrame);
+    }
+
+    highlightSyncFrame = requestAnimationFrame(() => {
+      highlightSyncFrame = null;
+      syncHighlightOverlay();
+    });
+  }
+
+  function syncHighlightOverlay() {
+    if (!textareaElement || !highlightOverlayElement || !highlightContentElement) {
+      return;
+    }
+
+    const computedStyle = window.getComputedStyle(textareaElement);
+
+    highlightOverlayElement.style.width = `${textareaElement.offsetWidth}px`;
+    highlightOverlayElement.style.height = `${textareaElement.offsetHeight}px`;
+    highlightOverlayElement.style.boxSizing = computedStyle.boxSizing;
+    highlightOverlayElement.style.padding = "0";
+    highlightOverlayElement.style.borderWidth = computedStyle.borderWidth;
+    highlightOverlayElement.style.borderStyle = computedStyle.borderStyle;
+    highlightOverlayElement.style.borderColor = "transparent";
+    highlightOverlayElement.style.font = computedStyle.font;
+    highlightOverlayElement.style.letterSpacing = computedStyle.letterSpacing;
+    highlightOverlayElement.style.lineHeight = computedStyle.lineHeight;
+    highlightOverlayElement.style.textAlign = computedStyle.textAlign;
+    highlightOverlayElement.style.textIndent = computedStyle.textIndent;
+    highlightOverlayElement.style.textTransform = computedStyle.textTransform;
+    highlightOverlayElement.style.tabSize = computedStyle.tabSize;
+    highlightOverlayElement.style.overflowX = "hidden";
+    highlightOverlayElement.style.overflowY = "hidden";
+    highlightOverlayElement.style.resize = "none";
+
+    highlightContentElement.style.width = `${textareaElement.clientWidth}px`;
+    highlightContentElement.style.boxSizing = computedStyle.boxSizing;
+    highlightContentElement.style.padding = computedStyle.padding;
+    highlightContentElement.style.font = computedStyle.font;
+    highlightContentElement.style.letterSpacing = computedStyle.letterSpacing;
+    highlightContentElement.style.lineHeight = computedStyle.lineHeight;
+    highlightContentElement.style.textAlign = computedStyle.textAlign;
+    highlightContentElement.style.textIndent = computedStyle.textIndent;
+    highlightContentElement.style.textTransform = computedStyle.textTransform;
+    highlightContentElement.style.tabSize = computedStyle.tabSize;
+    highlightContentElement.style.whiteSpace = computedStyle.whiteSpace;
+    highlightContentElement.style.overflowWrap = computedStyle.overflowWrap;
+    highlightContentElement.style.wordBreak = computedStyle.wordBreak;
+    highlightContentElement.style.transform = `translate(${-textareaElement.scrollLeft}px, ${-textareaElement.scrollTop}px)`;
+  }
+
   function updateSuggestionAnchor() {
     if (!textareaElement || !mirrorElement || !mirrorCaretElement) {
       return;
@@ -571,18 +661,22 @@
   }
 
   async function applySuggestion(item: ScriptCompletion) {
+    if (!textareaElement || replacementStart < 0 || replacementEnd < 0 || disabled) {
+      return;
+    }
+
     const markerIndex = item.insertText.indexOf(CURSOR_MARKER);
     const insertedText = item.insertText.replace(CURSOR_MARKER, "");
-    const nextValue = `${value.slice(0, replacementStart)}${insertedText}${value.slice(replacementEnd)}`;
-    const nextCursor =
-      replacementStart + (markerIndex >= 0 ? markerIndex : insertedText.length);
 
-    value = nextValue;
-    onValueInput(nextValue);
+    insertTextIntoEditableControl(textareaElement, insertedText, {
+      selectionStart: replacementStart,
+      selectionEnd: replacementEnd,
+      cursorOffset: markerIndex >= 0 ? markerIndex : insertedText.length,
+      undoBaselineSelection: "collapse-end"
+    });
     closeSuggestions();
     await tick();
-    textareaElement?.focus();
-    textareaElement?.setSelectionRange(nextCursor, nextCursor);
+    updateAutocompleteState();
   }
 
   function handleInput(event: Event) {
@@ -590,6 +684,7 @@
     value = target.value;
     onValueInput(target.value);
     updateAutocompleteState();
+    scheduleHighlightOverlaySync();
   }
 
   function handleFocus() {
@@ -643,6 +738,96 @@
         return;
       }
     }
+
+    if (handleScriptFormattingKeydown(event)) {
+      return;
+    }
+  }
+
+  function handleScriptFormattingKeydown(event: KeyboardEvent) {
+    if (!textareaElement || disabled) {
+      return false;
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const smartNewline = getSmartNewline(textareaElement);
+      insertTextIntoEditableControl(textareaElement, smartNewline.text, {
+        cursorOffset: smartNewline.cursorOffset
+      });
+      return true;
+    }
+
+    if (event.key === "Tab") {
+      event.preventDefault();
+      handleScriptTab(event.shiftKey);
+      return true;
+    }
+
+    return false;
+  }
+
+  function getSmartNewline(textarea: HTMLTextAreaElement) {
+    const { selectionStart, value: source } = textarea;
+    const lineStart = source.lastIndexOf("\n", selectionStart - 1) + 1;
+    const currentLine = source.slice(lineStart, selectionStart);
+    const baseIndent = currentLine.match(/^(\s*)/)?.[1] ?? "";
+    const beforeCursor = source.slice(0, selectionStart).trimEnd();
+    const afterCursor = source.slice(selectionStart).trimStart();
+    const extraIndent = /(?:\{|\(|\[|=>)$/.test(beforeCursor) ? "  " : "";
+
+    if (extraIndent && /^(?:\}|\)|\])/.test(afterCursor)) {
+      const text = `\n${baseIndent}${extraIndent}\n${baseIndent}`;
+      return {
+        text,
+        cursorOffset: `\n${baseIndent}${extraIndent}`.length
+      };
+    }
+
+    const text = `\n${baseIndent}${extraIndent}`;
+    return {
+      text,
+      cursorOffset: text.length
+    };
+  }
+
+  function handleScriptTab(isOutdent: boolean) {
+    if (!textareaElement) {
+      return;
+    }
+
+    const { selectionStart, selectionEnd, value: source } = textareaElement;
+    if (selectionStart === selectionEnd) {
+      if (isOutdent) {
+        const lineStart = source.lastIndexOf("\n", selectionStart - 1) + 1;
+        const linePrefix = source.slice(lineStart, selectionStart);
+        const removableIndent = linePrefix.match(/(?:  |\t)$/)?.[0] ?? "";
+
+        if (removableIndent) {
+          insertTextIntoEditableControl(textareaElement, "", {
+            selectionStart: selectionStart - removableIndent.length,
+            selectionEnd: selectionStart
+          });
+        }
+        return;
+      }
+
+      insertTextIntoEditableControl(textareaElement, isOutdent ? "" : "  ");
+      return;
+    }
+
+    const lineStart = source.lastIndexOf("\n", selectionStart - 1) + 1;
+    const selectedBlock = source.slice(lineStart, selectionEnd);
+    const replacement = selectedBlock
+      .split("\n")
+      .map((line) => isOutdent ? line.replace(/^(?:  |\t)/, "") : `  ${line}`)
+      .join("\n");
+
+    insertTextIntoEditableControl(textareaElement, replacement, {
+      selectionStart: lineStart,
+      selectionEnd,
+      cursorOffset: replacement.length
+    });
   }
 
   function handleSuggestionPointerDown(event: MouseEvent) {
@@ -653,12 +838,44 @@
   function getSuggestionStyle() {
     return `left: ${suggestionLeft}px; top: ${suggestionTop}px;`;
   }
+
+  function getScriptTokenClass(type: ScriptToken["type"]) {
+    switch (type) {
+      case "keyword":
+        return "jt-key";
+      case "api":
+      case "property":
+        return "jt-variable";
+      case "string":
+      case "template":
+        return "jt-string";
+      case "comment":
+        return "jt-comment";
+      case "number":
+        return "jt-number";
+      case "boolean":
+        return "jt-bool";
+      case "null":
+        return "jt-null";
+      case "operator":
+        return "jt-comma";
+      default:
+        return "";
+    }
+  }
 </script>
 
 <div class="variable-input-shell">
+  <pre
+    class="variable-highlight-overlay variable-highlight-overlay-multiline script-editor-overlay"
+    aria-hidden="true"
+    spellcheck={false}
+    bind:this={highlightOverlayElement}
+  ><code class="variable-highlight-content" bind:this={highlightContentElement}>{#each scriptTokens as token, index (index)}{#if getScriptTokenClass(token.type)}<span class={getScriptTokenClass(token.type)}>{token.value}</span>{:else}{token.value}{/if}{/each}</code></pre>
+
   <textarea
     bind:this={textareaElement}
-    class="text-input body-textarea request-script-editor"
+    class="text-input body-textarea request-script-editor variable-input-highlighted"
     bind:value={value}
     {placeholder}
     spellcheck={false}

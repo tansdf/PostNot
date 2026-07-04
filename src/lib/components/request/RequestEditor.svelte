@@ -12,6 +12,8 @@
   } from "$lib/api/types";
   import ScriptEditor from "$lib/components/request/ScriptEditor.svelte";
   import VariableField from "$lib/components/request/VariableField.svelte";
+  import { insertTextIntoEditableControl } from "$lib/dom-editing";
+  import { formatScript } from "$lib/script-formatting";
   import type { Attachment } from "svelte/attachments";
 
   let {
@@ -488,27 +490,22 @@
 
       if ((charBefore === '{' || charBefore === '[') && (charAfter === '}' || charAfter === ']')) {
         insert = `\n${indent}  \n${indent}`;
-        const next = val.slice(0, selectionStart) + insert + val.slice(selectionStart);
-        updateBodyField("raw", next);
-        requestAnimationFrame(() => {
-          const pos = selectionStart + indent.length + 3;
-          textarea.setSelectionRange(pos, pos);
+        insertTextIntoEditableControl(textarea, insert, {
+          selectionStart,
+          selectionEnd: selectionStart,
+          cursorOffset: indent.length + 3
         });
       } else if (charBefore === '{' || charBefore === '[') {
         insert = `\n${indent}  `;
-        const next = val.slice(0, selectionStart) + insert + val.slice(selectionStart);
-        updateBodyField("raw", next);
-        requestAnimationFrame(() => {
-          const pos = selectionStart + insert.length;
-          textarea.setSelectionRange(pos, pos);
+        insertTextIntoEditableControl(textarea, insert, {
+          selectionStart,
+          selectionEnd: selectionStart
         });
       } else {
         insert = `\n${indent}`;
-        const next = val.slice(0, selectionStart) + insert + val.slice(selectionStart);
-        updateBodyField("raw", next);
-        requestAnimationFrame(() => {
-          const pos = selectionStart + insert.length;
-          textarea.setSelectionRange(pos, pos);
+        insertTextIntoEditableControl(textarea, insert, {
+          selectionStart,
+          selectionEnd: selectionStart
         });
       }
       return;
@@ -518,11 +515,9 @@
       event.preventDefault();
       const { selectionStart, selectionEnd } = textarea;
       const insert = "  ";
-      const next = textarea.value.slice(0, selectionStart) + insert + textarea.value.slice(selectionEnd);
-      updateBodyField("raw", next);
-      requestAnimationFrame(() => {
-        const pos = selectionStart + 2;
-        textarea.setSelectionRange(pos, pos);
+      insertTextIntoEditableControl(textarea, insert, {
+        selectionStart,
+        selectionEnd
       });
     }
   }
@@ -684,6 +679,10 @@
       ...request,
       [field]: value
     };
+  }
+
+  function formatScriptField(field: "preRequestScript" | "testScript") {
+    updateScriptField(field, formatScript(request[field]));
   }
 
   function removeActionLabel(label: string) {
@@ -1432,6 +1431,7 @@
         <section class="request-script-card">
           <div class="request-script-card-header">
             <h3 class="request-script-card-title">Pre-request Script</h3>
+            <button class="button-secondary button-compact" type="button" onclick={() => formatScriptField("preRequestScript")}>Format</button>
           </div>
           <ScriptEditor
             value={request.preRequestScript}
@@ -1445,6 +1445,7 @@
         <section class="request-script-card">
           <div class="request-script-card-header">
             <h3 class="request-script-card-title">Test Script</h3>
+            <button class="button-secondary button-compact" type="button" onclick={() => formatScriptField("testScript")}>Format</button>
           </div>
           <ScriptEditor
             value={request.testScript}

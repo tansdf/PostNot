@@ -6,6 +6,18 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.20.21] - 2026-07-04
+
+### Added
+
+- Added JavaScript token highlighting and lightweight auto-formatting for pre-request and test script editors.
+
+### Fixed
+
+- Restored undo and redo support for native and layered editable fields in Linux/WSL Tauri builds, including app-driven insertions.
+- Kept autocomplete and variable insertions undoable without leaving the replaced trigger text selected after undo.
+- Improved layered editor alignment so highlight overlays mirror editable text metrics, wrapping, padding, and scrolling more reliably.
+
 ## [0.20.20] - 2026-07-01
 
 ### Fixed

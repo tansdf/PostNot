@@ -6,6 +6,7 @@
   import "$lib/styles/app.css";
   import { applyTheme, applyUiScale, watchSystemTheme } from "$lib/theme";
   import AppShell from "$lib/components/layout/AppShell.svelte";
+  import { installEditableUndoFallback, shouldInstallEditableUndoFallback } from "$lib/editable-undo";
   import { notifications } from "$lib/stores/notifications.svelte";
   import { updater } from "$lib/stores/updater.svelte";
 
@@ -13,6 +14,9 @@
 
   onMount(() => {
     let unlistenHistoryPersistence: (() => void) | undefined;
+    const uninstallEditableUndoFallback = shouldInstallEditableUndoFallback()
+      ? installEditableUndoFallback()
+      : undefined;
 
     if (hasTauriRuntime()) {
       void listen<{ message: string }>("history-persistence-error", (event) => {
@@ -56,6 +60,7 @@
 
     return () => {
       unlistenHistoryPersistence?.();
+      uninstallEditableUndoFallback?.();
       stopWatching();
     };
   });

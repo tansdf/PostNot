@@ -2,6 +2,7 @@
   import { tick } from "svelte";
 
   import type { EnvironmentVariable } from "$lib/api/types";
+  import { insertTextIntoEditableControl } from "$lib/dom-editing";
 
   type VariableOption = {
     key: string;
@@ -20,12 +21,6 @@
   type HighlightToken = {
     type: string;
     value: string;
-  };
-
-  type FieldHistoryEntry = {
-    value: string;
-    selectionStart: number;
-    selectionEnd: number;
   };
 
   let {
@@ -77,15 +72,9 @@
   let hasMeasuredSuggestionPosition = $state(false);
   let blurTimeout: ReturnType<typeof setTimeout> | null = $state(null);
   let mirrorBeforeText = $state(" ");
-  let historyEntries = $state<FieldHistoryEntry[]>([]);
-  let historyIndex = $state(-1);
-  let isApplyingHistory = false;
   let highlightSyncFrame: number | null = null;
-  let lastTypingHistoryAt = 0;
   let pendingLocalValue: string | null = null;
   let lastObservedValue = "";
-  let hasInitializedHistory = false;
-  let pendingInputBaseline: FieldHistoryEntry | null = null;
 
   const variablePattern = /{{\s*(\$[A-Za-z0-9_.-]+(?:\[\d+\])?|[A-Za-z0-9_.-]+)\s*}}/g;
   const dynamicVariableOptions: VariableOption[] = [
@@ -121,13 +110,6 @@
   $effect(() => {
     const nextValue = value;
 
-    if (!hasInitializedHistory) {
-      hasInitializedHistory = true;
-      lastObservedValue = nextValue;
-      resetHistory(nextValue);
-      return;
-    }
-
     if (nextValue === lastObservedValue) {
       return;
     }
@@ -139,16 +121,7 @@
       return;
     }
 
-    if (isApplyingHistory) {
-      isApplyingHistory = false;
-      return;
-    }
-
-    if (historyEntries[historyIndex]?.value === nextValue) {
-      return;
-    }
-
-    resetHistory(nextValue);
+    scheduleHighlightOverlaySync();
   });
 
   $effect(() => {
@@ -311,16 +284,11 @@
     return null;
   }
 
-  function updateValue(
-    nextValue: string,
-    historyMode: "typing" | "programmatic" = "programmatic",
-    baselineEntry: FieldHistoryEntry | null = null
-  ) {
+  function updateValue(nextValue: string) {
     pendingLocalValue = nextValue;
     lastObservedValue = nextValue;
     value = nextValue;
     onValueInput(nextValue);
-    pushHistoryEntry(nextValue, historyMode, baselineEntry);
     scheduleHighlightOverlaySync();
   }
   function scheduleHighlightOverlaySync() {
@@ -377,238 +345,6 @@
     highlightContentElement.style.overflowWrap = multiline ? computedStyle.overflowWrap : 'normal';
     highlightContentElement.style.wordBreak = multiline ? computedStyle.wordBreak : 'normal';
     highlightContentElement.style.transform = `translate(${-fieldElement.scrollLeft}px, ${-fieldElement.scrollTop}px)`;
-  }
-
-  function createHistoryEntry(nextValue: string): FieldHistoryEntry {
-    const selectionStart = fieldElement?.selectionStart ?? nextValue.length;
-    const selectionEnd = fieldElement?.selectionEnd ?? selectionStart;
-
-    return {
-      value: nextValue,
-      selectionStart,
-      selectionEnd
-    };
-  }
-
-  function createFieldHistoryEntryFromElement(target: HTMLInputElement | HTMLTextAreaElement): FieldHistoryEntry {
-    const selectionStart = target.selectionStart ?? target.value.length;
-    const selectionEnd = target.selectionEnd ?? selectionStart;
-
-    return {
-      value: target.value,
-      selectionStart,
-      selectionEnd
-    };
-  }
-
-  function resetHistory(nextValue: string) {
-    historyEntries = [createHistoryEntry(nextValue)];
-    historyIndex = 0;
-    lastTypingHistoryAt = 0;
-  }
-
-  function pushHistoryEntry(
-    nextValue: string,
-    historyMode: "typing" | "programmatic" = "programmatic",
-    baselineEntry: FieldHistoryEntry | null = null
-  ) {
-    const nextEntry = createHistoryEntry(nextValue);
-    const currentEntry = historyEntries[historyIndex];
-
-    if (
-      currentEntry &&
-      currentEntry.value === nextEntry.value &&
-      currentEntry.selectionStart === nextEntry.selectionStart &&
-      currentEntry.selectionEnd === nextEntry.selectionEnd
-    ) {
-      return;
-    }
-
-    const now = Date.now();
-    let nextHistoryEntries = historyEntries.slice(0, historyIndex + 1);
-    let nextHistoryIndex = historyIndex;
-
-    if (
-      historyMode === "typing" &&
-      baselineEntry &&
-      currentEntry &&
-      currentEntry.value === baselineEntry.value
-    ) {
-      nextHistoryEntries = [
-        ...nextHistoryEntries.slice(0, nextHistoryIndex),
-        baselineEntry
-      ];
-      nextHistoryIndex = nextHistoryEntries.length - 1;
-    }
-
-    const effectiveCurrentEntry = nextHistoryEntries[nextHistoryIndex];
-    if (
-      historyMode === "typing" &&
-      effectiveCurrentEntry &&
-      nextHistoryIndex > 0 &&
-      now - lastTypingHistoryAt < 1400 &&
-      isCoalescableTypingEdit(effectiveCurrentEntry, nextEntry)
-    ) {
-      historyEntries = [
-        ...nextHistoryEntries.slice(0, nextHistoryIndex),
-        nextEntry,
-        ...historyEntries.slice(historyIndex + 1)
-      ];
-      lastTypingHistoryAt = now;
-      return;
-    }
-
-    const nextEntries = [...nextHistoryEntries, nextEntry].slice(-200);
-    historyEntries = nextEntries;
-    historyIndex = nextEntries.length - 1;
-    lastTypingHistoryAt = historyMode === "typing" ? now : 0;
-  }
-
-  function isCoalescableTypingEdit(currentEntry: FieldHistoryEntry, nextEntry: FieldHistoryEntry) {
-    if (currentEntry.selectionStart !== currentEntry.selectionEnd || nextEntry.selectionStart !== nextEntry.selectionEnd) {
-      return false;
-    }
-
-    const oldValue = currentEntry.value;
-    const nextValue = nextEntry.value;
-    const lengthDelta = nextValue.length - oldValue.length;
-
-    if (Math.abs(lengthDelta) !== 1) {
-      return false;
-    }
-
-    const editStart = lengthDelta > 0 ? nextEntry.selectionStart - 1 : nextEntry.selectionStart;
-    if (editStart < 0) {
-      return false;
-    }
-
-    const beforeEdit = oldValue.slice(0, editStart) === nextValue.slice(0, editStart);
-    const oldSuffixStart = lengthDelta > 0 ? editStart : editStart + 1;
-    const nextSuffixStart = lengthDelta > 0 ? editStart + 1 : editStart;
-    const afterEdit = oldValue.slice(oldSuffixStart) === nextValue.slice(nextSuffixStart);
-
-    return beforeEdit && afterEdit;
-  }
-
-  function applyHistoryEntry(nextIndex: number) {
-    const nextEntry = historyEntries[nextIndex];
-    if (!nextEntry) {
-      return;
-    }
-
-    historyIndex = nextIndex;
-    isApplyingHistory = true;
-    lastTypingHistoryAt = 0;
-    pendingLocalValue = nextEntry.value;
-    lastObservedValue = nextEntry.value;
-    value = nextEntry.value;
-    onValueInput(nextEntry.value);
-
-    requestAnimationFrame(() => {
-      fieldElement?.focus();
-      fieldElement?.setSelectionRange(nextEntry.selectionStart, nextEntry.selectionEnd);
-      updateAutocompleteState();
-    });
-  }
-
-  function isUndoShortcut(event: KeyboardEvent) {
-    return (event.ctrlKey || event.metaKey) && !event.shiftKey && isShortcutKey(event, "z", "KeyZ");
-  }
-
-  function isRedoShortcut(event: KeyboardEvent) {
-    return (
-      ((event.ctrlKey || event.metaKey) && isShortcutKey(event, "y", "KeyY")) ||
-      ((event.ctrlKey || event.metaKey) && event.shiftKey && isShortcutKey(event, "z", "KeyZ"))
-    );
-  }
-
-  function isShortcutKey(event: KeyboardEvent, key: string, code: string) {
-    return event.key.toLowerCase() === key || event.code === code;
-  }
-
-  function getSelectionRange() {
-    const selectionStart = fieldElement?.selectionStart ?? value.length;
-    const selectionEnd = fieldElement?.selectionEnd ?? selectionStart;
-
-    return {
-      selectionStart,
-      selectionEnd
-    };
-  }
-
-  function getSelectedText() {
-    const { selectionStart, selectionEnd } = getSelectionRange();
-    return value.slice(selectionStart, selectionEnd);
-  }
-
-  async function writeClipboardText(text: string) {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return;
-    }
-
-    document.execCommand("copy");
-  }
-
-  async function applyTextReplacement(insertText: string) {
-    if (!fieldElement || disabled) {
-      return;
-    }
-
-    const baselineEntry = createFieldHistoryEntryFromElement(fieldElement);
-    const { selectionStart, selectionEnd } = baselineEntry;
-    const nextValue = `${value.slice(0, selectionStart)}${insertText}${value.slice(selectionEnd)}`;
-    const nextCursor = selectionStart + insertText.length;
-
-    updateValue(nextValue, "programmatic", baselineEntry);
-    closeSuggestions();
-    await tick();
-    fieldElement?.focus();
-    fieldElement?.setSelectionRange(nextCursor, nextCursor);
-    updateAutocompleteState();
-  }
-
-  function handleSelectAllShortcut(event: KeyboardEvent) {
-    if (!(event.ctrlKey || event.metaKey) || !isShortcutKey(event, "a", "KeyA") || !fieldElement) {
-      return false;
-    }
-
-    event.preventDefault();
-    fieldElement.setSelectionRange(0, value.length);
-    closeSuggestions();
-    return true;
-  }
-
-  function handleCopyShortcut(event: KeyboardEvent) {
-    if (!(event.ctrlKey || event.metaKey) || !isShortcutKey(event, "c", "KeyC")) {
-      return false;
-    }
-
-    const selectedText = getSelectedText();
-    if (!selectedText) {
-      return false;
-    }
-
-    event.preventDefault();
-    void writeClipboardText(selectedText).catch(() => {});
-    return true;
-  }
-
-  function handleCutShortcut(event: KeyboardEvent) {
-    if (!(event.ctrlKey || event.metaKey) || !isShortcutKey(event, "x", "KeyX") || disabled) {
-      return false;
-    }
-
-    const selectedText = getSelectedText();
-    if (!selectedText) {
-      return false;
-    }
-
-    event.preventDefault();
-    void writeClipboardText(selectedText).then(() => {
-      void applyTextReplacement("");
-    }).catch(() => {});
-    return true;
   }
 
   function getTokenContext(fieldValue: string, cursor: number) {
@@ -732,14 +468,19 @@
   }
 
   async function applySuggestion(variableKey: string) {
-    const nextValue = `${value.slice(0, replacementStart)}{{${variableKey}}}${value.slice(replacementEnd)}`;
-    const nextCursor = replacementStart + variableKey.length + 4;
+    if (!fieldElement || disabled || replacementStart < 0 || replacementEnd < 0) {
+      return;
+    }
 
-    updateValue(nextValue);
+    const insertText = `{{${variableKey}}}`;
+    insertTextIntoEditableControl(fieldElement, insertText, {
+      selectionStart: replacementStart,
+      selectionEnd: replacementEnd,
+      undoBaselineSelection: "collapse-end"
+    });
     closeSuggestions();
     await tick();
-    fieldElement?.focus();
-    fieldElement?.setSelectionRange(nextCursor, nextCursor);
+    updateAutocompleteState();
   }
 
   function closeSuggestions() {
@@ -761,15 +502,9 @@
 
   function handleInput(event: Event) {
     const target = event.currentTarget as HTMLInputElement | HTMLTextAreaElement;
-    const baselineEntry = pendingInputBaseline;
-    pendingInputBaseline = null;
-    updateValue(target.value, "typing", baselineEntry);
+    updateValue(target.value);
     updateAutocompleteState();
     scheduleHighlightOverlaySync();
-  }
-
-  function handleBeforeInput(event: InputEvent) {
-    pendingInputBaseline = createFieldHistoryEntryFromElement(event.currentTarget as HTMLInputElement | HTMLTextAreaElement);
   }
 
   function handleFocus() {
@@ -789,30 +524,6 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
-    if (
-      handleSelectAllShortcut(event) ||
-      handleCopyShortcut(event) ||
-      handleCutShortcut(event)
-    ) {
-      return;
-    }
-
-    if (isUndoShortcut(event)) {
-      if (historyIndex > 0) {
-        event.preventDefault();
-        applyHistoryEntry(historyIndex - 1);
-      }
-      return;
-    }
-
-    if (isRedoShortcut(event)) {
-      if (historyIndex < historyEntries.length - 1) {
-        event.preventDefault();
-        applyHistoryEntry(historyIndex + 1);
-      }
-      return;
-    }
-
     if (isSuggestionsOpen && filteredVariables.length) {
       clampSuggestionIndex();
       if (event.key === "ArrowDown") {
@@ -916,7 +627,6 @@
         autocomplete=off
         {disabled}
         value={value}
-        onbeforeinput={handleBeforeInput}
         onblur={handleBlur}
         onclick={handleCursorMovement}
         onfocus={handleFocus}
@@ -937,7 +647,6 @@
         {type}
         {list}
         value={value}
-        onbeforeinput={handleBeforeInput}
         onblur={handleBlur}
         onclick={handleCursorMovement}
         onfocus={handleFocus}

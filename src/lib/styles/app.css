@@ -992,8 +992,10 @@ select option {
 }
 
 .request-script-card-header {
-  display: grid;
+  display: flex;
   gap: 6px;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .request-script-card-title {
@@ -1004,6 +1006,8 @@ select option {
 
 .request-script-editor {
   min-height: 200px;
+  font-family: var(--font-mono);
+  tab-size: 2;
 }
 
 .multipart-editor,
@@ -4136,8 +4140,9 @@ iframe.large-response-viewer {
 .jt-string { color: var(--syntax-string); }
 .jt-number { color: var(--syntax-number); }
 .jt-bool { color: var(--syntax-boolean); }
-.jt-null { color: var(--syntax-null); font-style: italic; }
-.jt-variable { color: var(--syntax-variable); font-weight: 600; }
+.jt-null { color: var(--syntax-null); }
+.jt-variable { color: var(--syntax-variable); }
+.jt-comment { color: var(--text-muted); }
 .jt-bracket { color: var(--text-muted); }
 .jt-colon { color: var(--text-muted); }
 .jt-comma { color: var(--text-muted); }
@@ -4173,6 +4178,10 @@ iframe.large-response-viewer {
 }
 
 .json-editor-overlay {
+  font-family: var(--font-mono);
+}
+
+.script-editor-overlay {
   font-family: var(--font-mono);
 }
 
