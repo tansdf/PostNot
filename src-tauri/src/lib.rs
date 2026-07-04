@@ -23,6 +23,9 @@ pub fn run() -> Result<(), String> {
         .setup(|app| {
             let database = tauri::async_runtime::block_on(db::init(app.handle()))?;
             tauri::async_runtime::block_on(services::settings_service::ensure_defaults(&database))?;
+            tauri::async_runtime::block_on(services::collections_service::ensure_starter_collection(
+                &database,
+            ))?;
             let secret_store = services::secret_store_service::default_secret_store();
             app.manage(app_state::AppState::new(database, secret_store));
             if let Some(window) = app.get_webview_window("main") {

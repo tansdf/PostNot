@@ -4,7 +4,7 @@ import { defineConfig } from "vite";
 export default defineConfig({
   plugins: [sveltekit()],
   define: {
-    __APP_VERSION__: JSON.stringify("0.20.21")
+    __APP_VERSION__: JSON.stringify("0.20.22")
   },
   clearScreen: false,
   server: {

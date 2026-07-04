@@ -1424,6 +1424,53 @@ select option {
   line-height: 1.45;
 }
 
+.collection-empty-state {
+  display: grid;
+  gap: 10px;
+}
+
+.collection-empty-state strong {
+  color: var(--text-primary);
+}
+
+.collections-title-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.collections-title-copy p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-body);
+  line-height: 1.4;
+}
+
+.collections-first-run-empty {
+  max-width: 34rem;
+  padding-top: var(--space-2);
+}
+
+.collections-first-run-empty span {
+  max-width: 30rem;
+  color: var(--text-secondary);
+  font-size: var(--font-body);
+  line-height: 1.45;
+}
+
+.collections-page-feedback {
+  margin-bottom: var(--space-4);
+}
+
+.collections-subsection-heading {
+  margin: 4px 0 10px;
+}
+
+.collections-subsection-heading h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-section-title);
+}
+
 .empty-state-inline {
   padding: 10px 12px;
   border-radius: var(--radius-card);

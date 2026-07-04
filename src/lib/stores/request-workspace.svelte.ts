@@ -318,6 +318,27 @@ class RequestWorkspaceStore {
     void this.persistNow();
   }
 
+  unlinkSavedRequestsForCollection(collectionId: string) {
+    if (!collectionId) {
+      return 0;
+    }
+
+    return this.unlinkSavedRequestTabs((tab) => tab.collectionId === collectionId);
+  }
+
+  unlinkSavedRequests(savedRequestIds: string[]) {
+    const ids = new Set(savedRequestIds.filter(Boolean));
+    if (ids.size === 0) {
+      return 0;
+    }
+
+    return this.unlinkSavedRequestTabs((tab) => Boolean(tab.savedRequestId && ids.has(tab.savedRequestId)));
+  }
+
+  unlinkSavedRequestsFromMissingCollections(validCollectionIds: Set<string>) {
+    return this.unlinkSavedRequestTabs((tab) => Boolean(tab.collectionId && !validCollectionIds.has(tab.collectionId)));
+  }
+
   markSendStarted(tabId: string) {
     this.inFlightTabId = tabId;
     this.isCanceling = false;
@@ -422,6 +443,33 @@ class RequestWorkspaceStore {
       nextTab,
       ...this.tabs.slice(currentIndex + 1)
     ];
+  }
+
+  private unlinkSavedRequestTabs(matches: (tab: RequestWorkspaceTab) => boolean) {
+    let changedCount = 0;
+
+    this.tabs = this.tabs.map((tab) => {
+      if (!matches(tab)) {
+        return tab;
+      }
+
+      changedCount += 1;
+      return normalizeWorkspaceTab({
+        ...tab,
+        source: "blank",
+        savedRequestId: null,
+        collectionId: null,
+        parentId: null,
+        baselineRequest: null,
+        errorText: ""
+      });
+    });
+
+    if (changedCount > 0) {
+      void this.persistNow();
+    }
+
+    return changedCount;
   }
 
   private updateTab(tabId: string, mutate: (tab: RequestWorkspaceTab) => void) {

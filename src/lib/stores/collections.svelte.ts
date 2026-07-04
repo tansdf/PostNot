@@ -175,7 +175,7 @@ class CollectionsStore {
 
     try {
       const collection = await createCollection({
-        name: "Untitled collection",
+        name: "New collection",
         description: "",
         preRequestScript: "",
         testScript: ""
@@ -255,8 +255,10 @@ class CollectionsStore {
       const preferredId = this.selectedCollectionId === collectionId ? "" : this.selectedCollectionId;
       await this.loadCollections(preferredId);
       notifications.success(collectionName, "Collection deleted");
+      return true;
     } catch (error) {
       this.errorText = error instanceof Error ? error.message : String(error);
+      return false;
     } finally {
       this.pendingDeleteCollectionId = "";
     }
@@ -301,8 +303,10 @@ class CollectionsStore {
       await deleteCollectionItem(itemId);
       await Promise.all([this.loadCollections(collectionId), this.loadCollectionItems(collectionId)]);
       notifications.success(itemName, "Collection item deleted");
+      return true;
     } catch (error) {
       this.errorText = error instanceof Error ? error.message : String(error);
+      return false;
     } finally {
       this.pendingDeleteCollectionItemId = "";
     }

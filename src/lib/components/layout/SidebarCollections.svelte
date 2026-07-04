@@ -757,7 +757,7 @@
         </div>
       {/if}
     {:else if collections.collections.length === 0 && !collections.isCollectionsLoading}
-      <div class="sidebar-empty-state">Create a collection to keep saved requests close at hand.</div>
+      <div class="sidebar-empty-state">No collections yet.</div>
     {:else}
       <div class="sidebar-collection-stack" aria-label="Collection tree">
         {#each collections.collections as collection (collection.id)}

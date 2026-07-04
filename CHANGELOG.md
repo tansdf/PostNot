@@ -6,6 +6,20 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.20.22] - 2026-07-04
+
+### Added
+
+- Added a starter collection for new empty workspaces and direct New collection actions on the Collections page.
+
+### Changed
+
+- Clarified Collections page hierarchy, empty states, top-level drop affordance, and default new collection naming.
+
+### Fixed
+
+- Kept open request tabs as editable drafts when their saved collection or folder is deleted, so they can be saved again elsewhere without stale collection errors.
+
 ## [0.20.21] - 2026-07-04
 
 ### Added

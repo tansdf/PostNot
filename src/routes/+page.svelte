@@ -739,6 +739,9 @@ paths:
 
   async function initializePage() {
     await Promise.all([loadSettings(), loadHistory(), collections.ensureLoaded(), loadEnvironments(), requestWorkspace.ensureInitialized()]);
+    if (!collections.errorText) {
+      requestWorkspace.unlinkSavedRequestsFromMissingCollections(new Set(collections.collections.map((collection) => collection.id)));
+    }
 
     if (requestedSavedRequestId) {
       await openSavedRequestFromRoute(requestedSavedRequestId);

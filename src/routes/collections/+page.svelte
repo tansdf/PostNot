@@ -12,6 +12,7 @@
   import { exportCollection, importRequests } from "$lib/api/commands";
   import { notifications } from "$lib/stores/notifications.svelte";
   import { collections } from "$lib/stores/collections.svelte";
+  import { requestWorkspace } from "$lib/stores/request-workspace.svelte";
 
   let isSavingCollection = $state(false);
   let importFormat = $state<"postman" | "openapi">("postman");
@@ -119,6 +120,18 @@
     }
   }
 
+  async function handleCreateCollection() {
+    const collection = await collections.createBlankCollection();
+    if (!collection) {
+      return;
+    }
+
+    await goto(resolve(`/collections?collectionId=${encodeURIComponent(collection.id)}`), {
+      noScroll: true,
+      keepFocus: true
+    });
+  }
+
   async function handleSaveCollection(
     name: string,
     description: string,
@@ -185,7 +198,12 @@
       return;
     }
 
-    await collections.removeCollection(collectionId);
+    const deleted = await collections.removeCollection(collectionId);
+    if (!deleted) {
+      return;
+    }
+
+    requestWorkspace.unlinkSavedRequestsForCollection(collectionId);
 
     const nextCollectionId = collections.selectedCollectionId;
     const navOpts = { replaceState: true, noScroll: true, keepFocus: true } as const;
@@ -215,8 +233,22 @@
       return;
     }
 
-    await collections.removeCollectionItem(collection.id, item.id, item.name || "Collection item");
+    const deletedSavedRequestIds = collectSavedRequestIds(item);
+    const deleted = await collections.removeCollectionItem(collection.id, item.id, item.name || "Collection item");
+    if (!deleted) {
+      return;
+    }
+
+    requestWorkspace.unlinkSavedRequests(deletedSavedRequestIds);
     await collections.loadCollections(collection.id);
+  }
+
+  function collectSavedRequestIds(item: CollectionItemSummary): string[] {
+    if (item.kind === "request") {
+      return [item.id];
+    }
+
+    return item.children.flatMap(collectSavedRequestIds);
   }
 
   function findItemLocation(
@@ -445,6 +477,7 @@
     {isImporting}
     {isExporting}
     onOpenImport={openImportModal}
+    onCreateCollection={handleCreateCollection}
     onCreateRootFolder={() => handleCreateFolder()}
     onCreateChildFolder={(parentId: string) => handleCreateFolder(parentId)}
     onExportCollection={handleExportCollection}

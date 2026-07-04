@@ -25,6 +25,7 @@
     isImporting = false,
     isExporting = false,
     onOpenImport = () => {},
+    onCreateCollection = () => {},
     onCreateRootFolder = () => {},
     onCreateChildFolder = () => {},
     onExportCollection = () => {},
@@ -49,6 +50,7 @@
     isImporting?: boolean;
     isExporting?: boolean;
     onOpenImport?: () => Promise<void> | void;
+    onCreateCollection?: () => Promise<void> | void;
     onCreateRootFolder?: () => Promise<void> | void;
     onCreateChildFolder?: (parentId: string) => Promise<void> | void;
     onExportCollection?: () => Promise<void> | void;
@@ -124,14 +126,22 @@
   <section class="panel collections-page-panel">
     <div class="request-section-header">
       <div class="request-section-title">
-        <h1>Collection View</h1>
-        <button class="button-secondary button-compact" type="button" onclick={onOpenImport}>Import</button>
-        <button class="button-secondary button-compact" type="button" onclick={onCreateRootFolder} disabled={!collection || isCreatingFolder}>
-          {isCreatingFolder ? "Creating..." : "New folder"}
-        </button>
-        <button class="button-secondary button-compact" type="button" onclick={onExportCollection} disabled={!collection || isExporting}>
-          {isExporting ? "Exporting..." : "Export"}
-        </button>
+        <div class="collections-title-copy">
+          <h1>{collection?.name ?? "Collections"}</h1>
+          {#if !collection}
+            <p>Save and organize reusable requests.</p>
+          {/if}
+        </div>
+        {#if collection}
+          <button class="button-primary button-compact" type="button" onclick={onCreateCollection}>New collection</button>
+          <button class="button-secondary button-compact" type="button" onclick={onOpenImport}>Import</button>
+          <button class="button-secondary button-compact" type="button" onclick={onCreateRootFolder} disabled={isCreatingFolder}>
+            {isCreatingFolder ? "Creating..." : "New folder"}
+          </button>
+          <button class="button-secondary button-compact" type="button" onclick={onExportCollection} disabled={isExporting}>
+            {isExporting ? "Exporting..." : "Export"}
+          </button>
+        {/if}
       </div>
 
       {#if isExporting}
@@ -144,10 +154,14 @@
     </div>
 
     {#if errorText}
-      <div class="feedback feedback-error">{errorText}</div>
+      <div class="feedback feedback-error collections-page-feedback">{errorText}</div>
     {/if}
 
     {#if collection}
+      <div class="collections-subsection-heading">
+        <h2>Collection settings</h2>
+      </div>
+
       {#key collection.id}
         <CollectionDetailForm
           {collection}
@@ -158,42 +172,50 @@
         />
       {/key}
     {:else}
-      <div class="empty-state">Pick a collection from the sidebar or create one with the `+` button.</div>
+      <div class="collection-empty-state collections-first-run-empty">
+        <strong>No collections yet</strong>
+        <span>Start from scratch or import an existing API workspace.</span>
+        <div class="collections-page-actions">
+          <button class="button-primary" type="button" onclick={onCreateCollection}>New collection</button>
+          <button class="button-secondary" type="button" onclick={onOpenImport}>Import</button>
+        </div>
+      </div>
     {/if}
   </section>
 
+  {#if collection}
   <section class="panel collections-page-panel">
     <div class="collections-column-header">
-      <h2>Collection Items</h2>
-      {#if collection}
-        <span class="history-meta">
-          {isCollectionItemsLoading
-            ? "Refreshing..."
-            : `${collection.requestCount} request${collection.requestCount === 1 ? "" : "s"}`}
-        </span>
-      {/if}
+      <h2>Saved requests</h2>
+      <span class="history-meta">
+        {isCollectionItemsLoading
+          ? "Refreshing..."
+          : `${collection.requestCount} request${collection.requestCount === 1 ? "" : "s"}`}
+      </span>
     </div>
 
-    {#if !collection}
-      <div class="empty-state">Select a collection to inspect its folders and saved requests.</div>
-    {:else}
+    {#if collectionDnd.isDragging}
       <button
         class={[
           "collection-root-drop",
           collectionDnd.matchesDropIndicator(collection.id, null, "root") && "collection-root-drop-active"
         ]}
         type="button"
-        aria-label="Move a saved request to the collection root"
+        aria-label="Move item to the top level of this collection"
         data-collection-drop="root"
         data-collection-id={collection.id}
       >
-        <strong>Collection root</strong>
-        <span>Drop a saved request here to move it to the top level.</span>
+        <strong>Top level</strong>
+        <span>Drop here to place the item outside folders.</span>
       </button>
+    {/if}
 
-      {#if collectionItems.length === 0 && !isCollectionItemsLoading}
-        <div class="empty-state">No folders or saved requests yet. Use `New folder` or the request editor `Save` flow to start organizing.</div>
-      {:else}
+    {#if collectionItems.length === 0 && !isCollectionItemsLoading}
+      <div class="empty-state collection-empty-state">
+        <strong>No folders or saved requests yet</strong>
+        <span>Use New folder here, or save the active request into this collection from the Requests screen.</span>
+      </div>
+    {:else}
       {#snippet renderItems(items: CollectionItemSummary[], depth: number)}
         <div class={["collection-item-tree", depth > 0 && "collection-item-tree-nested"]}>
           {#each items as item (item.id)}
@@ -315,7 +337,7 @@
       {/snippet}
 
       {@render renderItems(collectionItems, 0)}
-      {/if}
     {/if}
   </section>
+  {/if}
 </div>

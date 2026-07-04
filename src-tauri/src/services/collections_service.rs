@@ -16,6 +16,56 @@ use crate::{
     error::{AppError, AppResult},
 };
 
+const STARTER_COLLECTION_SEEDED_KEY: &str = "starter_collection_seeded";
+const STARTER_COLLECTION_NAME: &str = "My Collection";
+const STARTER_COLLECTION_DESCRIPTION: &str = "Default workspace for saved requests.";
+
+pub async fn ensure_starter_collection(pool: &SqlitePool) -> AppResult<()> {
+    let already_seeded: Option<String> =
+        sqlx::query_scalar("SELECT value_json FROM app_settings WHERE key = ?1")
+            .bind(STARTER_COLLECTION_SEEDED_KEY)
+            .fetch_optional(pool)
+            .await?;
+
+    if matches!(already_seeded.as_deref(), Some("true")) {
+        return Ok(());
+    }
+
+    let collection_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM collections")
+        .fetch_one(pool)
+        .await?;
+
+    if collection_count == 0 {
+        let id = Uuid::new_v4().to_string();
+        let now = now_iso();
+
+        sqlx::query(
+            r#"
+            INSERT INTO collections (
+              id, name, description, prerequest_script, test_script, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, '', '', ?4, ?5)
+            "#,
+        )
+        .bind(&id)
+        .bind(STARTER_COLLECTION_NAME)
+        .bind(STARTER_COLLECTION_DESCRIPTION)
+        .bind(&now)
+        .bind(&now)
+        .execute(pool)
+        .await?;
+    }
+
+    sqlx::query(
+        "INSERT INTO app_settings (key, value_json, updated_at) VALUES (?1, 'true', ?2) ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at",
+    )
+    .bind(STARTER_COLLECTION_SEEDED_KEY)
+    .bind(now_iso())
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
 pub async fn list_collections(pool: &SqlitePool) -> AppResult<Vec<CollectionSummary>> {
     let rows = sqlx::query(
         r#"
@@ -1360,3 +1410,7 @@ struct SearchAncestor {
     id: String,
     name: String,
 }
+
+#[cfg(test)]
+#[path = "collections_service_tests.rs"]
+mod tests;
