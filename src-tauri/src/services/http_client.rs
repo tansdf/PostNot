@@ -8,16 +8,22 @@ use std::{
 use chrono::Utc;
 use reqwest::header::{HeaderName, HeaderValue};
 use reqwest::redirect::Policy;
-use reqwest::{multipart, Client, Method, Response};
+use reqwest::{multipart, Body, Client, Method, Response};
+use tokio::io::AsyncWriteExt;
 use tokio::sync::watch;
+use tokio_util::io::ReaderStream;
 use url::Url;
 
 use crate::domain::{
-    requests::{KeyValueRow, ResponsePayload, SendRequestPayload},
+    requests::{KeyValueRow, ResponseBody, ResponsePayload, SendRequestPayload},
     settings::AppSettings,
 };
 use crate::error::{AppError, AppResult};
 use crate::services::request_url_service::normalize_request_url;
+use crate::services::response_body_service::{
+    decode_text, describe_inline, ResponseBodyStore, ResponseRowIndexBuilder, BODY_PREVIEW_LIMIT,
+    INLINE_BODY_LIMIT,
+};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 struct ClientCacheKey {
@@ -40,6 +46,28 @@ pub type ResponseProgressSink = Arc<dyn Fn(ResponseDownloadProgress) + Send + Sy
 struct ClientCache {
     clients: HashMap<ClientCacheKey, Client>,
     insertion_order: VecDeque<ClientCacheKey>,
+}
+
+struct TemporaryBodyCleanup(Option<std::path::PathBuf>);
+
+impl TemporaryBodyCleanup {
+    fn new() -> Self {
+        Self(None)
+    }
+    fn track(&mut self, path: std::path::PathBuf) {
+        self.0 = Some(path);
+    }
+    fn disarm(&mut self) {
+        self.0 = None;
+    }
+}
+
+impl Drop for TemporaryBodyCleanup {
+    fn drop(&mut self) {
+        if let Some(path) = self.0.take() {
+            let _ = std::fs::remove_file(path);
+        }
+    }
 }
 
 static HTTP_CLIENT_CACHE: LazyLock<Mutex<ClientCache>> = LazyLock::new(|| {
@@ -99,6 +127,16 @@ pub async fn send_request(
     settings: &AppSettings,
     cancel_rx: watch::Receiver<bool>,
     progress_sink: Option<ResponseProgressSink>,
+) -> AppResult<ResponsePayload> {
+    send_request_with_store(payload, settings, cancel_rx, progress_sink, None).await
+}
+
+pub async fn send_request_with_store(
+    payload: &SendRequestPayload,
+    settings: &AppSettings,
+    cancel_rx: watch::Receiver<bool>,
+    progress_sink: Option<ResponseProgressSink>,
+    body_store: Option<&ResponseBodyStore>,
 ) -> AppResult<ResponsePayload> {
     let mut cancel_rx = cancel_rx;
     let client = client_for_settings(settings)?;
@@ -206,17 +244,21 @@ pub async fn send_request(
                     continue;
                 }
 
-                let bytes = tokio::select! {
-                    bytes = tokio::fs::read(&file.path) => bytes?,
+                let source_file = tokio::select! {
+                    file = tokio::fs::File::open(&file.path) => file?,
                     _ = wait_for_cancellation(&mut cancel_rx) => return Err(AppError::Cancelled),
                 };
+                let metadata = source_file.metadata().await?;
                 let file_name = Path::new(&file.path)
                     .file_name()
                     .and_then(|name| name.to_str())
                     .filter(|name| !name.trim().is_empty())
                     .unwrap_or(field_name)
                     .to_string();
-                let part = multipart::Part::bytes(bytes).file_name(file_name);
+                let stream = ReaderStream::new(source_file);
+                let part =
+                    multipart::Part::stream_with_length(Body::wrap_stream(stream), metadata.len())
+                        .file_name(file_name);
                 form = form.part(field_name.to_string(), part);
             }
 
@@ -232,6 +274,11 @@ pub async fn send_request(
     };
     let status = response.status();
     let content_length = response.content_length();
+    let content_type = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_string);
     let headers = response
         .headers()
         .iter()
@@ -252,21 +299,20 @@ pub async fn send_request(
         });
     }
 
-    let body_bytes = read_full_body(
+    let downloaded = read_response_body(
         &mut response,
         &mut cancel_rx,
         progress_sink.as_ref(),
         content_length,
+        body_store,
+        content_type.clone(),
     )
     .await?;
-    let body_size = content_length
-        .and_then(|value| usize::try_from(value).ok())
-        .unwrap_or(body_bytes.len());
-    let body_text = String::from_utf8_lossy(&body_bytes).to_string();
+    let body_size = downloaded.size_bytes();
 
     if let Some(progress_sink) = progress_sink.as_ref() {
         progress_sink(ResponseDownloadProgress {
-            downloaded_bytes: body_bytes.len(),
+            downloaded_bytes: usize::try_from(body_size).unwrap_or(usize::MAX),
             content_length,
             finished: true,
         });
@@ -278,19 +324,30 @@ pub async fn send_request(
         duration_ms: started_at.elapsed().as_millis(),
         size_bytes: body_size,
         headers,
-        body_text,
+        body: downloaded,
         error_text: String::new(),
         executed_at: Utc::now().to_rfc3339(),
     })
 }
 
-async fn read_full_body(
+async fn read_response_body(
     response: &mut Response,
     cancel_rx: &mut watch::Receiver<bool>,
     progress_sink: Option<&ResponseProgressSink>,
     content_length: Option<u64>,
-) -> AppResult<Vec<u8>> {
+    body_store: Option<&ResponseBodyStore>,
+    content_type: Option<String>,
+) -> AppResult<ResponseBody> {
     let mut bytes = Vec::new();
+    if let Some(length) = content_length.and_then(|value| usize::try_from(value).ok()) {
+        bytes.reserve(length.min(INLINE_BODY_LIMIT + 1));
+    }
+    let mut preview = Vec::with_capacity(BODY_PREVIEW_LIMIT);
+    let mut spill: Option<(String, std::path::PathBuf, tokio::fs::File)> = None;
+    let mut downloaded_bytes = 0usize;
+    let mut last_progress_emit = Instant::now();
+    let mut row_index = body_store.map(|_| ResponseRowIndexBuilder::new());
+    let mut cleanup = TemporaryBodyCleanup::new();
 
     loop {
         let chunk = tokio::select! {
@@ -299,17 +356,86 @@ async fn read_full_body(
         };
 
         let Some(chunk) = chunk else {
-            return Ok(bytes);
+            if let Some((handle_id, path, mut file)) = spill {
+                file.flush().await?;
+                drop(file);
+                let store = body_store.expect("spill requires body store");
+                let response_body = store.register_temporary_with_index(
+                    handle_id,
+                    path,
+                    content_type,
+                    &preview,
+                    downloaded_bytes as u64,
+                    row_index
+                        .take()
+                        .expect("file-backed response has row index")
+                        .finish(),
+                )?;
+                cleanup.disarm();
+                return Ok(response_body.into());
+            }
+            let descriptor = describe_inline(&bytes, content_type);
+            if body_store.is_some()
+                && matches!(
+                    descriptor.presentation,
+                    crate::services::response_body_service::ResponsePresentation::Image
+                        | crate::services::response_body_service::ResponsePresentation::Binary
+                )
+            {
+                return Ok(body_store
+                    .expect("checked body store")
+                    .store_bytes(&bytes, descriptor.content_type.as_deref())
+                    .await?
+                    .into());
+            }
+            return Ok(ResponseBody::Inline {
+                text: decode_text(&bytes, descriptor.charset.as_deref()),
+                size_bytes: downloaded_bytes as u64,
+                content_type: descriptor.content_type,
+                charset: descriptor.charset,
+                presentation: descriptor.presentation,
+            });
         };
 
-        bytes.extend_from_slice(&chunk);
+        downloaded_bytes = downloaded_bytes.saturating_add(chunk.len());
+        if let Some(index) = row_index.as_mut() {
+            index.push(&chunk);
+        }
+        if preview.len() < BODY_PREVIEW_LIMIT {
+            let remaining = BODY_PREVIEW_LIMIT - preview.len();
+            preview.extend_from_slice(&chunk[..chunk.len().min(remaining)]);
+        }
 
-        if let Some(progress_sink) = progress_sink {
+        if spill.is_none()
+            && body_store.is_some()
+            && bytes.len().saturating_add(chunk.len()) > INLINE_BODY_LIMIT
+        {
+            let store = body_store.expect("checked body store");
+            tokio::fs::create_dir_all(store.root()).await?;
+            let handle_id = uuid::Uuid::new_v4().to_string();
+            let path = store.root().join(format!("{handle_id}.body"));
+            let mut file = tokio::fs::File::create(&path).await?;
+            cleanup.track(path.clone());
+            file.write_all(&bytes).await?;
+            bytes.clear();
+            spill = Some((handle_id, path, file));
+        }
+
+        if let Some((_, _, file)) = spill.as_mut() {
+            file.write_all(&chunk).await?;
+        } else {
+            bytes.extend_from_slice(&chunk);
+        }
+
+        if let Some(progress_sink) =
+            progress_sink.filter(|_| last_progress_emit.elapsed() >= Duration::from_millis(100))
+        {
             progress_sink(ResponseDownloadProgress {
-                downloaded_bytes: bytes.len(),
+                downloaded_bytes,
                 content_length,
                 finished: false,
             });
+            last_progress_emit = Instant::now();
         }
     }
 }
@@ -332,11 +458,14 @@ async fn wait_for_cancellation(cancel_rx: &mut watch::Receiver<bool>) {
 
 #[cfg(test)]
 mod tests {
-    use super::{send_request, ResponseDownloadProgress, ResponseProgressSink};
+    use super::{
+        send_request, send_request_with_store, ResponseDownloadProgress, ResponseProgressSink,
+    };
     use crate::domain::{
         requests::{KeyValueRow, RequestAuth, RequestBody, SendRequestPayload},
         settings::AppSettings,
     };
+    use crate::services::response_body_service::ResponseBodyStore;
     use std::{
         io::{Read, Write},
         net::{TcpListener, TcpStream},
@@ -392,7 +521,7 @@ mod tests {
 
         assert_eq!(response.status_code, Some(201));
         assert_eq!(response.status_text, "Created");
-        assert_eq!(response.body_text, "{\"ok\":true}");
+        assert_eq!(response.body.inline_text(), Some("{\"ok\":true}"));
         assert_eq!(response.size_bytes, 11);
         assert!(captured
             .head
@@ -446,7 +575,7 @@ mod tests {
             .expect("server captured request");
 
         assert_eq!(response.status_code, Some(200));
-        assert_eq!(response.body_text, "ok");
+        assert_eq!(response.body.inline_text(), Some("ok"));
         assert!(captured.head.starts_with("GET /health HTTP/1.1"));
     }
 
@@ -486,10 +615,107 @@ mod tests {
         .expect("large response should succeed");
 
         assert_eq!(response.status_code, Some(200));
-        assert_eq!(response.size_bytes, body.len());
-        assert_eq!(response.body_text.len(), body.len());
-        assert!(response.body_text.starts_with("{\"data\":\"xxx"));
-        assert!(response.body_text.ends_with("\"}"));
+        let body_text = response
+            .body
+            .inline_text()
+            .expect("test response is inline");
+        assert_eq!(response.size_bytes, body.len() as u64);
+        assert_eq!(body_text.len(), body.len());
+        assert!(body_text.starts_with("{\"data\":\"xxx"));
+        assert!(body_text.ends_with("\"}"));
+    }
+
+    #[tokio::test]
+    async fn send_request_spills_large_response_to_managed_file() {
+        let body = format!("{{\"data\":\"{}\"}}", "x".repeat(2 * 1024 * 1024));
+        let response_message = format!(
+            "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        let (url, _captured_rx) = spawn_test_server(&response_message);
+        let (_cancel_tx, cancel_rx) = watch::channel(false);
+        let root = std::env::temp_dir().join(format!("postnot-http-body-{}", uuid::Uuid::new_v4()));
+        let store = ResponseBodyStore::new(root.clone());
+        let response = send_request_with_store(
+            &SendRequestPayload {
+                name: "Large file-backed JSON".into(),
+                method: "GET".into(),
+                url: format!("{url}/large-file"),
+                query_params: Vec::new(),
+                headers: Vec::new(),
+                body: RequestBody {
+                    mode: "none".into(),
+                    raw: String::new(),
+                    form: Vec::new(),
+                    files: Vec::new(),
+                },
+                auth: empty_auth(),
+                pre_request_script: String::new(),
+                test_script: String::new(),
+            },
+            &default_settings(),
+            cancel_rx,
+            None,
+            Some(&store),
+        )
+        .await
+        .expect("large response should succeed");
+        let handle = response
+            .body
+            .handle_id()
+            .expect("large response is file-backed");
+        assert_eq!(response.size_bytes, body.len() as u64);
+        assert_eq!(store.read_all_text(handle).await.unwrap().len(), body.len());
+        store.release(handle).unwrap();
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[tokio::test]
+    async fn send_request_keeps_small_binary_response_file_backed() {
+        let response_message =
+            "HTTP/1.1 200 OK\r\ncontent-type: image/png\r\ncontent-length: 4\r\n\r\nPNG!";
+        let (url, _captured_rx) = spawn_test_server(response_message);
+        let (_cancel_tx, cancel_rx) = watch::channel(false);
+        let root =
+            std::env::temp_dir().join(format!("postnot-http-binary-{}", uuid::Uuid::new_v4()));
+        let store = ResponseBodyStore::new(root.clone());
+        let response = send_request_with_store(
+            &SendRequestPayload {
+                name: "Small image".into(),
+                method: "GET".into(),
+                url,
+                query_params: Vec::new(),
+                headers: Vec::new(),
+                body: RequestBody {
+                    mode: "none".into(),
+                    raw: String::new(),
+                    form: Vec::new(),
+                    files: Vec::new(),
+                },
+                auth: empty_auth(),
+                pre_request_script: String::new(),
+                test_script: String::new(),
+            },
+            &default_settings(),
+            cancel_rx,
+            None,
+            Some(&store),
+        )
+        .await
+        .expect("small image response");
+        let handle = response
+            .body
+            .handle_id()
+            .expect("binary response is file-backed");
+        assert_eq!(
+            tokio::fs::read(store.path_for(handle).unwrap())
+                .await
+                .unwrap(),
+            b"PNG!"
+        );
+        store.release(handle).unwrap();
+        std::fs::remove_dir_all(root).ok();
     }
 
     #[tokio::test]
@@ -536,12 +762,15 @@ mod tests {
         .expect("response should succeed");
 
         let events = progress_events.lock().expect("progress events lock");
-        assert_eq!(response.size_bytes, body.len());
+        assert_eq!(response.size_bytes, body.len() as u64);
         assert!(
             events.len() >= 2,
             "expected initial and finished progress events"
         );
-        assert_eq!(events.first().unwrap().content_length, Some(body.len() as u64));
+        assert_eq!(
+            events.first().unwrap().content_length,
+            Some(body.len() as u64)
+        );
         assert!(events.last().unwrap().finished);
         assert!(events
             .iter()
@@ -593,11 +822,15 @@ mod tests {
         assert!(captured
             .head
             .contains("\r\naccept-encoding: gzip, deflate, br\r\n"));
+        let body_text = response
+            .body
+            .inline_text()
+            .expect("test response is inline");
         assert_eq!(
-            response.body_text,
+            body_text,
             format!("{{\"compressed\":true,\"data\":\"{}\"}}", "x".repeat(128))
         );
-        assert_eq!(response.size_bytes, response.body_text.len());
+        assert_eq!(response.size_bytes, body_text.len() as u64);
     }
 
     fn spawn_test_server(response: &str) -> (String, mpsc::Receiver<CapturedRequest>) {

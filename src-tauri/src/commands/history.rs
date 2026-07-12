@@ -20,10 +20,10 @@ pub async fn get_history_entry(
     state: State<'_, AppState>,
     id: String,
 ) -> AppResult<HistoryEntryDetail> {
-    history_service::get_history_entry(state.db(), &id).await
+    history_service::get_history_entry(state.db(), state.response_bodies(), &id).await
 }
 
 #[tauri::command]
 pub async fn clear_history(state: State<'_, AppState>) -> AppResult<()> {
-    history_service::clear_history(state.db()).await
+    history_service::clear_history(state.db(), state.response_bodies()).await
 }

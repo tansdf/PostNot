@@ -59,13 +59,34 @@ export type RequestDraft = {
   testScript: string;
 };
 
+export type ResponsePresentation = "text" | "json" | "image" | "binary";
+
+export type ResponseBody =
+  | {
+      mode: "inline";
+      text: string;
+      sizeBytes: number;
+      contentType: string | null;
+      charset: string | null;
+      presentation: ResponsePresentation;
+    }
+  | {
+      mode: "file";
+      handleId: string;
+      previewText: string;
+      sizeBytes: number;
+      contentType: string | null;
+      charset: string | null;
+      presentation: ResponsePresentation;
+    };
+
 export type ResponsePayload = {
   statusCode: number | null;
   statusText: string;
   durationMs: number;
   sizeBytes: number;
   headers: KeyValueRow[];
-  bodyText: string;
+  body: ResponseBody;
   errorText: string;
   executedAt: string;
 };
@@ -154,7 +175,7 @@ export type HistoryEntryDetail = {
   durationMs: number;
   requestSnapshot: RequestDraft;
   responseHeaders: KeyValueRow[];
-  responseBodyText: string;
+  responseBody: ResponseBody;
   errorText: string;
   executedAt: string;
 };
@@ -242,6 +263,15 @@ export type ImportResult = {
   collectionName: string;
   importedRequestCount: number;
   createdCollection: boolean;
+  details?: ImportDetails | null;
+};
+
+export type ImportDetails = {
+  format: string;
+  summary: string;
+  importedItems: string[];
+  warnings: string[];
+  errors: string[];
 };
 
 export type CurlImportInput = {
@@ -600,8 +630,13 @@ export function cloneRequestDraft(request: RequestDraft): RequestDraft {
 export function cloneResponsePayload(response: ResponsePayload): ResponsePayload {
   return {
     ...response,
+    body: { ...response.body },
     headers: response.headers.map((header) => ({ ...header }))
   };
+}
+
+export function inlineResponseText(response: ResponsePayload): string {
+  return response.body.mode === "inline" ? response.body.text : response.body.previewText;
 }
 
 export function cloneRequestScriptExecution(execution: RequestScriptExecution): RequestScriptExecution {

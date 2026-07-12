@@ -3807,6 +3807,28 @@ body.collection-dnd-active {
   word-break: break-word;
 }
 
+.notification-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.notification-action-button {
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: var(--radius-compact);
+  border: 1px solid color-mix(in srgb, var(--notification-accent) 34%, var(--border-soft));
+  background: color-mix(in srgb, var(--notification-accent) 10%, var(--control-bg));
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.notification-action-button:hover {
+  background: color-mix(in srgb, var(--notification-accent) 16%, var(--control-hover-bg));
+}
+
 .notification-close {
   width: 28px;
   height: 28px;
@@ -3817,6 +3839,40 @@ body.collection-dnd-active {
   color: var(--text-secondary);
   font-size: 0.84rem;
   font-weight: 700;
+}
+
+.notification-details-body {
+  display: grid;
+  gap: 12px;
+}
+
+.notification-details-body p,
+.notification-details-body ul {
+  margin: 0;
+}
+
+.notification-details-body h3 {
+  margin: 4px 0 0;
+  color: var(--text-primary);
+  font-size: var(--font-section-title);
+}
+
+.notification-details-body ul {
+  max-height: 220px;
+  overflow: auto;
+  padding-left: 20px;
+  color: var(--text-secondary);
+}
+
+.notification-details-body pre {
+  max-height: 260px;
+  overflow: auto;
+  margin: 0;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-code);
+  color: var(--text-primary);
+  white-space: pre-wrap;
 }
 
 .notification-close:hover {
@@ -4181,6 +4237,116 @@ iframe.large-response-viewer {
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-soft);
   background: var(--bg-code, var(--bg-panel-strong));
+}
+
+.virtual-response {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.virtual-response-toolbar,
+.virtual-response-actions,
+.response-find-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.virtual-response-toolbar {
+  justify-content: space-between;
+  color: var(--text-secondary);
+  font-size: var(--font-meta);
+}
+
+.response-find-bar {
+  padding: var(--space-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-subtle);
+}
+
+.response-find-bar .text-input {
+  min-width: min(18rem, 100%);
+  flex: 1 1 14rem;
+}
+
+.response-find-case {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--font-meta);
+  white-space: nowrap;
+}
+
+.response-find-status {
+  min-width: 5.5rem;
+  color: var(--text-secondary);
+  font-size: var(--font-meta);
+  text-align: right;
+}
+
+.virtual-response-viewport {
+  min-height: clamp(18rem, 62vh, 44rem);
+  overflow: auto;
+  scrollbar-gutter: stable;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--bg-code);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--font-code);
+  line-height: 1.55;
+  contain: strict;
+}
+
+.virtual-response-row {
+  min-height: 1.55em;
+  margin: 0;
+  padding: 0 var(--space-4);
+  font: inherit;
+  line-height: inherit;
+  white-space: pre;
+  overflow-wrap: normal;
+}
+
+.virtual-response-wrap .virtual-response-row {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.virtual-response-row mark {
+  border-radius: 2px;
+  background: var(--warning);
+  color: var(--bg-app);
+}
+
+.virtual-response-loading {
+  display: grid;
+  min-height: 12rem;
+  place-items: center;
+  color: var(--text-secondary);
+}
+
+.virtual-response-image-wrap {
+  display: grid;
+  min-height: clamp(18rem, 62vh, 44rem);
+  max-height: clamp(18rem, 62vh, 44rem);
+  place-items: center;
+  overflow: auto;
+  padding: var(--space-4);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--bg-code);
+}
+
+.virtual-response-image-wrap img {
+  display: block;
+  max-width: 100%;
+  height: auto;
 }
 
 .jt-key { color: var(--syntax-key); }

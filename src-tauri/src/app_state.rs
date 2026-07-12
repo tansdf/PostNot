@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::{
     error::{AppError, AppResult},
-    services::secret_store_service::SecretStore,
+    services::{response_body_service::ResponseBodyStore, secret_store_service::SecretStore},
 };
 
 struct InFlightRequest {
@@ -20,16 +20,26 @@ pub struct AppState {
     secret_store: Arc<dyn SecretStore>,
     in_flight_request: Mutex<Option<InFlightRequest>>,
     pending_update: Mutex<Option<Update>>,
+    response_bodies: ResponseBodyStore,
 }
 
 impl AppState {
-    pub fn new(db: SqlitePool, secret_store: Arc<dyn SecretStore>) -> Self {
+    pub fn new(
+        db: SqlitePool,
+        secret_store: Arc<dyn SecretStore>,
+        response_bodies: ResponseBodyStore,
+    ) -> Self {
         Self {
             db,
             secret_store,
             in_flight_request: Mutex::new(None),
             pending_update: Mutex::new(None),
+            response_bodies,
         }
+    }
+
+    pub fn response_bodies(&self) -> &ResponseBodyStore {
+        &self.response_bodies
     }
 
     pub fn db(&self) -> &SqlitePool {

@@ -5,7 +5,7 @@ use uuid::Uuid;
 use crate::{
     domain::{
         collections::CreateCollectionInput,
-        imports::ImportResult,
+        imports::{ImportDetails, ImportResult},
         requests::{FileRow, KeyValueRow, RequestAuth, RequestBody, SendRequestPayload},
     },
     error::{AppError, AppResult},
@@ -21,37 +21,59 @@ pub(super) async fn import_curl_request(
 ) -> AppResult<ImportResult> {
     let request = parse_curl_command(source)?;
 
-    let (collection_id, collection_name, created_collection) =
-        if let Some(collection_id) = target_collection_id {
-            let collection = collections_service::list_collections(pool)
-                .await?
-                .into_iter()
-                .find(|item| item.id == collection_id)
-                .ok_or_else(|| AppError::Message("Target collection not found.".to_string()))?;
+    if let Some(collection_id) = target_collection_id {
+        let collection = collections_service::list_collections(pool)
+            .await?
+            .into_iter()
+            .find(|item| item.id == collection_id)
+            .ok_or_else(|| AppError::Message("Target collection not found.".to_string()))?;
 
-            (collection.id, collection.name, false)
-        } else {
-            let created = collections_service::create_collection(
-                pool,
-                &CreateCollectionInput {
-                    name: "Imported cURL".to_string(),
-                    description: "Requests imported from cURL.".to_string(),
-                    pre_request_script: String::new(),
-                    test_script: String::new(),
-                },
-            )
-            .await?;
+        collections_service::save_request(pool, &collection.id, None, &request).await?;
 
-            (created.id, created.name, true)
-        };
+        return Ok(ImportResult {
+            collection_id: collection.id,
+            collection_name: collection.name,
+            imported_request_count: 1,
+            created_collection: false,
+            details: Some(ImportDetails {
+                format: "curl".to_string(),
+                summary: "1 request imported from cURL.".to_string(),
+                imported_items: vec![request.name.clone()],
+                warnings: Vec::new(),
+                errors: Vec::new(),
+            }),
+        });
+    }
 
-    collections_service::save_request(pool, &collection_id, None, &request).await?;
+    let created = collections_service::import_collection_atomic(
+        pool,
+        &CreateCollectionInput {
+            name: "Imported cURL".to_string(),
+            description: "Requests imported from cURL.".to_string(),
+            pre_request_script: String::new(),
+            test_script: String::new(),
+        },
+        &[],
+        &[collections_service::ImportCollectionRequest {
+            parent_id: None,
+            sort_order: 0,
+            request: request.clone(),
+        }],
+    )
+    .await?;
 
     Ok(ImportResult {
-        collection_id,
-        collection_name,
+        collection_id: created.id,
+        collection_name: created.name,
         imported_request_count: 1,
-        created_collection,
+        created_collection: true,
+        details: Some(ImportDetails {
+            format: "curl".to_string(),
+            summary: "1 request imported from cURL.".to_string(),
+            imported_items: vec![request.name],
+            warnings: Vec::new(),
+            errors: Vec::new(),
+        }),
     })
 }
 

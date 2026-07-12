@@ -1,6 +1,6 @@
 import { browser } from "$app/environment";
 
-import { getRequestWorkspaceState, saveRequestWorkspaceState } from "$lib/api/commands";
+import { getRequestWorkspaceState, releaseResponseBody, saveRequestWorkspaceState } from "$lib/api/commands";
 import type {
   RequestDraft,
   RequestScriptExecution,
@@ -290,6 +290,10 @@ class RequestWorkspaceStore {
     response: ResponsePayload | null,
     scriptExecution: RequestScriptExecution = createEmptyRequestScriptExecution()
   ) {
+    const previous = this.tabs.find((tab) => tab.id === tabId)?.response;
+    if (previous?.body.mode === "file" && previous.body.handleId !== (response?.body.mode === "file" ? response.body.handleId : "")) {
+      void releaseResponseBody(previous.body.handleId);
+    }
     this.updateTab(tabId, (tab) => {
       tab.response = response ? cloneResponsePayload(response) : null;
       tab.scriptExecution = normalizeScriptExecution(scriptExecution);
@@ -361,6 +365,10 @@ class RequestWorkspaceStore {
     const tab = this.tabs.find((item) => item.id === tabId) ?? null;
     if (!tab) {
       return "missing" as const;
+    }
+
+    if (tab.response?.body.mode === "file") {
+      void releaseResponseBody(tab.response.body.handleId);
     }
 
     if (this.inFlightTabId === tabId) {

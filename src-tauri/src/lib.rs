@@ -23,11 +23,22 @@ pub fn run() -> Result<(), String> {
         .setup(|app| {
             let database = tauri::async_runtime::block_on(db::init(app.handle()))?;
             tauri::async_runtime::block_on(services::settings_service::ensure_defaults(&database))?;
-            tauri::async_runtime::block_on(services::collections_service::ensure_starter_collection(
-                &database,
-            ))?;
+            tauri::async_runtime::block_on(
+                services::collections_service::ensure_starter_collection(&database),
+            )?;
             let secret_store = services::secret_store_service::default_secret_store();
-            app.manage(app_state::AppState::new(database, secret_store));
+            let response_bodies = services::response_body_service::ResponseBodyStore::new(
+                storage::paths::response_bodies_dir(app.handle())?,
+            );
+            let referenced_bodies = tauri::async_runtime::block_on(
+                services::history_service::stored_response_body_paths(&database),
+            )?;
+            tauri::async_runtime::block_on(response_bodies.reconcile(&referenced_bodies))?;
+            app.manage(app_state::AppState::new(
+                database,
+                secret_store,
+                response_bodies,
+            ));
             if let Some(window) = app.get_webview_window("main") {
                 services::window_state_service::restore_and_track_main_window(&window);
             }
@@ -38,6 +49,17 @@ pub fn run() -> Result<(), String> {
             commands::requests::preview_request,
             commands::requests::cancel_active_request,
             commands::requests::pick_multipart_files,
+            commands::responses::read_response_body_window,
+            commands::responses::search_response_body,
+            commands::responses::cancel_response_search,
+            commands::responses::find_response_match,
+            commands::responses::read_response_body_text,
+            commands::responses::retain_response_body,
+            commands::responses::release_response_body,
+            commands::responses::get_response_body_path,
+            commands::responses::save_response_body,
+            commands::responses::format_response_body,
+            commands::responses::cancel_response_body_job,
             commands::settings::get_settings,
             commands::settings::update_settings,
             commands::settings::get_request_workspace_state,

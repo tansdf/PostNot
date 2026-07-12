@@ -1,4 +1,4 @@
-import { sendRequest } from "$lib/api/commands";
+import { readResponseBodyText, releaseResponseBody, sendRequest } from "$lib/api/commands";
 import {
   createEnvironmentVariable,
   createFileRow,
@@ -571,6 +571,7 @@ function createVariableFacade(variables: VariableMap, runtimeContext: ScriptRunt
 }
 
 function createResponseFacade(response: ResponsePayload) {
+  const bodyText = response.body.mode === "inline" ? response.body.text : response.body.previewText;
   return {
     code: response.statusCode,
     status: response.statusText,
@@ -579,10 +580,10 @@ function createResponseFacade(response: ResponsePayload) {
     errorText: response.errorText,
     executedAt: response.executedAt,
     text() {
-      return response.bodyText;
+      return bodyText;
     },
     json() {
-      return JSON.parse(response.bodyText);
+      return JSON.parse(bodyText);
     },
     header(name: string) {
       const normalizedName = asString(name).trim().toLowerCase();
@@ -801,7 +802,26 @@ function createHttpFacade() {
           throw new Error(CONCURRENT_HELPER_REQUEST_ERROR);
         }
 
-        activeSend = sendRequest(preparedRequest, { persistHistory: false }).then((result) => result.response);
+        activeSend = sendRequest(preparedRequest, { persistHistory: false }).then(async (result) => {
+          const response = result.response;
+          if (response.body.mode !== "file") return response;
+          try {
+            const text = await readResponseBodyText(response.body.handleId);
+            return {
+              ...response,
+              body: {
+                mode: "inline" as const,
+                text,
+                sizeBytes: response.body.sizeBytes,
+                contentType: response.body.contentType,
+                charset: response.body.charset,
+                presentation: response.body.presentation
+              }
+            };
+          } finally {
+            void releaseResponseBody(response.body.handleId);
+          }
+        });
 
         try {
           const response = await activeSend;
@@ -852,6 +872,21 @@ export function createEmptyRequestScriptExecution() {
   return createEmptyExecution();
 }
 
+let sharedScriptWorker: Worker | null = null;
+let scriptWorkerQueue: Promise<void> = Promise.resolve();
+
+function getSharedScriptWorker() {
+  sharedScriptWorker ??= new Worker(new URL("./request-script-worker.ts", import.meta.url), {
+    type: "module"
+  });
+  return sharedScriptWorker;
+}
+
+function resetSharedScriptWorker() {
+  sharedScriptWorker?.terminate();
+  sharedScriptWorker = null;
+}
+
 async function runScriptInWorker<T>(
   request: ScriptWorkerRequest,
   runtimeContext: ScriptRuntimeContext
@@ -860,14 +895,25 @@ async function runScriptInWorker<T>(
     throw new Error("Script workers are unavailable in this runtime.");
   }
 
+  const execute = () => executeScriptInWorker<T>(request, runtimeContext);
+  const result = scriptWorkerQueue.then(execute, execute);
+  scriptWorkerQueue = result.then(() => undefined, () => undefined);
+  return result;
+}
+
+async function executeScriptInWorker<T>(
+  request: ScriptWorkerRequest,
+  runtimeContext: ScriptRuntimeContext
+): Promise<T> {
   const workerRequest = cloneScriptWorkerRequest(request);
-  const worker = new Worker(new URL("./request-script-worker.ts", import.meta.url), {
-    type: "module"
-  });
+  const helperNeedsBody = workerRequestUsesResponseBody(workerRequest);
+  const worker = getSharedScriptWorker();
 
   return new Promise<T>((resolve, reject) => {
     let settled = false;
+    const helperHandles = new Set<string>();
     const timeoutId = window.setTimeout(() => {
+      resetSharedScriptWorker();
       finish("reject", new Error("Script execution timed out."));
     }, SCRIPT_WORKER_TIMEOUT_MS);
 
@@ -878,7 +924,9 @@ async function runScriptInWorker<T>(
 
       settled = true;
       window.clearTimeout(timeoutId);
-      worker.terminate();
+      worker.onmessage = null;
+      worker.onerror = null;
+      for (const handleId of helperHandles) void releaseResponseBody(handleId);
 
       if (mode === "resolve") {
         resolve(value as T);
@@ -906,15 +954,36 @@ async function runScriptInWorker<T>(
 
       if (message.type === "http-send") {
         void sendRequest(message.request, { persistHistory: false })
-          .then((result) => {
+          .then(async (result) => {
             if (settled) {
               return;
+            }
+            let response = result.response;
+            if (response.body.mode === "file") {
+              const handleId = response.body.handleId;
+              helperHandles.add(handleId);
+              if (helperNeedsBody) {
+                const text = await readResponseBodyText(handleId);
+                response = {
+                  ...response,
+                  body: {
+                    mode: "inline",
+                    text,
+                    sizeBytes: response.body.sizeBytes,
+                    contentType: response.body.contentType,
+                    charset: response.body.charset,
+                    presentation: response.body.presentation
+                  }
+                };
+                void releaseResponseBody(handleId);
+                helperHandles.delete(handleId);
+              }
             }
             worker.postMessage({
               type: "bridge-result",
               id: workerRequest.id,
               bridgeId: message.bridgeId,
-              value: result.response
+              value: response
             } satisfies ScriptMainToWorkerMessage);
           })
           .catch((error) => {
@@ -969,11 +1038,23 @@ async function runScriptInWorker<T>(
     };
 
     worker.onerror = (event) => {
+      resetSharedScriptWorker();
       finish("reject", new Error(event.message || "Script worker failed."));
     };
 
     worker.postMessage(workerRequest satisfies ScriptMainToWorkerMessage);
   });
+}
+
+function workerRequestUsesResponseBody(request: ScriptWorkerRequest) {
+  const scripts = request.kind === "test"
+    ? [request.request.testScript, request.inheritedScripts?.testScript ?? "", ...(request.inheritedScripts?.folderScripts ?? []).map((folder) => folder.testScript)]
+    : [request.request.preRequestScript, request.inheritedScripts?.preRequestScript ?? "", ...(request.inheritedScripts?.folderScripts ?? []).map((folder) => folder.preRequestScript)];
+  return scriptsUseResponseBody(scripts.join("\n"));
+}
+
+export function scriptsUseResponseBody(source: string) {
+  return /pn\.response\.(?:text|json|raw)\b|\.(?:text|json)\s*\(/.test(source);
 }
 
 function scriptWorkerRequestId(prefix: string) {
@@ -1077,13 +1158,15 @@ export async function runTestScript(
     return createEmptyExecution();
   }
 
+  const workerResponse = await hydrateResponseForTestScripts(response, request, inheritedScripts);
+
   try {
     return await runScriptInWorker(
       {
         id: scriptWorkerRequestId("test"),
         kind: "test",
         request,
-        response,
+        response: workerResponse,
         environmentVariables,
         inheritedScripts,
         activeEnvironment: runtimeContext.activeEnvironment ?? null
@@ -1096,6 +1179,32 @@ export async function runTestScript(
       testScriptErrorText: `Script worker: ${normalizeScriptError(error)}`
     };
   }
+}
+
+async function hydrateResponseForTestScripts(
+  response: ResponsePayload,
+  request: RequestDraft,
+  inheritedScripts: InheritedRequestScripts | null
+): Promise<ResponsePayload> {
+  if (response.body.mode !== "file") return response;
+  const sources = [
+    request.testScript,
+    inheritedScripts?.testScript ?? "",
+    ...(inheritedScripts?.folderScripts ?? []).map((folder) => folder.testScript)
+  ].join("\n");
+  if (!scriptsUseResponseBody(sources)) return response;
+  const text = await readResponseBodyText(response.body.handleId);
+  return {
+    ...response,
+    body: {
+      mode: "inline",
+      text,
+      sizeBytes: response.body.sizeBytes,
+      contentType: response.body.contentType,
+      charset: response.body.charset,
+      presentation: response.body.presentation
+    }
+  };
 }
 
 function hasTestScriptSources(request: RequestDraft, inheritedScripts: InheritedRequestScripts | null) {

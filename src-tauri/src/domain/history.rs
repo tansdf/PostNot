@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::domain::requests::{KeyValueRow, SendRequestPayload};
+use crate::domain::requests::{KeyValueRow, ResponseBody, SendRequestPayload};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -27,7 +27,7 @@ pub struct HistoryEntryDetail {
     pub duration_ms: i64,
     pub request_snapshot: SendRequestPayload,
     pub response_headers: Vec<KeyValueRow>,
-    pub response_body_text: String,
+    pub response_body: ResponseBody,
     pub error_text: String,
     pub executed_at: String,
 }

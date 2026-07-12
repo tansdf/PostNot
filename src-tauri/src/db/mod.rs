@@ -1,4 +1,4 @@
-use std::{fs, str::FromStr};
+use std::{fs, str::FromStr, time::Duration};
 
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous},
@@ -26,10 +26,11 @@ pub async fn init(app: &AppHandle) -> AppResult<SqlitePool> {
         .create_if_missing(true)
         .foreign_keys(true)
         .journal_mode(SqliteJournalMode::Wal)
-        .synchronous(SqliteSynchronous::Normal);
+        .synchronous(SqliteSynchronous::Normal)
+        .busy_timeout(Duration::from_secs(5));
 
     let pool = SqlitePoolOptions::new()
-        .max_connections(1)
+        .max_connections(4)
         .connect_with(options)
         .await?;
 

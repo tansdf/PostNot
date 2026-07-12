@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { RequestScriptExecution, ResponsePayload } from "$lib/api/types";
   import JsonViewer from "$lib/components/response/JsonViewer.svelte";
+  import VirtualResponseDocument from "$lib/components/response/VirtualResponseDocument.svelte";
 
   type RequestResponseProgress = {
     downloadedBytes: number;
@@ -13,13 +14,15 @@
     scriptExecution = null,
     isSending = false,
     progress = null,
-    elapsedMs = 0
+    elapsedMs = 0,
+    areTestsRunning = false
   }: {
     response?: ResponsePayload | null;
     scriptExecution?: RequestScriptExecution | null;
     isSending?: boolean;
     progress?: RequestResponseProgress | null;
     elapsedMs?: number;
+    areTestsRunning?: boolean;
   } = $props();
 
   let responseErrorSummary = $derived.by(() => {
@@ -128,7 +131,9 @@
       <div class="feedback feedback-error">{scriptExecution.testScriptErrorText}</div>
     {/if}
 
-    {#if scriptExecution && scriptExecution.tests.length > 0}
+    {#if areTestsRunning}
+      <div class="feedback feedback-info" role="status">Running response tests…</div>
+    {:else if scriptExecution && scriptExecution.tests.length > 0}
       <div class="response-tests">
         <div class="editor-header">
           <h3>Tests</h3>
@@ -171,7 +176,11 @@
 
       <div class="response-column response-body-column">
         <h3>Body</h3>
-        <JsonViewer source={response.bodyText} />
+        {#if response.body.mode === "file"}
+          <VirtualResponseDocument body={response.body} />
+        {:else}
+          <JsonViewer source={response.body.text} />
+        {/if}
       </div>
     </div>
   {:else}

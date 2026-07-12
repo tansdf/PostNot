@@ -434,11 +434,29 @@
 
       notifications.success(
         `${result.importedRequestCount} request${result.importedRequestCount === 1 ? "" : "s"} imported into ${result.collectionName}.`,
-        importFormat === "postman" ? "Collection imported" : "OpenAPI collection imported"
+        importFormat === "postman" ? "Collection imported" : "OpenAPI collection imported",
+        result.details
+          ? {
+              details: {
+                title: importFormat === "postman" ? "Postman import details" : "OpenAPI import details",
+                summary: result.details.summary,
+                items: result.details.importedItems,
+                warnings: result.details.warnings,
+                errors: result.details.errors
+              }
+            }
+          : undefined
       );
       importSource = "";
     } catch (error) {
       importErrorText = error instanceof Error ? error.message : String(error);
+      notifications.error(importErrorText, "Import failed", {
+        details: {
+          title: "Import failure details",
+          summary: "No collection changes were saved.",
+          errors: [importErrorText]
+        }
+      });
     } finally {
       isImporting = false;
     }

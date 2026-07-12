@@ -20,6 +20,7 @@
     listPlaybookRuns,
     listPlaybooks,
     recordPlaybookRunStep,
+    releaseResponseBody,
     reorderPlaybookSteps,
     searchCollectionEntities,
     sendRequest,
@@ -444,6 +445,7 @@
       return { failed: true, reason };
     }
 
+    let responseHandle = "";
     try {
       const context = await getPlaybookExecutionContext(step.id);
       const requestToSend = cloneRequestDraft(context.savedRequest.request);
@@ -465,6 +467,7 @@
 
       updateLiveStep(step.id, { detail: "Sending request." });
       const sendResult = await sendRequest(prepared.request);
+      responseHandle = sendResult.response.body.mode === "file" ? sendResult.response.body.handleId : "";
       const scriptExecution = await runTestScript(
         requestToSend,
         sendResult.response,
@@ -545,6 +548,8 @@
       await recordStepFailure(runId, step, message, null, 0, 0, 0, 0, "");
       updateLiveStep(step.id, { status: "failed", detail: message });
       return { failed: true, reason: message };
+    } finally {
+      if (responseHandle) void releaseResponseBody(responseHandle);
     }
   }
 

@@ -58,6 +58,28 @@ export type SendRequestOptions = {
   persistHistory?: boolean;
 };
 
+export type ResponseBodyRow = {
+  key: string;
+  rowIndex: number;
+  sourceLine: number;
+  segmentIndex: number;
+  text: string;
+  continues: boolean;
+};
+
+export type ResponseBodyWindow = {
+  startRow: number;
+  totalRows: number;
+  rows: ResponseBodyRow[];
+};
+
+export type ResponseSearchResult = {
+  totalMatches: number;
+  capped: boolean;
+  matches: { byteOffset: number; byteLength: number; rowIndex: number }[];
+};
+export type ResponseSearchMatch = ResponseSearchResult["matches"][number];
+
 function createMockResponse(payload: RequestDraft): ResponsePayload {
   return {
     statusCode: payload.method === "POST" ? 201 : 200,
@@ -72,16 +94,23 @@ function createMockResponse(payload: RequestDraft): ResponsePayload {
         enabled: true
       }
     ],
-    bodyText: JSON.stringify(
-      {
-        id: "note_42",
-        title: payload.name || "Sample request",
-        status: "draft",
-        savedLocally: true
-      },
-      null,
-      2
-    ),
+    body: {
+      mode: "inline",
+      text: JSON.stringify(
+        {
+          id: "note_42",
+          title: payload.name || "Sample request",
+          status: "draft",
+          savedLocally: true
+        },
+        null,
+        2
+      ),
+      sizeBytes: 214,
+      contentType: "application/json",
+      charset: "utf-8",
+      presentation: "json"
+    },
     errorText: "",
     executedAt: new Date().toISOString()
   };
@@ -359,7 +388,14 @@ function createMockHistoryDetail(id: string): HistoryEntryDetail {
     durationMs: request.durationMs,
     requestSnapshot: request.requestSnapshot,
     responseHeaders: request.responseHeaders,
-    responseBodyText: request.responseBodyPreview,
+    responseBody: {
+      mode: "inline",
+      text: request.responseBodyPreview,
+      sizeBytes: request.responseBodyPreview.length,
+      contentType: "application/json",
+      charset: "utf-8",
+      presentation: "json"
+    },
     errorText: request.errorText,
     executedAt: request.executedAt
   };
@@ -666,6 +702,75 @@ export async function clearHistory(): Promise<void> {
   }
 
   await invoke("clear_history");
+}
+
+export async function readResponseBodyWindow(input: {
+  handleId: string;
+  startRow: number;
+  rowCount: number;
+  maxBytes?: number;
+  representation?: "raw" | "formatted" | "hex";
+}): Promise<ResponseBodyWindow> {
+  return invoke<ResponseBodyWindow>("read_response_body_window", {
+    input: { ...input, maxBytes: input.maxBytes ?? 1024 * 1024, representation: input.representation ?? "raw" }
+  });
+}
+
+export async function searchResponseBody(input: {
+  handleId: string;
+  query: string;
+  caseSensitive: boolean;
+  searchId: string;
+  representation: "raw" | "formatted" | "hex";
+}): Promise<ResponseSearchResult> {
+  return invoke<ResponseSearchResult>("search_response_body", { input });
+}
+
+export async function cancelResponseSearch(searchId: string): Promise<void> {
+  if (!hasTauriRuntime()) return;
+  await invoke("cancel_response_search", { searchId });
+}
+
+export async function findResponseMatch(input: {
+  handleId: string;
+  query: string;
+  caseSensitive: boolean;
+  fromOffset: number;
+  direction: "next" | "previous";
+  wrap: boolean;
+  representation: "raw" | "formatted" | "hex";
+}): Promise<ResponseSearchMatch | null> {
+  return invoke("find_response_match", { input });
+}
+
+export async function readResponseBodyText(handleId: string): Promise<string> {
+  return invoke<string>("read_response_body_text", { handleId });
+}
+
+export async function retainResponseBody(handleId: string): Promise<void> {
+  if (!hasTauriRuntime()) return;
+  await invoke("retain_response_body", { handleId });
+}
+
+export async function releaseResponseBody(handleId: string): Promise<void> {
+  if (!hasTauriRuntime()) return;
+  await invoke("release_response_body", { handleId });
+}
+
+export async function getResponseBodyPath(handleId: string): Promise<string> {
+  return invoke<string>("get_response_body_path", { handleId });
+}
+
+export async function saveResponseBody(handleId: string, suggestedName?: string): Promise<string | null> {
+  return invoke<string | null>("save_response_body", { handleId, suggestedName });
+}
+
+export async function formatResponseBody(handleId: string, jobId: string): Promise<import("$lib/api/types").ResponseBody> {
+  return invoke("format_response_body", { handleId, jobId });
+}
+
+export async function cancelResponseBodyJob(jobId: string): Promise<void> {
+  await invoke("cancel_response_body_job", { jobId });
 }
 
 export async function getRequestWorkspaceState(): Promise<RequestWorkspaceState | null> {
@@ -1211,7 +1316,14 @@ export async function importRequests(input: ImportRequestInput): Promise<ImportR
             ? "Imported OpenAPI collection"
             : "Imported Postman collection",
       importedRequestCount: input.format === "curl" ? 1 : 3,
-      createdCollection: !input.targetCollectionId
+      createdCollection: !input.targetCollectionId,
+      details: {
+        format: input.format,
+        summary: `Mock ${input.format} import completed.`,
+        importedItems: ["Example request"],
+        warnings: [],
+        errors: []
+      }
     };
   }
 

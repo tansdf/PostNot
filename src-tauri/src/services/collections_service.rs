@@ -16,6 +16,23 @@ use crate::{
     error::{AppError, AppResult},
 };
 
+#[derive(Debug, Clone)]
+pub struct ImportCollectionFolder {
+    pub id: String,
+    pub parent_id: Option<String>,
+    pub sort_order: i64,
+    pub name: String,
+    pub pre_request_script: String,
+    pub test_script: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct ImportCollectionRequest {
+    pub parent_id: Option<String>,
+    pub sort_order: i64,
+    pub request: SendRequestPayload,
+}
+
 const STARTER_COLLECTION_SEEDED_KEY: &str = "starter_collection_seeded";
 const STARTER_COLLECTION_NAME: &str = "My Collection";
 const STARTER_COLLECTION_DESCRIPTION: &str = "Default workspace for saved requests.";
@@ -63,6 +80,7 @@ pub async fn ensure_starter_collection(pool: &SqlitePool) -> AppResult<()> {
     .execute(pool)
     .await?;
 
+    rebuild_collection_search_index(pool).await?;
     Ok(())
 }
 
@@ -116,91 +134,77 @@ pub async fn search_collection_entities(
         return Ok(Vec::new());
     }
 
-    let collections = list_search_collection_rows(pool).await?;
-    let item_rows = list_search_collection_item_rows(pool).await?;
-    let collection_name_by_id: HashMap<String, String> = collections
-        .iter()
-        .map(|collection| (collection.id.clone(), collection.name.clone()))
-        .collect();
-    let items_by_id: HashMap<String, SearchCollectionItemRow> = item_rows
-        .iter()
-        .cloned()
-        .map(|item| (item.id.clone(), item))
-        .collect();
+    let max_results = limit.unwrap_or(30).clamp(1, 50);
+    let mut search_sql = String::from(
+        r#"
+        SELECT entity_id, kind, collection_id, parent_id, name, path, method, url,
+               ancestor_ids, ancestor_names, updated_at, request_count
+        FROM collection_search_fts
+        WHERE "#,
+    );
+    for (index, _) in tokens.iter().enumerate() {
+        if index > 0 {
+            search_sql.push_str(" AND ");
+        }
+        search_sql.push_str(
+            "(lower(coalesce(name, '')) LIKE ? ESCAPE '\\' OR lower(coalesce(path, '')) LIKE ? ESCAPE '\\' OR lower(coalesce(method, '')) LIKE ? ESCAPE '\\' OR lower(coalesce(url, '')) LIKE ? ESCAPE '\\')",
+        );
+    }
+    search_sql.push_str(" ORDER BY updated_at DESC, name ASC");
+
+    let mut search_query = sqlx::query(&search_sql);
+    for token in &tokens {
+        let pattern = search_like_pattern(token);
+        search_query = search_query
+            .bind(pattern.clone())
+            .bind(pattern.clone())
+            .bind(pattern.clone())
+            .bind(pattern);
+    }
+    let rows = search_query.fetch_all(pool).await?;
 
     let mut ranked_results = Vec::new();
 
-    for collection in collections {
+    for row in rows {
+        let name: String = row.get("name");
+        let path_text: String = row.get("path");
+        let method: Option<String> = row.get("method");
+        let url: Option<String> = row.get("url");
         if let Some(rank) = classify_search_match(
-            &collection.name,
-            &collection.name,
-            None,
-            None,
-            &tokens,
-            trimmed_query,
-        ) {
-            ranked_results.push(RankedSearchResult {
-                rank,
-                updated_at: collection.updated_at.clone(),
-                name: collection.name.clone(),
-                result: CollectionSearchResult {
-                    id: collection.id.clone(),
-                    kind: "collection".to_string(),
-                    collection_id: collection.id,
-                    parent_id: None,
-                    name: collection.name.clone(),
-                    method: None,
-                    url: None,
-                    updated_at: collection.updated_at,
-                    collection_name: collection.name,
-                    ancestor_ids: Vec::new(),
-                    ancestor_names: Vec::new(),
-                    request_count: Some(collection.request_count),
-                },
-            });
-        }
-    }
-
-    for item in item_rows {
-        let Some(collection_name) = collection_name_by_id.get(&item.collection_id).cloned() else {
-            continue;
-        };
-        let ancestors = build_ancestors(&item, &items_by_id);
-        let ancestor_ids: Vec<String> = ancestors
-            .iter()
-            .map(|ancestor| ancestor.id.clone())
-            .collect();
-        let ancestor_names: Vec<String> = ancestors
-            .iter()
-            .map(|ancestor| ancestor.name.clone())
-            .collect();
-        let path_text = format_search_path_text(&collection_name, &ancestor_names);
-
-        if let Some(rank) = classify_search_match(
-            &item.name,
+            &name,
             &path_text,
-            item.method.as_deref(),
-            item.url.as_deref(),
+            method.as_deref(),
+            url.as_deref(),
             &tokens,
             trimmed_query,
         ) {
+            let kind: String = row.get("kind");
+            let updated_at: String = row.get("updated_at");
             ranked_results.push(RankedSearchResult {
                 rank,
-                updated_at: item.updated_at.clone(),
-                name: item.name.clone(),
+                updated_at: updated_at.clone(),
+                name: name.clone(),
                 result: CollectionSearchResult {
-                    id: item.id,
-                    kind: item.kind,
-                    collection_id: item.collection_id,
-                    parent_id: item.parent_id,
-                    name: item.name,
-                    method: item.method,
-                    url: item.url,
-                    updated_at: item.updated_at,
-                    collection_name,
-                    ancestor_ids,
-                    ancestor_names,
-                    request_count: None,
+                    id: row.get("entity_id"),
+                    kind: kind.clone(),
+                    collection_id: row.get("collection_id"),
+                    parent_id: row.get("parent_id"),
+                    name: name.clone(),
+                    method,
+                    url,
+                    updated_at,
+                    collection_name: path_text
+                        .split(" / ")
+                        .next()
+                        .unwrap_or(name.as_str())
+                        .to_string(),
+                    ancestor_ids: decode_search_list(&row.get::<String, _>("ancestor_ids"))?,
+                    ancestor_names: decode_search_list(&row.get::<String, _>("ancestor_names"))?,
+                    request_count: if kind == "collection" {
+                        Some(row.get::<String, _>("request_count").parse().unwrap_or(0))
+                    } else {
+                        None
+                    },
                 },
             });
         }
@@ -213,8 +217,6 @@ pub async fn search_collection_entities(
             .then_with(|| right.updated_at.cmp(&left.updated_at))
             .then_with(|| left.name.cmp(&right.name))
     });
-
-    let max_results = limit.unwrap_or(30).clamp(1, 50);
 
     Ok(ranked_results
         .into_iter()
@@ -254,7 +256,103 @@ pub async fn create_collection(
     .execute(pool)
     .await?;
 
+    rebuild_collection_search_index_for_collection(pool, &id).await?;
     get_collection(pool, &id).await
+}
+
+pub async fn import_collection_atomic(
+    pool: &SqlitePool,
+    input: &CreateCollectionInput,
+    folders: &[ImportCollectionFolder],
+    requests: &[ImportCollectionRequest],
+) -> AppResult<CollectionSummary> {
+    let name = input.name.trim();
+    if name.is_empty() {
+        return Err(AppError::Message(
+            "Collection name is required.".to_string(),
+        ));
+    }
+
+    let mut transaction = pool.begin().await?;
+    let collection_id = Uuid::new_v4().to_string();
+    let now = now_iso();
+
+    sqlx::query(
+        r#"
+        INSERT INTO collections (
+          id, name, description, prerequest_script, test_script, created_at, updated_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+        "#,
+    )
+    .bind(&collection_id)
+    .bind(name)
+    .bind(input.description.trim())
+    .bind(&input.pre_request_script)
+    .bind(&input.test_script)
+    .bind(&now)
+    .bind(&now)
+    .execute(&mut *transaction)
+    .await?;
+
+    for folder in folders {
+        sqlx::query(
+            r#"
+            INSERT INTO collection_items (
+              id, collection_id, parent_id, kind, name, sort_order, method, url,
+              query_params_json, headers_json, body_json, auth_json,
+              prerequest_script, test_script, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, 'folder', ?4, ?5, NULL, NULL, '[]', '[]', '{}', '{}', ?6, ?7, ?8, ?9)
+            "#,
+        )
+        .bind(&folder.id)
+        .bind(&collection_id)
+        .bind(folder.parent_id.as_deref())
+        .bind(folder.name.trim())
+        .bind(folder.sort_order)
+        .bind(&folder.pre_request_script)
+        .bind(&folder.test_script)
+        .bind(&now)
+        .bind(&now)
+        .execute(&mut *transaction)
+        .await?;
+    }
+
+    for imported_request in requests {
+        let request = &imported_request.request;
+        let item_id = Uuid::new_v4().to_string();
+        let item_name = saved_request_name(request);
+
+        sqlx::query(
+            r#"
+            INSERT INTO collection_items (
+              id, collection_id, parent_id, kind, name, sort_order, method, url,
+              query_params_json, headers_json, body_json, auth_json,
+              prerequest_script, test_script, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, 'request', ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
+            "#,
+        )
+        .bind(&item_id)
+        .bind(&collection_id)
+        .bind(imported_request.parent_id.as_deref())
+        .bind(&item_name)
+        .bind(imported_request.sort_order)
+        .bind(&request.method)
+        .bind(&request.url)
+        .bind(serde_json::to_string(&request.query_params)?)
+        .bind(serde_json::to_string(&request.headers)?)
+        .bind(serde_json::to_string(&request.body)?)
+        .bind(serde_json::to_string(&request.auth)?)
+        .bind(&request.pre_request_script)
+        .bind(&request.test_script)
+        .bind(&now)
+        .bind(&now)
+        .execute(&mut *transaction)
+        .await?;
+    }
+
+    transaction.commit().await?;
+    rebuild_collection_search_index_for_collection(pool, &collection_id).await?;
+    get_collection(pool, &collection_id).await
 }
 
 pub async fn create_collection_folder(
@@ -313,6 +411,7 @@ pub async fn create_collection_folder(
 
     touch_collection_in_transaction(&mut transaction, collection_id, &now).await?;
     transaction.commit().await?;
+    rebuild_collection_search_index_for_collection(pool, &collection_id).await?;
     get_collection_item_summary(pool, &item_id).await
 }
 
@@ -358,6 +457,7 @@ pub async fn update_collection_folder(
     .await?;
 
     touch_collection(pool, &collection_id).await?;
+    rebuild_collection_search_index_for_collection(pool, &collection_id).await?;
     get_collection_item_summary(pool, item_id).await
 }
 
@@ -484,6 +584,10 @@ pub async fn move_collection_item(
     }
 
     transaction.commit().await?;
+    rebuild_collection_search_index_for_collection(pool, &source_collection_id).await?;
+    if source_collection_id != target_collection_id {
+        rebuild_collection_search_index_for_collection(pool, target_collection_id).await?;
+    }
     get_collection_item_summary(pool, item_id).await
 }
 
@@ -523,6 +627,7 @@ pub async fn update_collection(
         return Err(AppError::Message("Collection not found.".to_string()));
     }
 
+    rebuild_collection_search_index_for_collection(pool, collection_id).await?;
     get_collection(pool, collection_id).await
 }
 
@@ -532,6 +637,7 @@ pub async fn delete_collection(pool: &SqlitePool, collection_id: &str) -> AppRes
         .execute(pool)
         .await?;
 
+    rebuild_collection_search_index_for_collection(pool, collection_id).await?;
     Ok(())
 }
 
@@ -615,6 +721,7 @@ pub async fn save_request(
     .await?;
 
     touch_collection(pool, collection_id).await?;
+    rebuild_collection_search_index_for_collection(pool, &collection_id).await?;
     get_saved_request_summary(pool, &item_id).await
 }
 
@@ -668,6 +775,7 @@ pub async fn update_saved_request(
     .await?;
 
     touch_collection(pool, &collection_id).await?;
+    rebuild_collection_search_index_for_collection(pool, &collection_id).await?;
     get_saved_request_summary(pool, item_id).await
 }
 
@@ -721,6 +829,7 @@ pub async fn delete_collection_item(pool: &SqlitePool, item_id: &str) -> AppResu
         .await?;
 
     touch_collection(pool, &collection_id).await?;
+    rebuild_collection_search_index_for_collection(pool, &collection_id).await?;
     Ok(())
 }
 
@@ -1034,7 +1143,10 @@ async fn list_collection_item_rows(
         .collect())
 }
 
-async fn list_search_collection_rows(pool: &SqlitePool) -> AppResult<Vec<SearchCollectionRow>> {
+async fn list_search_collection_rows(
+    pool: &SqlitePool,
+    collection_id: Option<&str>,
+) -> AppResult<Vec<SearchCollectionRow>> {
     let rows = sqlx::query(
         r#"
         SELECT
@@ -1046,9 +1158,11 @@ async fn list_search_collection_rows(pool: &SqlitePool) -> AppResult<Vec<SearchC
         LEFT JOIN collection_items
           ON collection_items.collection_id = collections.id
           AND collection_items.kind = 'request'
+        WHERE (?1 IS NULL OR collections.id = ?1)
         GROUP BY collections.id
         "#,
     )
+    .bind(collection_id)
     .fetch_all(pool)
     .await?;
 
@@ -1065,14 +1179,17 @@ async fn list_search_collection_rows(pool: &SqlitePool) -> AppResult<Vec<SearchC
 
 async fn list_search_collection_item_rows(
     pool: &SqlitePool,
+    collection_id: Option<&str>,
 ) -> AppResult<Vec<SearchCollectionItemRow>> {
     let rows = sqlx::query(
         r#"
         SELECT id, collection_id, parent_id, kind, name, method, url, updated_at
         FROM collection_items
+        WHERE (?1 IS NULL OR collection_id = ?1)
         ORDER BY updated_at DESC, name ASC
         "#,
     )
+    .bind(collection_id)
     .fetch_all(pool)
     .await?;
 
@@ -1089,6 +1206,104 @@ async fn list_search_collection_item_rows(
             updated_at: row.get("updated_at"),
         })
         .collect())
+}
+
+pub async fn rebuild_collection_search_index(pool: &SqlitePool) -> AppResult<()> {
+    rebuild_collection_search_index_partition(pool, None).await
+}
+
+pub async fn rebuild_collection_search_index_for_collection(
+    pool: &SqlitePool,
+    collection_id: &str,
+) -> AppResult<()> {
+    rebuild_collection_search_index_partition(pool, Some(collection_id)).await
+}
+
+async fn rebuild_collection_search_index_partition(
+    pool: &SqlitePool,
+    collection_id: Option<&str>,
+) -> AppResult<()> {
+    let collections = list_search_collection_rows(pool, collection_id).await?;
+    let item_rows = list_search_collection_item_rows(pool, collection_id).await?;
+    let collection_name_by_id: HashMap<String, String> = collections
+        .iter()
+        .map(|collection| (collection.id.clone(), collection.name.clone()))
+        .collect();
+    let items_by_id: HashMap<String, SearchCollectionItemRow> = item_rows
+        .iter()
+        .cloned()
+        .map(|item| (item.id.clone(), item))
+        .collect();
+
+    let mut transaction = pool.begin().await?;
+    if let Some(collection_id) = collection_id {
+        sqlx::query("DELETE FROM collection_search_fts WHERE collection_id = ?1")
+            .bind(collection_id)
+            .execute(&mut *transaction)
+            .await?;
+    } else {
+        sqlx::query("DELETE FROM collection_search_fts")
+            .execute(&mut *transaction)
+            .await?;
+    }
+
+    for collection in collections {
+        sqlx::query(
+            r#"
+            INSERT INTO collection_search_fts (
+              entity_id, kind, collection_id, parent_id, name, path, method, url,
+              ancestor_ids, ancestor_names, updated_at, request_count
+            ) VALUES (?1, 'collection', ?1, NULL, ?2, ?2, NULL, NULL, '[]', '[]', ?3, ?4)
+            "#,
+        )
+        .bind(&collection.id)
+        .bind(&collection.name)
+        .bind(&collection.updated_at)
+        .bind(collection.request_count.to_string())
+        .execute(&mut *transaction)
+        .await?;
+    }
+
+    for item in item_rows {
+        let Some(collection_name) = collection_name_by_id.get(&item.collection_id).cloned() else {
+            continue;
+        };
+        let ancestors = build_ancestors(&item, &items_by_id);
+        let ancestor_ids: Vec<String> = ancestors
+            .iter()
+            .map(|ancestor| ancestor.id.clone())
+            .collect();
+        let ancestor_names: Vec<String> = ancestors
+            .iter()
+            .map(|ancestor| ancestor.name.clone())
+            .collect();
+        let path_text = format_search_path_text(&collection_name, &ancestor_names);
+
+        sqlx::query(
+            r#"
+            INSERT INTO collection_search_fts (
+              entity_id, kind, collection_id, parent_id, name, path, method, url,
+              ancestor_ids, ancestor_names, updated_at, request_count
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, '')
+            "#,
+        )
+        .bind(&item.id)
+        .bind(&item.kind)
+        .bind(&item.collection_id)
+        .bind(item.parent_id.as_deref())
+        .bind(&item.name)
+        .bind(&path_text)
+        .bind(item.method.as_deref())
+        .bind(item.url.as_deref())
+        .bind(serde_json::to_string(&ancestor_ids)?)
+        .bind(serde_json::to_string(&ancestor_names)?)
+        .bind(&item.updated_at)
+        .execute(&mut *transaction)
+        .await?;
+    }
+
+    transaction.commit().await?;
+    Ok(())
 }
 
 fn build_collection_item_tree(rows: Vec<CollectionItemRow>) -> Vec<CollectionItemSummary> {
@@ -1188,8 +1403,22 @@ fn tokenize_search_query(query: &str) -> Vec<String> {
         .collect()
 }
 
+fn decode_search_list(value: &str) -> AppResult<Vec<String>> {
+    Ok(serde_json::from_str(value)?)
+}
+
 fn normalize_search_text(value: &str) -> String {
     value.trim().to_lowercase()
+}
+
+fn search_like_pattern(token: &str) -> String {
+    format!(
+        "%{}%",
+        token
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_")
+    )
 }
 
 fn search_words(value: &str) -> Vec<String> {

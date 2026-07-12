@@ -2,7 +2,8 @@ use sqlx::{Row, SqlitePool};
 
 use super::{
     create_collection, delete_collection, ensure_starter_collection, list_collections,
-    STARTER_COLLECTION_DESCRIPTION, STARTER_COLLECTION_NAME, STARTER_COLLECTION_SEEDED_KEY,
+    rebuild_collection_search_index_for_collection, STARTER_COLLECTION_DESCRIPTION,
+    STARTER_COLLECTION_NAME, STARTER_COLLECTION_SEEDED_KEY,
 };
 use crate::domain::collections::CreateCollectionInput;
 
@@ -56,6 +57,22 @@ async fn setup_test_db() -> SqlitePool {
           updated_at TEXT NOT NULL
         )
         "#,
+        r#"
+        CREATE VIRTUAL TABLE collection_search_fts USING fts5(
+          entity_id UNINDEXED,
+          kind UNINDEXED,
+          collection_id UNINDEXED,
+          parent_id UNINDEXED,
+          name,
+          path,
+          method,
+          url,
+          ancestor_ids UNINDEXED,
+          ancestor_names UNINDEXED,
+          updated_at UNINDEXED,
+          request_count UNINDEXED
+        )
+        "#,
     ] {
         sqlx::query(statement)
             .execute(&pool)
@@ -64,6 +81,52 @@ async fn setup_test_db() -> SqlitePool {
     }
 
     pool
+}
+
+#[tokio::test]
+async fn rebuilding_one_collection_search_partition_preserves_other_rows() {
+    let pool = setup_test_db().await;
+    let first = create_collection(
+        &pool,
+        &CreateCollectionInput {
+            name: "First".into(),
+            description: String::new(),
+            pre_request_script: String::new(),
+            test_script: String::new(),
+        },
+    )
+    .await
+    .expect("first collection");
+    let second = create_collection(
+        &pool,
+        &CreateCollectionInput {
+            name: "Second".into(),
+            description: String::new(),
+            pre_request_script: String::new(),
+            test_script: String::new(),
+        },
+    )
+    .await
+    .expect("second collection");
+    sqlx::query(
+        "UPDATE collection_search_fts SET path = 'preserved-marker' WHERE collection_id = ?1",
+    )
+    .bind(&second.id)
+    .execute(&pool)
+    .await
+    .expect("mark unrelated row");
+
+    rebuild_collection_search_index_for_collection(&pool, &first.id)
+        .await
+        .expect("rebuild one partition");
+
+    let path: String =
+        sqlx::query_scalar("SELECT path FROM collection_search_fts WHERE collection_id = ?1")
+            .bind(&second.id)
+            .fetch_one(&pool)
+            .await
+            .expect("read unrelated row");
+    assert_eq!(path, "preserved-marker");
 }
 
 async fn starter_seeded_value(pool: &SqlitePool) -> Option<String> {

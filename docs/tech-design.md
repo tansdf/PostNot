@@ -80,8 +80,8 @@ Responsibilities:
 6. Rust loads persisted request settings from SQLite
 7. Rust resolves environment variables and built-in dynamic variables
 8. Rust executes the request with `reqwest`
-9. Rust returns response metadata plus the decoded response body to the UI
-10. Rust writes a history entry to SQLite, redacting secret-derived environment substitutions back to their original `{{variable}}` form and persisting decoded response text when available
+9. Rust returns response metadata plus either an inline body (up to 1 MiB) or a managed file handle; large bodies never cross Tauri IPC in full
+10. Rust adopts the downloaded response file into history, writes its metadata and sparse row index, and redacts secret-derived environment substitutions back to their original `{{variable}}` form
 11. Frontend runs inherited collection, folder, and saved-request test scripts (if any) against the returned response for assertion output
 12. Frontend reloads history, updates the originating tab, and persists the refreshed workspace state
 
@@ -381,7 +381,8 @@ CREATE TABLE history_entries (
 Implementation notes:
 
 - successful requests are persisted with a response preview
-- successful responses with decoded text also persist the full response body to a file path referenced by `response_body_path`
+- successful responses persist exact response bytes to a file path referenced by `response_body_path`; large downloads are atomically adopted instead of rewritten
+- file-backed bodies include content type, charset, presentation, actual byte size, and a sparse row index for bounded visible-range reads
 - failed requests are also persisted with `error_text`
 - history is pruned based on the persisted `history_limit` setting
 
@@ -475,7 +476,9 @@ On successful request execution:
 - the request snapshot is stored
 - response summary metadata is stored
 - response preview text is stored
-- full response bodies are stored on disk for detail inspection
+- full response bodies are stored on disk for virtualized detail inspection, whole-document search, formatting, binary hex display, image preview, and streamed Save as
+- active tabs and history details lease body handles so pruning or clearing history cannot invalidate an open response
+- responses at or below 1 MiB remain inline; larger responses stream to disk and expose only bounded windows to the WebView
 - history is pruned to the configured limit
 
 On failed request execution:

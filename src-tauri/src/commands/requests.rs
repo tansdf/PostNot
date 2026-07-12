@@ -72,19 +72,26 @@ pub async fn send_request(
         );
     });
 
-    let request_result = http_client::send_request(
+    let request_result = http_client::send_request_with_store(
         &resolved_request.payload,
         &settings,
         cancel_rx,
         Some(progress_sink),
+        Some(state.response_bodies()),
     )
     .await;
 
     let result = match request_result {
         Ok(response) => {
             let history_persistence_error = if should_persist_history {
-                match history_service::record_success(state.db(), &history_payload, &response, &app)
-                    .await
+                match history_service::record_success(
+                    state.db(),
+                    &history_payload,
+                    &response,
+                    &app,
+                    state.response_bodies(),
+                )
+                .await
                 {
                     Ok(()) => None,
                     Err(error) => Some(error.to_string()),
@@ -105,6 +112,7 @@ pub async fn send_request(
                         state.db(),
                         &history_payload,
                         &error.to_string(),
+                        state.response_bodies(),
                     )
                     .await
                     {

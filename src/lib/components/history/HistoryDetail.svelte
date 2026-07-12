@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { FileRow, HistoryEntryDetail, KeyValueRow } from "$lib/api/types";
   import JsonViewer from "$lib/components/response/JsonViewer.svelte";
+  import VirtualResponseDocument from "$lib/components/response/VirtualResponseDocument.svelte";
 
   let {
     detail = null,
@@ -228,8 +229,10 @@
 
             <div class="detail-response-column">
               <h5 class="detail-subtitle">Body</h5>
-              {#if detail.responseBodyText}
-                <JsonViewer source={detail.responseBodyText} maxHeight="clamp(12rem, 40vh, 28rem)" />
+              {#if detail.responseBody.mode === "file"}
+                <VirtualResponseDocument body={detail.responseBody} maxHeight="clamp(12rem, 40vh, 28rem)" />
+              {:else if detail.responseBody.text}
+                <JsonViewer source={detail.responseBody.text} maxHeight="clamp(12rem, 40vh, 28rem)" />
               {:else if !detail.errorText}
                 <div class="empty-state">No response preview was stored for this history entry.</div>
               {/if}

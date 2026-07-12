@@ -441,6 +441,7 @@ function createRequestFacade(request: RequestDraft, variables: VariableMap) {
 }
 
 function createResponseFacade(response: ResponsePayload) {
+  const bodyText = response.body.mode === "inline" ? response.body.text : response.body.previewText;
   return {
     code: response.statusCode,
     status: response.statusText,
@@ -449,10 +450,10 @@ function createResponseFacade(response: ResponsePayload) {
     errorText: response.errorText,
     executedAt: response.executedAt,
     text() {
-      return response.bodyText;
+      return bodyText;
     },
     json() {
-      return JSON.parse(response.bodyText);
+      return JSON.parse(bodyText);
     },
     header(name: string) {
       const normalizedName = asString(name).trim().toLowerCase();

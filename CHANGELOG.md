@@ -6,6 +6,44 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-07-12
+
+### Added
+
+- Added a continuous virtual response viewer with whole-document search, wrapped scrolling, raw JSON formatting, binary hex rows, image previews, and streamed Save as support.
+- Added file-backed response handles, sparse line indexes, cancellable search and formatting jobs, and a repeatable 1 GiB response stress scenario.
+
+### Changed
+
+- Stream large response bodies directly to managed files after the 1 MiB inline threshold, avoiding full-body Tauri IPC and WebView copies.
+- Reuse script workers and load file-backed response text only when scripts explicitly access the body.
+- Reuse downloaded response files for history and defer deletion while active tabs or history details still hold leases.
+
+### Fixed
+
+- Preserved exact bytes for small image and binary responses by keeping them file-backed for image and hex presentation.
+- Searched legacy-encoded response bodies through lazily streamed UTF-8 display sidecars so results match visible text.
+- Deferred history body deletion until every handle referencing the same file has released its lease.
+- Limited collection search-index maintenance to affected collections, including both sides of cross-collection moves.
+- Canceled stale whole-document searches when switching between raw and formatted response views.
+
+## [0.20.23] - 2026-07-09
+
+### Added
+
+- Added import result details in notifications for Postman and OpenAPI collection imports.
+- Added persistent collection search indexing for faster sidebar and Collections page search.
+
+### Changed
+
+- Made Postman and OpenAPI imports atomic, preserving imported folder and request ordering.
+- Streamed multipart file uploads instead of loading complete files into memory before sending.
+
+### Fixed
+
+- Preserved substring matching in collection search, including literal `%` and `_` characters.
+- Kept collection search indexes consistent during concurrent collection updates.
+
 ## [0.20.22] - 2026-07-04
 
 ### Added

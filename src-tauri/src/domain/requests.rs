@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::services::response_body_service::{ResponsePresentation, StoredResponseBody};
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct KeyValueRow {
@@ -79,11 +81,72 @@ pub struct ResponsePayload {
     pub status_code: Option<u16>,
     pub status_text: String,
     pub duration_ms: u128,
-    pub size_bytes: usize,
+    pub size_bytes: u64,
     pub headers: Vec<KeyValueRow>,
-    pub body_text: String,
+    pub body: ResponseBody,
     pub error_text: String,
     pub executed_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "mode", rename_all = "lowercase")]
+pub enum ResponseBody {
+    Inline {
+        text: String,
+        #[serde(rename = "sizeBytes")]
+        size_bytes: u64,
+        #[serde(rename = "contentType")]
+        content_type: Option<String>,
+        charset: Option<String>,
+        presentation: ResponsePresentation,
+    },
+    File {
+        #[serde(rename = "handleId")]
+        handle_id: String,
+        #[serde(rename = "previewText")]
+        preview_text: String,
+        #[serde(rename = "sizeBytes")]
+        size_bytes: u64,
+        #[serde(rename = "contentType")]
+        content_type: Option<String>,
+        charset: Option<String>,
+        presentation: ResponsePresentation,
+    },
+}
+
+impl ResponseBody {
+    pub fn inline_text(&self) -> Option<&str> {
+        match self {
+            Self::Inline { text, .. } => Some(text),
+            Self::File { .. } => None,
+        }
+    }
+
+    pub fn handle_id(&self) -> Option<&str> {
+        match self {
+            Self::File { handle_id, .. } => Some(handle_id),
+            Self::Inline { .. } => None,
+        }
+    }
+
+    pub fn size_bytes(&self) -> u64 {
+        match self {
+            Self::Inline { size_bytes, .. } | Self::File { size_bytes, .. } => *size_bytes,
+        }
+    }
+}
+
+impl From<StoredResponseBody> for ResponseBody {
+    fn from(value: StoredResponseBody) -> Self {
+        Self::File {
+            handle_id: value.handle_id,
+            preview_text: value.preview_text,
+            size_bytes: value.size_bytes,
+            content_type: value.content_type,
+            charset: value.charset,
+            presentation: value.presentation,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

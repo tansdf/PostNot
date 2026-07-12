@@ -1,15 +1,15 @@
 use serde::Deserialize;
 use sqlx::SqlitePool;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 use uuid::Uuid;
 
 use crate::{
     domain::{
-        collections::{CreateCollectionFolderInput, CreateCollectionInput},
+        collections::CreateCollectionInput,
         environments::{
             EnvironmentInput, EnvironmentVariable, ImportEnvironmentInput, ImportEnvironmentResult,
         },
-        imports::ImportResult,
+        imports::{ImportDetails, ImportResult},
         requests::{FileRow, KeyValueRow, RequestAuth, RequestBody, SendRequestPayload},
     },
     error::{AppError, AppResult},
@@ -298,19 +298,17 @@ pub(super) async fn import_postman_collection(
     let pre_request_script = join_postman_script_events(&collection.event, "prerequest");
     let test_script = join_postman_script_events(&collection.event, "test");
 
-    let created_collection = collections_service::create_collection(
-        pool,
-        &CreateCollectionInput {
-            name: collection_name.clone(),
-            description,
-            pre_request_script,
-            test_script,
-        },
-    )
-    .await?;
-
-    let imported_request_count =
-        import_postman_items(pool, &created_collection.id, None, &collection.item).await?;
+    let mut folders = Vec::new();
+    let mut requests = Vec::new();
+    let mut imported_items = Vec::new();
+    build_postman_import_items(
+        None,
+        &collection.item,
+        &mut folders,
+        &mut requests,
+        &mut imported_items,
+    )?;
+    let imported_request_count = requests.len();
 
     if imported_request_count == 0 {
         return Err(AppError::Message(
@@ -318,61 +316,92 @@ pub(super) async fn import_postman_collection(
         ));
     }
 
+    let created_collection = collections_service::import_collection_atomic(
+        pool,
+        &CreateCollectionInput {
+            name: collection_name.clone(),
+            description,
+            pre_request_script,
+            test_script,
+        },
+        &folders,
+        &requests,
+    )
+    .await?;
+
     Ok(ImportResult {
         collection_id: created_collection.id,
         collection_name: created_collection.name,
         imported_request_count,
         created_collection: true,
+        details: Some(ImportDetails {
+            format: "postman".to_string(),
+            summary: format!(
+                "{} request{} imported from Postman.",
+                imported_request_count,
+                if imported_request_count == 1 { "" } else { "s" }
+            ),
+            imported_items,
+            warnings: Vec::new(),
+            errors: Vec::new(),
+        }),
     })
 }
 
-async fn import_postman_items(
-    pool: &SqlitePool,
-    collection_id: &str,
-    parent_id: Option<&str>,
+fn build_postman_import_items(
+    parent_id: Option<String>,
     items: &[PostmanItem],
-) -> AppResult<usize> {
-    let mut imported_request_count = 0usize;
+    folders: &mut Vec<collections_service::ImportCollectionFolder>,
+    requests: &mut Vec<collections_service::ImportCollectionRequest>,
+    imported_items: &mut Vec<String>,
+) -> AppResult<()> {
     let mut stack: Vec<(Option<String>, &PostmanItem)> = items
         .iter()
         .rev()
-        .map(|item| (parent_id.map(|value| value.to_string()), item))
+        .map(|item| (parent_id.clone(), item))
         .collect();
+    let mut next_sort_order = HashMap::<Option<String>, i64>::new();
 
     while let Some((current_parent_id, item)) = stack.pop() {
         if !item.item.is_empty() {
-            let folder = collections_service::create_collection_folder(
-                pool,
-                collection_id,
-                &CreateCollectionFolderInput {
-                    name: normalized_folder_name(&item.name),
-                    parent_id: current_parent_id.clone(),
-                    pre_request_script: join_postman_script_events(&item.event, "prerequest"),
-                    test_script: join_postman_script_events(&item.event, "test"),
-                },
-            )
-            .await?;
+            let folder_id = Uuid::new_v4().to_string();
+            let sort_order = next_sort_order
+                .entry(current_parent_id.clone())
+                .or_insert(0);
+            let folder_sort_order = *sort_order;
+            *sort_order += 1;
+            folders.push(collections_service::ImportCollectionFolder {
+                id: folder_id.clone(),
+                parent_id: current_parent_id.clone(),
+                sort_order: folder_sort_order,
+                name: normalized_folder_name(&item.name),
+                pre_request_script: join_postman_script_events(&item.event, "prerequest"),
+                test_script: join_postman_script_events(&item.event, "test"),
+            });
 
             for child in item.item.iter().rev() {
-                stack.push((Some(folder.id.clone()), child));
+                stack.push((Some(folder_id.clone()), child));
             }
             continue;
         }
 
         if let Some(request) = &item.request {
             let request = map_postman_request(item, request)?;
-            collections_service::save_request(
-                pool,
-                collection_id,
-                current_parent_id.as_deref(),
-                &request,
-            )
-            .await?;
-            imported_request_count += 1;
+            let sort_order = next_sort_order
+                .entry(current_parent_id.clone())
+                .or_insert(0);
+            let request_sort_order = *sort_order;
+            *sort_order += 1;
+            imported_items.push(request.name.clone());
+            requests.push(collections_service::ImportCollectionRequest {
+                parent_id: current_parent_id,
+                sort_order: request_sort_order,
+                request,
+            });
         }
     }
 
-    Ok(imported_request_count)
+    Ok(())
 }
 
 fn map_postman_request(

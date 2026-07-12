@@ -17,6 +17,21 @@ pub struct ImportResult {
     pub collection_name: String,
     pub imported_request_count: usize,
     pub created_collection: bool,
+    #[serde(default)]
+    pub details: Option<ImportDetails>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportDetails {
+    pub format: String,
+    pub summary: String,
+    #[serde(default)]
+    pub imported_items: Vec<String>,
+    #[serde(default)]
+    pub warnings: Vec<String>,
+    #[serde(default)]
+    pub errors: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

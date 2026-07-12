@@ -1,6 +1,6 @@
 {
   "name": "postnot",
-  "version": "0.20.22",
+  "version": "0.21.0",
   "license": "Apache-2.0",
   "private": true,
   "type": "module",
@@ -12,6 +12,7 @@
     "docs:capture-screenshots": "node scripts/capture-docs-screenshots.mjs",
     "docs:check-screenshots": "node scripts/capture-docs-screenshots.mjs --check",
     "test": "node scripts/run-tests.mjs",
+    "test:response-stress": "cargo test --manifest-path src-tauri/Cargo.toml handles_one_gib_file_without_full_body_reads -- --ignored --nocapture",
     "tauri": "tauri"
   },
   "dependencies": {

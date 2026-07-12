@@ -1,10 +1,25 @@
 export type NotificationTone = "info" | "success" | "warning" | "error";
 
+export type NotificationDetails = {
+  title: string;
+  summary?: string;
+  items?: string[];
+  warnings?: string[];
+  errors?: string[];
+  rawText?: string;
+};
+
+export type NotificationAction = {
+  label: string;
+  kind: "details";
+};
+
 export type NotificationInput = {
   title?: string;
   message: string;
   tone?: NotificationTone;
   durationMs?: number;
+  details?: NotificationDetails;
 };
 
 export type NotificationItem = {
@@ -13,6 +28,8 @@ export type NotificationItem = {
   message: string;
   tone: NotificationTone;
   durationMs: number;
+  actions: NotificationAction[];
+  details: NotificationDetails | null;
 };
 
 function createId() {
@@ -27,6 +44,7 @@ class NotificationsStore {
   items = $state.raw<NotificationItem[]>([]);
   maxVisible = 5;
   defaultDurationMs = $state(5_000);
+  activeDetails = $state.raw<NotificationDetails | null>(null);
 
   show(input: NotificationInput) {
     const message = input.message.trim();
@@ -39,7 +57,9 @@ class NotificationsStore {
       title: input.title?.trim() ?? "",
       message,
       tone: input.tone ?? "info",
-      durationMs: normalizeDuration(input.durationMs ?? this.defaultDurationMs)
+      durationMs: normalizeDuration(input.durationMs ?? this.defaultDurationMs),
+      actions: input.details ? [{ label: "View details", kind: "details" }] : [],
+      details: input.details ?? null
     };
 
     this.items = [notification, ...this.items].slice(0, this.maxVisible);
@@ -50,20 +70,30 @@ class NotificationsStore {
     this.items = this.items.filter((item) => item.id !== id);
   }
 
-  info(message: string, title = "") {
-    return this.show({ tone: "info", title, message });
+  info(message: string, title = "", options: Pick<NotificationInput, "details" | "durationMs"> = {}) {
+    return this.show({ tone: "info", title, message, ...options });
   }
 
-  success(message: string, title = "") {
-    return this.show({ tone: "success", title, message });
+  success(message: string, title = "", options: Pick<NotificationInput, "details" | "durationMs"> = {}) {
+    return this.show({ tone: "success", title, message, ...options });
   }
 
-  warning(message: string, title = "") {
-    return this.show({ tone: "warning", title, message });
+  warning(message: string, title = "", options: Pick<NotificationInput, "details" | "durationMs"> = {}) {
+    return this.show({ tone: "warning", title, message, ...options });
   }
 
-  error(message: string, title = "") {
-    return this.show({ tone: "error", title, message });
+  error(message: string, title = "", options: Pick<NotificationInput, "details" | "durationMs"> = {}) {
+    return this.show({ tone: "error", title, message, ...options });
+  }
+
+  openDetails(item: NotificationItem) {
+    if (item.details) {
+      this.activeDetails = item.details;
+    }
+  }
+
+  closeDetails() {
+    this.activeDetails = null;
   }
 
   clear() {

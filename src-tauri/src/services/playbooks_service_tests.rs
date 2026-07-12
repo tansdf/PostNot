@@ -122,6 +122,22 @@ async fn setup_test_db() -> SqlitePool {
           FOREIGN KEY (saved_request_id) REFERENCES collection_items(id) ON DELETE SET NULL
         )
         "#,
+        r#"
+        CREATE VIRTUAL TABLE collection_search_fts USING fts5(
+          entity_id UNINDEXED,
+          kind UNINDEXED,
+          collection_id UNINDEXED,
+          parent_id UNINDEXED,
+          name,
+          path,
+          method,
+          url,
+          ancestor_ids UNINDEXED,
+          ancestor_names UNINDEXED,
+          updated_at UNINDEXED,
+          request_count UNINDEXED
+        )
+        "#,
     ] {
         sqlx::query(statement)
             .execute(&pool)

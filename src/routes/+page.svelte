@@ -18,6 +18,7 @@
     listEnvironments,
     listHistory,
     previewRequest,
+    releaseResponseBody,
     setActiveEnvironment,
     sendRequest,
     updateSettings,
@@ -42,7 +43,8 @@
     cloneRequestDraft,
     createDefaultSettings,
     createEnvironmentVariable,
-    createRequestDraft
+    createRequestDraft,
+    inlineResponseText
   } from "$lib/api/types";
   import HistoryPanel from "$lib/components/history/HistoryPanel.svelte";
   import DialogShell from "$lib/components/layout/DialogShell.svelte";
@@ -95,6 +97,7 @@
   let activeResponseProgress: RequestResponseProgress | null = $state(null);
   let sendElapsedMs = $state(0);
   let sendStartedAt = 0;
+  let testingTabId = $state("");
   let sendTimer: ReturnType<typeof setInterval> | null = null;
   let isEnvironmentChanging = $state(false);
   let environmentsErrorText = $state("");
@@ -141,6 +144,7 @@
   let requestOwnerTabId = "";
   let lastSyncedCollectionId = "";
   let lastHandledRequestedSavedRequestId = "";
+  let historyDetailSequence = 0;
 
   const savedRequestRoute = createStaleGuard();
 
@@ -894,21 +898,36 @@ paths:
   }
 
   async function inspectHistoryEntry(id: string, shouldKeepExistingDetail = false) {
+    const sequence = ++historyDetailSequence;
     const scrollY = window.scrollY;
     selectedHistoryId = id;
     isHistoryDetailLoading = true;
     historyDetailErrorText = "";
 
+    const previousDetail = selectedHistoryDetail;
     if (!shouldKeepExistingDetail) {
       selectedHistoryDetail = null;
     }
 
     try {
-      selectedHistoryDetail = await getHistoryEntry(id);
+      const nextDetail = await getHistoryEntry(id);
+      if (sequence !== historyDetailSequence) {
+        if (nextDetail.responseBody.mode === "file") void releaseResponseBody(nextDetail.responseBody.handleId);
+        return;
+      }
+      selectedHistoryDetail = nextDetail;
+      if (previousDetail?.responseBody.mode === "file") {
+        void releaseResponseBody(previousDetail.responseBody.handleId);
+      }
     } catch (error) {
+      if (sequence !== historyDetailSequence) return;
       selectedHistoryDetail = null;
+      if (previousDetail?.responseBody.mode === "file") {
+        void releaseResponseBody(previousDetail.responseBody.handleId);
+      }
       historyDetailErrorText = error instanceof Error ? error.message : String(error);
     } finally {
+      if (sequence !== historyDetailSequence) return;
       isHistoryDetailLoading = false;
       await tick();
       window.scrollTo({ top: scrollY });
@@ -916,6 +935,10 @@ paths:
   }
 
   function closeHistoryDetail() {
+    historyDetailSequence += 1;
+    if (selectedHistoryDetail?.responseBody.mode === "file") {
+      void releaseResponseBody(selectedHistoryDetail.responseBody.handleId);
+    }
     selectedHistoryId = "";
     selectedHistoryDetail = null;
     historyDetailErrorText = "";
@@ -967,10 +990,12 @@ paths:
     }
 
     restoringHistoryId = id;
+    let transientDetail: HistoryEntryDetail | null = null;
 
     try {
-      const detail =
-        selectedHistoryDetail?.id === id ? selectedHistoryDetail : await getHistoryEntry(id);
+      const detail = selectedHistoryDetail?.id === id
+        ? selectedHistoryDetail
+        : (transientDetail = await getHistoryEntry(id));
       const openedTab = requestWorkspace.openHistoryRequest(detail.requestSnapshot);
       bumpRequestTabsScrollIntoView(openedTab.id);
       await syncRouteToActiveTab();
@@ -981,6 +1006,9 @@ paths:
       const message = error instanceof Error ? error.message : String(error);
       notifications.error(message, "Restore failed");
     } finally {
+      if (transientDetail?.responseBody.mode === "file") {
+        void releaseResponseBody(transientDetail.responseBody.handleId);
+      }
       restoringHistoryId = "";
     }
   }
@@ -1081,13 +1109,15 @@ paths:
 
     const sendResult = await sendRequest(tokenRequest, { persistHistory: false });
     const { response } = sendResult;
+    const responseHandle = response.body.mode === "file" ? response.body.handleId : "";
+    try {
 
     if (response.errorText) {
       throw new Error(response.errorText);
     }
 
     if (!response.statusCode || response.statusCode < 200 || response.statusCode >= 300) {
-      const details = responseSnippet(response.bodyText);
+      const details = responseSnippet(inlineResponseText(response));
       throw new Error(
         `Token endpoint returned ${response.statusCode ?? "no status"}${details ? `: ${details}` : "."}`
       );
@@ -1095,7 +1125,7 @@ paths:
 
     let tokenBody: unknown;
     try {
-      tokenBody = JSON.parse(response.bodyText);
+      tokenBody = JSON.parse(inlineResponseText(response));
     } catch {
       throw new Error("Token endpoint did not return JSON.");
     }
@@ -1163,6 +1193,9 @@ paths:
       expiresIn,
       tokenType
     };
+    } finally {
+      if (responseHandle) void releaseResponseBody(responseHandle);
+    }
   }
 
   function activeCollectionScripts(tab: RequestWorkspaceTab): InheritedRequestScripts | null {
@@ -1301,7 +1334,7 @@ paths:
           durationMs: 0,
           sizeBytes: 0,
           headers: [],
-          bodyText: "",
+          body: { mode: "inline", text: "", sizeBytes: 0, contentType: null, charset: null, presentation: "text" },
           errorText: "",
           executedAt: new Date().toISOString()
         }, execution);
@@ -1309,6 +1342,8 @@ paths:
       }
 
       const sendResult = await sendRequest(preparedRequest.request);
+      requestWorkspace.setTabResponse(tabId, sendResult.response);
+      testingTabId = tabId;
       const scriptExecution = await runTestScript(
         requestToSend,
         sendResult.response,
@@ -1321,6 +1356,7 @@ paths:
       );
 
       requestWorkspace.setTabResponse(tabId, sendResult.response, scriptExecution);
+      testingTabId = "";
 
       if (scriptExecution.testScriptErrorText) {
         notifications.warning(
@@ -1350,11 +1386,12 @@ paths:
         durationMs: 0,
         sizeBytes: 0,
         headers: [],
-        bodyText: "",
+        body: { mode: "inline", text: "", sizeBytes: 0, contentType: null, charset: null, presentation: "text" },
         errorText,
         executedAt: new Date().toISOString()
       });
     } finally {
+      if (testingTabId === tabId) testingTabId = "";
       stopSendTimer();
       activeResponseProgress = null;
       requestWorkspace.markSendFinished(tabId);
@@ -1777,7 +1814,7 @@ paths:
   <RequestEditor
     bind:request
     environmentVariables={activeEnvironmentDetail?.variables ?? []}
-    isSending={activeTabIsSending}
+    isSending={activeTabIsSending && testingTabId !== activeTab?.id}
     isCanceling={requestWorkspace.isCanceling}
     isSaving={collections.isSavingRequest}
     saveLabel={activeTab?.savedRequestId ? "Update" : "Save"}
@@ -1806,6 +1843,7 @@ paths:
     isSending={activeTabIsSending}
     progress={activeResponseProgress}
     elapsedMs={sendElapsedMs}
+    areTestsRunning={testingTabId === activeTab?.id}
   />
 
   <HistoryPanel

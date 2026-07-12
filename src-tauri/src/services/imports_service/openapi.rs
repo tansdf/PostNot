@@ -5,8 +5,8 @@ use uuid::Uuid;
 
 use crate::{
     domain::{
-        collections::{CreateCollectionFolderInput, CreateCollectionInput},
-        imports::{ImportResult, ImportedRequestDraft},
+        collections::CreateCollectionInput,
+        imports::{ImportDetails, ImportResult, ImportedRequestDraft},
         requests::{FileRow, KeyValueRow, RequestAuth, RequestBody, SendRequestPayload},
     },
     error::{AppError, AppResult},
@@ -211,23 +211,6 @@ pub(super) async fn import_openapi_collection(
     source: &str,
 ) -> AppResult<ImportResult> {
     let document = parse_openapi_document(source)?;
-    let collection_name = if document.info.title.trim().is_empty() {
-        "Imported OpenAPI collection".to_string()
-    } else {
-        document.info.title.trim().to_string()
-    };
-
-    let created_collection = collections_service::create_collection(
-        pool,
-        &CreateCollectionInput {
-            name: collection_name,
-            description: document.info.description.trim().to_string(),
-            pre_request_script: String::new(),
-            test_script: String::new(),
-        },
-    )
-    .await?;
-
     let requests = build_openapi_requests(&document)?;
     if requests.is_empty() {
         return Err(AppError::Message(
@@ -235,47 +218,88 @@ pub(super) async fn import_openapi_collection(
         ));
     }
 
-    let mut imported_request_count = 0usize;
-    let mut folder_ids = HashMap::<String, String>::new();
+    let collection_name = if document.info.title.trim().is_empty() {
+        "Imported OpenAPI collection".to_string()
+    } else {
+        document.info.title.trim().to_string()
+    };
 
-    for imported in requests {
+    let mut folders = Vec::new();
+    let mut folder_ids = HashMap::<String, String>::new();
+    let mut next_sort_order = HashMap::<Option<String>, i64>::new();
+    let mut imported_requests = Vec::new();
+    let mut imported_items = Vec::new();
+
+    for imported in &requests {
         let parent_id = if let Some(folder_name) = imported.folder_name.as_deref() {
-            if let Some(existing_id) = folder_ids.get(folder_name) {
-                Some(existing_id.clone())
-            } else {
-                let folder = collections_service::create_collection_folder(
-                    pool,
-                    &created_collection.id,
-                    &CreateCollectionFolderInput {
-                        name: folder_name.to_string(),
-                        parent_id: None,
-                        pre_request_script: String::new(),
-                        test_script: String::new(),
-                    },
-                )
-                .await?;
-                folder_ids.insert(folder_name.to_string(), folder.id.clone());
-                Some(folder.id)
-            }
+            Some(
+                folder_ids
+                    .entry(folder_name.to_string())
+                    .or_insert_with(|| {
+                        let id = Uuid::new_v4().to_string();
+                        let sort_order = next_sort_order.entry(None).or_insert(0);
+                        let folder_sort_order = *sort_order;
+                        *sort_order += 1;
+                        folders.push(collections_service::ImportCollectionFolder {
+                            id: id.clone(),
+                            parent_id: None,
+                            sort_order: folder_sort_order,
+                            name: folder_name.to_string(),
+                            pre_request_script: String::new(),
+                            test_script: String::new(),
+                        });
+                        id
+                    })
+                    .clone(),
+            )
         } else {
             None
         };
 
-        collections_service::save_request(
-            pool,
-            &created_collection.id,
-            parent_id.as_deref(),
-            &imported.request,
-        )
-        .await?;
-        imported_request_count += 1;
+        let sort_order = next_sort_order.entry(parent_id.clone()).or_insert(0);
+        let request_sort_order = *sort_order;
+        *sort_order += 1;
+        imported_items.push(imported.request.name.clone());
+        imported_requests.push(collections_service::ImportCollectionRequest {
+            parent_id,
+            sort_order: request_sort_order,
+            request: imported.request.clone(),
+        });
     }
+
+    let created_collection = collections_service::import_collection_atomic(
+        pool,
+        &CreateCollectionInput {
+            name: collection_name,
+            description: document.info.description.trim().to_string(),
+            pre_request_script: String::new(),
+            test_script: String::new(),
+        },
+        &folders,
+        &imported_requests,
+    )
+    .await?;
 
     Ok(ImportResult {
         collection_id: created_collection.id,
         collection_name: created_collection.name,
-        imported_request_count,
+        imported_request_count: imported_requests.len(),
         created_collection: true,
+        details: Some(ImportDetails {
+            format: "openapi".to_string(),
+            summary: format!(
+                "{} request{} imported from OpenAPI.",
+                imported_requests.len(),
+                if imported_requests.len() == 1 {
+                    ""
+                } else {
+                    "s"
+                }
+            ),
+            imported_items,
+            warnings: Vec::new(),
+            errors: Vec::new(),
+        }),
     })
 }
 
