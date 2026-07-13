@@ -420,6 +420,10 @@ section {
   padding: 2.8rem 0;
 }
 
+main > section[id] {
+  scroll-margin-top: 4.75rem;
+}
+
 .section-heading {
   margin-bottom: 1rem;
 }
@@ -702,8 +706,8 @@ h2:hover .heading-anchor,
   min-width: 0;
 }
 
-.doc-content section {
-  scroll-margin-top: 6.8rem;
+.doc-content h2[id] {
+  scroll-margin-top: 4.75rem;
 }
 
 .doc-sidebar {
@@ -1131,9 +1135,8 @@ code,
 .hero__proof span { color: var(--panel-ink-muted); font-size: 0.86rem; }
 
 .trust-strip {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0;
   margin: 1rem 0 3rem;
   overflow: hidden;
@@ -1144,16 +1147,19 @@ code,
 }
 
 .trust-strip span {
-  flex: 1 1 12rem;
+  display: grid;
+  min-height: 4.75rem;
   padding: 0.85rem 1rem;
+  place-content: center;
+  gap: 0.08rem;
   border-right: 1px solid var(--border-soft);
   color: var(--panel-ink-muted);
   text-align: center;
-  font-size: 0.82rem;
 }
 
 .trust-strip span:last-child { border-right: 0; }
 .trust-strip strong { color: var(--panel-ink); font-weight: 700; }
+.trust-strip small { color: var(--panel-ink-muted); font-size: 0.78rem; }
 
 .section-heading--wide { max-width: 50rem; }
 .section-heading > p:not(.eyebrow) { max-width: 44rem; color: var(--panel-ink-soft); }
@@ -1326,7 +1332,7 @@ code,
   background: var(--panel-strong);
 }
 
-.release-summary > div { display: grid; gap: 0.15rem; }
+.release-summary > div:not(.release-summary__links) { display: grid; gap: 0.15rem; }
 .release-summary__label { color: var(--panel-ink-muted); font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; }
 .release-summary__links { display: flex !important; flex-wrap: wrap; align-items: center; gap: 1rem; }
 
@@ -1361,7 +1367,28 @@ code,
 .download-card__heading { display: flex; gap: 0.8rem; align-items: center; margin-bottom: 1rem; }
 .download-card__heading h3 { margin: 0; font-size: 1.15rem; }
 .download-card__heading p { margin: 0.1rem 0 0; color: var(--panel-ink-muted); font-size: 0.8rem; }
-.platform-mark { display: grid; place-items: center; width: 2.35rem; height: 2.35rem; border-radius: 0.7rem; background: var(--accent-soft); color: var(--accent-strong); font-weight: 800; }
+.platform-mark {
+  display: grid;
+  flex: 0 0 2.5rem;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.7rem;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.platform-mark__icon {
+  display: block;
+  width: 1.25rem;
+  height: 1.25rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
 .asset-list { display: grid; gap: 0.55rem; }
 
 .asset-row {

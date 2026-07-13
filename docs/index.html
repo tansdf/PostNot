@@ -135,11 +135,11 @@
       </section>
 
       <aside class="trust-strip" aria-label="Product trust highlights">
-        <span><strong>SQLite</strong> local persistence</span>
-        <span><strong>OS credential store</strong> for secrets</span>
-        <span><strong>Redacted</strong> request exports</span>
-        <span><strong>Signed</strong> updater artifacts</span>
-        <span><strong>Postman · OpenAPI · cURL</strong> imports</span>
+        <span><strong>SQLite</strong><small>Local persistence</small></span>
+        <span><strong>OS credential store</strong><small>Secret storage</small></span>
+        <span><strong>Redacted</strong><small>Request exports</small></span>
+        <span><strong>Signed</strong><small>Updater artifacts</small></span>
+        <span><strong>Postman · OpenAPI · cURL</strong><small>Import support</small></span>
       </aside>
 
       <section id="product" aria-labelledby="product-heading">
@@ -400,7 +400,17 @@
 
         <div class="download-grid" data-download-grid>
           <article class="download-card" data-download-platform="windows">
-            <div class="download-card__heading"><span class="platform-mark" aria-hidden="true">⊞</span><div><h3>Windows</h3><p>x86-64 · Windows 7+ · WebView2</p></div></div>
+            <div class="download-card__heading">
+              <span class="platform-mark" aria-hidden="true">
+                <svg class="platform-mark__icon" viewBox="0 0 24 24" focusable="false">
+                  <rect x="3" y="3" width="7.5" height="7.5" rx="0.75"></rect>
+                  <rect x="13.5" y="3" width="7.5" height="7.5" rx="0.75"></rect>
+                  <rect x="3" y="13.5" width="7.5" height="7.5" rx="0.75"></rect>
+                  <rect x="13.5" y="13.5" width="7.5" height="7.5" rx="0.75"></rect>
+                </svg>
+              </span>
+              <div><h3>Windows</h3><p>x86-64 · Windows 7+ · WebView2</p></div>
+            </div>
             <div class="asset-list">
               <a class="asset-row" data-asset-match="_x64-setup\.exe$" href="https://github.com/tansdf/PostNot/releases/latest" rel="noopener noreferrer"><span><strong>Setup executable</strong><small data-asset-meta>Latest stable release</small></span><span aria-hidden="true">↓</span></a>
               <a class="asset-row" data-asset-match="_x64_en-US\.msi$" href="https://github.com/tansdf/PostNot/releases/latest" rel="noopener noreferrer"><span><strong>MSI installer</strong><small data-asset-meta>Latest stable release</small></span><span aria-hidden="true">↓</span></a>
@@ -409,7 +419,14 @@
           </article>
 
           <article class="download-card" data-download-platform="macos">
-            <div class="download-card__heading"><span class="platform-mark" aria-hidden="true">●</span><div><h3>macOS</h3><p>10.15+ · Apple Silicon and Intel</p></div></div>
+            <div class="download-card__heading">
+              <span class="platform-mark" aria-hidden="true">
+                <svg class="platform-mark__icon" viewBox="0 0 24 24" focusable="false">
+                  <path d="M18 9a3 3 0 1 0 0-6 3 3 0 0 0-3 3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12Z"></path>
+                </svg>
+              </span>
+              <div><h3>macOS</h3><p>10.15+ · Apple Silicon and Intel</p></div>
+            </div>
             <div class="asset-list">
               <a class="asset-row" data-asset-match="_aarch64\.dmg$" href="https://github.com/tansdf/PostNot/releases/latest" rel="noopener noreferrer"><span><strong>Apple Silicon DMG</strong><small data-asset-meta>ARM64 · latest stable release</small></span><span aria-hidden="true">↓</span></a>
               <a class="asset-row" data-asset-match="_x64\.dmg$" href="https://github.com/tansdf/PostNot/releases/latest" rel="noopener noreferrer"><span><strong>Intel DMG</strong><small data-asset-meta>x86-64 · latest stable release</small></span><span aria-hidden="true">↓</span></a>
@@ -418,7 +435,15 @@
           </article>
 
           <article class="download-card" data-download-platform="linux">
-            <div class="download-card__heading"><span class="platform-mark" aria-hidden="true">⌁</span><div><h3>Linux</h3><p>x86-64 desktop distributions</p></div></div>
+            <div class="download-card__heading">
+              <span class="platform-mark" aria-hidden="true">
+                <svg class="platform-mark__icon" viewBox="0 0 24 24" focusable="false">
+                  <rect x="2.75" y="4" width="18.5" height="16" rx="3"></rect>
+                  <path d="m7.5 9 3 3-3 3M13.5 15h3"></path>
+                </svg>
+              </span>
+              <div><h3>Linux</h3><p>x86-64 desktop distributions</p></div>
+            </div>
             <div class="asset-list">
               <a class="asset-row" data-asset-match="_amd64\.AppImage$" href="https://github.com/tansdf/PostNot/releases/latest" rel="noopener noreferrer"><span><strong>AppImage</strong><small data-asset-meta>Portable · latest stable release</small></span><span aria-hidden="true">↓</span></a>
               <a class="asset-row" data-asset-match="_amd64\.deb$" href="https://github.com/tansdf/PostNot/releases/latest" rel="noopener noreferrer"><span><strong>Debian package</strong><small data-asset-meta>Ubuntu / Debian</small></span><span aria-hidden="true">↓</span></a>

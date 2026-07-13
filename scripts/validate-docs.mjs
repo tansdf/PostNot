@@ -79,6 +79,12 @@ for (const [relativePath, html] of [
 requirePattern(indexHtml, /id="product"/, "docs/index.html: product section is missing");
 requirePattern(indexHtml, /id="download"/, "docs/index.html: download section is missing");
 requirePattern(indexHtml, /data-download-platform=/, "docs/index.html: platform download cards are missing");
+if ((indexHtml.match(/class="platform-mark__icon"/g) ?? []).length !== 3) {
+  fail("docs/index.html: download cards must use three consistently sized SVG platform icons");
+}
+if (/<span class="platform-mark"[^>]*>[⊞●⌁]/.test(indexHtml)) {
+  fail("docs/index.html: download cards still use baseline-dependent Unicode platform glyphs");
+}
 requirePattern(indexHtml, /data-release-fallback/, "docs/index.html: release fallback is missing");
 requirePattern(indexHtml, /data-menu-toggle[^>]+aria-expanded="false"/, "docs/index.html: accessible mobile menu toggle is missing");
 requirePattern(indexHtml, /Free and open source[^<]*Apache-2\.0/i, "docs/index.html: permanent open-source message is missing");

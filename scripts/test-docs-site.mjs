@@ -106,11 +106,55 @@ async function testReleaseEnhancement(browser, baseUrl) {
   const page = await browser.newPage({ viewport: { width: 960, height: 900 } });
   await withFixtureRelease(page);
   await page.goto(baseUrl, { waitUntil: "networkidle" });
+  const platformIconGeometry = await page.locator(".platform-mark").evaluateAll((marks) =>
+    marks.map((mark) => {
+      const markRect = mark.getBoundingClientRect();
+      const iconRect = mark.querySelector("svg").getBoundingClientRect();
+      return {
+        width: iconRect.width,
+        height: iconRect.height,
+        centerOffsetX: Math.abs(markRect.x + markRect.width / 2 - (iconRect.x + iconRect.width / 2)),
+        centerOffsetY: Math.abs(markRect.y + markRect.height / 2 - (iconRect.y + iconRect.height / 2))
+      };
+    })
+  );
+  assert.equal(platformIconGeometry.length, 3);
+  for (const geometry of platformIconGeometry) {
+    assert.equal(geometry.width, platformIconGeometry[0].width);
+    assert.equal(geometry.height, platformIconGeometry[0].height);
+    assert.equal(geometry.centerOffsetX < 0.5, true);
+    assert.equal(geometry.centerOffsetY < 0.5, true);
+  }
   assert.equal(await page.locator("[data-release-version]").textContent(), "v9.8.7");
+  const releaseLinkBoxes = await page.locator(".release-summary__links a").evaluateAll((links) =>
+    links.map((link) => {
+      const rect = link.getBoundingClientRect();
+      return { left: rect.left, right: rect.right };
+    })
+  );
+  assert.equal(releaseLinkBoxes.length, 2);
+  assert.equal(releaseLinkBoxes[1].left - releaseLinkBoxes[0].right >= 12, true, "Release actions need a clear visual gap");
+  assert.equal(await page.locator(".trust-strip span > strong").count(), 5);
+  assert.equal(await page.locator(".trust-strip span > small").count(), 5);
   const setupLink = page.locator(".asset-row", { hasText: "Setup executable" });
   assert.match(await setupLink.getAttribute("href"), /PostNot_9\.8\.7_x64-setup\.exe$/);
   assert.match(await setupLink.locator("[data-asset-meta]").textContent(), /SHA-256/);
   assert.equal(await page.locator(".asset-signature").count() > 0, true);
+  await page.close();
+}
+
+async function testMarketingNavigation(browser, baseUrl) {
+  const page = await browser.newPage({ viewport: { width: 1080, height: 736 }, reducedMotion: "reduce" });
+  await withFixtureRelease(page);
+  await page.goto(baseUrl, { waitUntil: "networkidle" });
+  const headerBottom = await page.locator(".site-header").evaluate((header) => header.getBoundingClientRect().bottom);
+
+  for (const targetId of ["product", "privacy", "download"]) {
+    await page.locator(`.nav-links a[href="#${targetId}"]`).click();
+    const targetTop = await page.locator(`#${targetId}`).evaluate((target) => target.getBoundingClientRect().top);
+    assert.equal(targetTop >= headerBottom - 1, true, `${targetId} must not scroll underneath the sticky header`);
+    assert.equal(targetTop <= headerBottom + 12, true, `${targetId} should align closely with the sticky-header edge`);
+  }
   await page.close();
 }
 
@@ -168,11 +212,16 @@ async function testWithoutJavaScript(browser, baseUrl) {
 
 async function testDocumentation(browser, baseUrl) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto(`${baseUrl}scripting.html`, { waitUntil: "networkidle" });
   assert.equal(await page.locator(".doc-mobile-toc").isVisible(), true);
   assert.equal(await page.locator(".heading-anchor").count() >= 12, true);
   await page.locator("[data-doc-mobile-toc]").selectOption("#examples");
   await page.waitForFunction(() => location.hash === "#examples" || document.querySelector("#examples").getBoundingClientRect().top < innerHeight);
+  const headerBottom = await page.locator(".site-header").evaluate((header) => header.getBoundingClientRect().bottom);
+  const examplesTop = await page.locator("#examples").evaluate((section) => section.getBoundingClientRect().top);
+  assert.equal(examplesTop >= headerBottom - 1, true, `Scripting section top ${examplesTop}px is above sticky header bottom ${headerBottom}px`);
+  assert.equal(examplesTop <= headerBottom + 12, true, `Scripting section top ${examplesTop}px is too far below sticky header bottom ${headerBottom}px`);
   await assertNoOverflow(page, 390);
   await page.close();
 }
@@ -187,6 +236,7 @@ async function main() {
   try {
     await captureThemes(browser, baseUrl);
     await testReleaseEnhancement(browser, baseUrl);
+    await testMarketingNavigation(browser, baseUrl);
     await testReleaseFallback(browser, baseUrl);
     await testMobileInteractions(browser, baseUrl);
     await testWithoutJavaScript(browser, baseUrl);
