@@ -1,0 +1,17 @@
+{
+  "name": "PostNot",
+  "short_name": "PostNot",
+  "description": "Private, local-first desktop API client.",
+  "start_url": "/",
+  "display": "browser",
+  "background_color": "#111917",
+  "theme_color": "#111917",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

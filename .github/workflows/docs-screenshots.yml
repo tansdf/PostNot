@@ -8,18 +8,22 @@ on:
       - "src/lib/styles/**"
       - "src/routes/**"
       - "scripts/capture-docs-screenshots.mjs"
+      - "scripts/test-docs-site.mjs"
+      - "scripts/validate-docs.mjs"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/docs-screenshots.yml"
   push:
     branches:
-      - main
+      - master
     paths:
       - "docs/**"
       - "src/lib/components/**"
       - "src/lib/styles/**"
       - "src/routes/**"
       - "scripts/capture-docs-screenshots.mjs"
+      - "scripts/test-docs-site.mjs"
+      - "scripts/validate-docs.mjs"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/docs-screenshots.yml"
@@ -45,5 +49,22 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Validate docs structure and metadata
+        run: npm run docs:validate
+
+      - name: Test docs accessibility and interactions
+        run: npm run docs:test-site
+
       - name: Check docs screenshot freshness
         run: npm run docs:check-screenshots
+
+      - name: Upload docs visual snapshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-site-visuals
+          path: .tmp/docs-site-visuals
+          if-no-files-found: ignore

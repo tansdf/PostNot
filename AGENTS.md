@@ -82,6 +82,14 @@ Frontend:
 npm run check
 ```
 
+Marketing site:
+
+```bash
+npm run docs:validate
+npm run docs:test-site
+npm run docs:check-screenshots
+```
+
 Rust:
 
 ```bash

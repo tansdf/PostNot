@@ -21,6 +21,7 @@ src-tauri/target/
 
 # Logs
 *.log
+.tmp/
 npm-debug.log*
 pnpm-debug.log*
 yarn-debug.log*

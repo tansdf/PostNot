@@ -64,9 +64,20 @@ jobs:
       - name: Validate frontend types
         run: npm run check
 
+      - name: Install Chromium for docs checks
+        if: matrix.platform == 'ubuntu-22.04'
+        run: npx playwright install --with-deps chromium
+
+      - name: Validate marketing site
+        if: matrix.platform == 'ubuntu-22.04'
+        run: npm run docs:validate
+
+      - name: Test marketing site
+        if: matrix.platform == 'ubuntu-22.04'
+        run: npm run docs:test-site
+
       - name: Check docs screenshot freshness
         if: matrix.platform == 'ubuntu-22.04'
-        continue-on-error: true
         run: npm run docs:check-screenshots
 
       - name: Extract release notes

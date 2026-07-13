@@ -10,7 +10,11 @@
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "docs:capture-screenshots": "node scripts/capture-docs-screenshots.mjs",
+    "docs:update-screenshot-manifest": "node scripts/capture-docs-screenshots.mjs --update-manifest-only",
     "docs:check-screenshots": "node scripts/capture-docs-screenshots.mjs --check",
+    "docs:validate": "node scripts/validate-docs.mjs",
+    "docs:test-site": "node scripts/test-docs-site.mjs",
+    "docs:check": "npm run docs:validate && npm run docs:test-site && npm run docs:check-screenshots",
     "test": "node scripts/run-tests.mjs",
     "test:response-stress": "cargo test --manifest-path src-tauri/Cargo.toml handles_one_gib_file_without_full_body_reads -- --ignored --nocapture",
     "tauri": "tauri"
@@ -20,6 +24,7 @@
     "svelte": "^5.28.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
     "@sveltejs/adapter-static": "^3.0.8",
     "@sveltejs/kit": "^2.16.0",
     "@tauri-apps/cli": "^2.3.1",

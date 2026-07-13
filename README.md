@@ -11,7 +11,7 @@ PostNot is built for working with HTTP APIs on your own machine, with local pers
 
 ## Website
 
-**Live site:** [post-not.com](https://post-not.com/) — project landing page (features, screenshots, links to GitHub and releases). It is served through [GitHub Pages](https://pages.github.com/) from the [`docs/`](docs/) folder on the default branch, with the **post-not.com** custom domain configured in the repository Pages settings.
+**Live site:** [post-not.com](https://post-not.com/) — product overview, platform downloads, privacy model, scripting reference, and links to the public project. It is served through [GitHub Pages](https://pages.github.com/) from the [`docs/`](docs/) folder on the default branch, with the **post-not.com** custom domain configured in the repository Pages settings.
 
 ## What It Does
 
@@ -83,6 +83,9 @@ Frontend:
 
 ```bash
 npm run check
+npm run docs:validate
+npm run docs:test-site
+npm run docs:check-screenshots
 ```
 
 Rust:

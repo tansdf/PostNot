@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>PostNot scripting documentation</title>
+    <title>PostNot scripting API — pre-request and test scripts</title>
     <meta
       name="description"
       content="Documentation for PostNot pre-request and test scripts, including inheritance order, pn APIs, examples, and scripting runtime boundaries."
@@ -14,31 +14,51 @@
       content="Use inherited collection, folder, and saved-request scripts to mutate requests and assert responses in PostNot."
     />
     <meta property="og:type" content="article" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
-      rel="stylesheet"
-    />
+    <meta property="og:url" content="https://post-not.com/scripting.html" />
+    <meta property="og:image" content="https://post-not.com/social-preview.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="PostNot local-first desktop API client" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="PostNot scripting API" />
+    <meta name="twitter:description" content="Pre-request scripts, test scripts, helper HTTP calls, and environment variables in PostNot." />
+    <meta name="twitter:image" content="https://post-not.com/social-preview.png" />
+    <meta name="theme-color" content="#111917" />
+    <link rel="canonical" href="https://post-not.com/scripting.html" />
+    <link rel="manifest" href="site.webmanifest" />
     <link rel="stylesheet" href="site.css" />
     <link rel="icon" type="image/svg+xml" href="icon.svg" />
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
     <script src="site.js" defer></script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "TechArticle",
+        "headline": "PostNot scripting API",
+        "description": "Reference for PostNot pre-request and test scripts, helper requests, variables, assertions, and runtime boundaries.",
+        "url": "https://post-not.com/scripting.html",
+        "isPartOf": { "@type": "SoftwareApplication", "name": "PostNot", "url": "https://post-not.com/" },
+        "license": "https://www.apache.org/licenses/LICENSE-2.0"
+      }
+    </script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
-    <header class="site-header">
+    <header class="site-header" data-site-header>
       <div class="site-header__inner">
-        <a class="brand" href="index.html">
+        <a class="brand" href="index.html" aria-label="PostNot home">
           <img src="icon.svg" width="36" height="36" alt="" />
           <span>PostNot</span>
         </a>
-        <nav aria-label="Primary">
+        <button class="menu-toggle" type="button" data-menu-toggle aria-expanded="false" aria-controls="site-nav">
+          <span class="menu-toggle__label">Menu</span><span class="menu-toggle__icon" aria-hidden="true"></span>
+        </button>
+        <nav id="site-nav" class="site-nav" data-site-nav aria-label="Primary">
           <ul class="nav-links">
-            <li><a href="index.html#features">Features</a></li>
-            <li><a href="index.html#screenshots">Screenshots</a></li>
+            <li><a href="index.html#product">Product</a></li>
             <li><a href="scripting.html" aria-current="page">Scripting</a></li>
             <li><a href="index.html#privacy">Privacy</a></li>
-            <li><a href="https://github.com/tansdf/PostNot/blob/master/docs/tech-design.md" rel="noopener noreferrer">Technical design</a></li>
+            <li><a class="nav-links__download" href="index.html#download">Download</a></li>
             <li><a href="https://github.com/tansdf/PostNot" rel="noopener noreferrer">GitHub</a></li>
           </ul>
         </nav>
@@ -47,6 +67,7 @@
 
     <main id="main" class="doc-page">
       <section class="doc-hero" aria-labelledby="scripting-heading">
+        <a class="doc-back-link" href="index.html#product"><span aria-hidden="true">←</span> Back to product</a>
         <p class="eyebrow">PostNot scripting</p>
         <h1 id="scripting-heading">Inherited scripts for API workflows</h1>
         <p class="section-lead">
@@ -57,6 +78,24 @@
           keeping request execution in the native Rust layer.
         </p>
       </section>
+
+      <div class="doc-mobile-toc">
+        <label for="doc-section-select">Jump to a section</label>
+        <select id="doc-section-select" data-doc-mobile-toc>
+          <option value="#where-scripts-run">Where scripts run</option>
+          <option value="#where-to-edit">Where to edit scripts</option>
+          <option value="#script-order">Script execution order</option>
+          <option value="#persistence-rules">What persists</option>
+          <option value="#pre-request-api">Pre-request API</option>
+          <option value="#helper-request-shape">Helper request shape</option>
+          <option value="#variables-api">Variable API</option>
+          <option value="#test-api">Test API</option>
+          <option value="#failure-behavior">Failure behavior</option>
+          <option value="#examples">Common scripts</option>
+          <option value="#limits">Runtime boundaries</option>
+          <option value="#postman-events">Postman portability</option>
+        </select>
+      </div>
 
       <div class="doc-layout">
         <aside class="doc-sidebar" aria-labelledby="contents-heading">
@@ -84,7 +123,7 @@
           <section aria-labelledby="where-scripts-run">
             <div class="section-heading">
               <p class="eyebrow">Execution model</p>
-              <h2 id="where-scripts-run">Where scripts run</h2>
+              <h2 id="where-scripts-run">Where scripts run <a class="heading-anchor" href="#where-scripts-run" aria-label="Link to Where scripts run">#</a></h2>
             </div>
             <div class="doc-grid">
               <article class="card">
@@ -119,7 +158,7 @@
       <section aria-labelledby="where-to-edit">
         <div class="section-heading">
           <p class="eyebrow">Authoring</p>
-          <h2 id="where-to-edit">Where to edit scripts</h2>
+          <h2 id="where-to-edit">Where to edit scripts <a class="heading-anchor" href="#where-to-edit" aria-label="Link to Where to edit scripts">#</a></h2>
         </div>
         <div class="doc-grid">
           <article class="card">
@@ -149,7 +188,7 @@
       <section aria-labelledby="script-order">
         <div class="section-heading">
           <p class="eyebrow">Inheritance</p>
-          <h2 id="script-order">Script execution order</h2>
+          <h2 id="script-order">Script execution order <a class="heading-anchor" href="#script-order" aria-label="Link to Script execution order">#</a></h2>
         </div>
         <p class="section-lead">
           For a saved request inside nested folders, PostNot runs scripts from broadest scope to most
@@ -170,7 +209,7 @@
       <section aria-labelledby="persistence-rules">
         <div class="section-heading">
           <p class="eyebrow">Reliability</p>
-          <h2 id="persistence-rules">What persists and what does not</h2>
+          <h2 id="persistence-rules">What persists and what does not <a class="heading-anchor" href="#persistence-rules" aria-label="Link to persistence rules">#</a></h2>
         </div>
         <div class="doc-grid">
           <article class="card">
@@ -211,7 +250,7 @@
       <section aria-labelledby="pre-request-api">
         <div class="section-heading">
           <p class="eyebrow">Pre-request API</p>
-          <h2 id="pre-request-api">Mutate the outgoing request</h2>
+          <h2 id="pre-request-api">Mutate the outgoing request <a class="heading-anchor" href="#pre-request-api" aria-label="Link to pre-request API">#</a></h2>
         </div>
         <div class="api-table" role="table" aria-label="Pre-request scripting API">
           <div role="row">
@@ -300,7 +339,7 @@
       <section aria-labelledby="helper-request-shape">
         <div class="section-heading">
           <p class="eyebrow">Helper requests</p>
-          <h2 id="helper-request-shape">Helper request shape</h2>
+          <h2 id="helper-request-shape">Helper request shape <a class="heading-anchor" href="#helper-request-shape" aria-label="Link to helper request shape">#</a></h2>
         </div>
         <p class="section-lead">
           <span class="code-inline">pn.http.send(...)</span> expects a request object with a required
@@ -348,7 +387,7 @@
       <section aria-labelledby="variables-api">
         <div class="section-heading">
           <p class="eyebrow">Variables</p>
-          <h2 id="variables-api">Read and write active environment variables</h2>
+          <h2 id="variables-api">Read and write active environment variables <a class="heading-anchor" href="#variables-api" aria-label="Link to variable API">#</a></h2>
         </div>
         <p class="section-lead">
           Scripts can read and update active environment values directly. Environment placeholders and built-in
@@ -391,7 +430,7 @@
       <section aria-labelledby="test-api">
         <div class="section-heading">
           <p class="eyebrow">Test API</p>
-          <h2 id="test-api">Inspect responses and assert behavior</h2>
+          <h2 id="test-api">Inspect responses and assert behavior <a class="heading-anchor" href="#test-api" aria-label="Link to test API">#</a></h2>
         </div>
         <div class="api-table" role="table" aria-label="Test scripting API">
           <div role="row">
@@ -472,7 +511,7 @@
       <section aria-labelledby="failure-behavior">
         <div class="section-heading">
           <p class="eyebrow">Failure modes</p>
-          <h2 id="failure-behavior">Failure behavior</h2>
+          <h2 id="failure-behavior">Failure behavior <a class="heading-anchor" href="#failure-behavior" aria-label="Link to failure behavior">#</a></h2>
         </div>
         <div class="doc-grid">
           <article class="card">
@@ -511,7 +550,7 @@
       <section aria-labelledby="examples">
         <div class="section-heading">
           <p class="eyebrow">Examples</p>
-          <h2 id="examples">Common scripts</h2>
+          <h2 id="examples">Common scripts <a class="heading-anchor" href="#examples" aria-label="Link to common scripts">#</a></h2>
         </div>
         <div class="example-grid">
           <article class="doc-example">
@@ -572,7 +611,7 @@ pn.test('response has an id', () => {
       <section aria-labelledby="limits">
         <div class="section-heading">
           <p class="eyebrow">Runtime boundaries</p>
-          <h2 id="limits">Async helper boundaries</h2>
+          <h2 id="limits">Async helper boundaries <a class="heading-anchor" href="#limits" aria-label="Link to runtime boundaries">#</a></h2>
         </div>
         <div class="status-callout">
           <p>
@@ -597,7 +636,7 @@ pn.test('response has an id', () => {
           <section aria-labelledby="postman-events">
             <div class="section-heading">
               <p class="eyebrow">Portability</p>
-              <h2 id="postman-events">Postman event import and export</h2>
+              <h2 id="postman-events">Postman event import and export <a class="heading-anchor" href="#postman-events" aria-label="Link to Postman portability">#</a></h2>
             </div>
             <p class="section-lead">
               PostNot imports and exports collection, folder, and request scripts through Postman
@@ -627,109 +666,5 @@ pn.test('response has an id', () => {
         </div>
       </div>
     </footer>
-    <script>
-      (() => {
-        const tocLinks = Array.from(document.querySelectorAll(".doc-toc a[href^='#']"));
-        const sidebar = document.querySelector(".doc-sidebar");
-        const siteHeader = document.querySelector(".site-header");
-        if (tocLinks.length === 0) {
-          return;
-        }
-
-        const sections = tocLinks
-          .map((link) => {
-            const id = link.getAttribute("href")?.slice(1) ?? "";
-            const section = id ? document.getElementById(id) : null;
-            return section ? { link, section } : null;
-          })
-          .filter(Boolean);
-
-        if (sections.length === 0) {
-          return;
-        }
-
-        let activeId = "";
-
-        function preferredScrollOffset() {
-          const sidebarTop = sidebar?.getBoundingClientRect().top ?? 0;
-          if (window.matchMedia("(min-width: 860px)").matches && sidebarTop > 0) {
-            return sidebarTop;
-          }
-
-          const headerBottom = siteHeader?.getBoundingClientRect().bottom ?? 0;
-          return headerBottom + 16;
-        }
-
-        function scrollSectionIntoView(id, shouldUpdateHash = true) {
-          const target = document.getElementById(id);
-          if (!target) {
-            return;
-          }
-
-          const top = window.scrollY + target.getBoundingClientRect().top - preferredScrollOffset();
-          window.scrollTo({
-            top: Math.max(0, top),
-            behavior: "smooth"
-          });
-
-          if (shouldUpdateHash) {
-            history.pushState(null, "", `#${id}`);
-          }
-        }
-
-        function setActive(id) {
-          if (!id || id === activeId) {
-            return;
-          }
-
-          activeId = id;
-          for (const entry of sections) {
-            entry.link.setAttribute(
-              "aria-current",
-              entry.section.id === id ? "location" : "false"
-            );
-          }
-        }
-
-        const observer = new IntersectionObserver(
-          (entries) => {
-            const visible = entries
-              .filter((entry) => entry.isIntersecting)
-              .sort((left, right) => left.boundingClientRect.top - right.boundingClientRect.top);
-
-            if (visible.length > 0) {
-              setActive(visible[0].target.id);
-            }
-          },
-          {
-            rootMargin: "-18% 0px -62% 0px",
-            threshold: [0, 0.1, 0.25, 0.5, 1]
-          }
-        );
-
-        for (const entry of sections) {
-          observer.observe(entry.section);
-        }
-
-        const initialId = window.location.hash.slice(1) || sections[0].section.id;
-        setActive(initialId);
-
-        for (const entry of sections) {
-          entry.link.addEventListener("click", (event) => {
-            event.preventDefault();
-            setActive(entry.section.id);
-            scrollSectionIntoView(entry.section.id);
-          });
-        }
-
-        window.addEventListener("hashchange", () => {
-          const id = window.location.hash.slice(1);
-          if (id) {
-            setActive(id);
-            scrollSectionIntoView(id, false);
-          }
-        });
-      })();
-    </script>
   </body>
 </html>

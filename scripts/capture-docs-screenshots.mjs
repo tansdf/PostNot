@@ -14,8 +14,10 @@ const imageDir = join(repoRoot, "docs", "images");
 const manifestPath = join(imageDir, "screenshot-manifest.json");
 const tempDir = join(repoRoot, ".tmp", "docs-screenshots");
 const viewport = { width: 1995, height: 1179 };
-const manifestVersion = 1;
+const responsiveScreenshotWidth = 960;
+const manifestVersion = 2;
 const checkOnly = process.argv.includes("--check");
+const manifestOnly = process.argv.includes("--update-manifest-only");
 
 const now = new Date("2026-06-29T12:00:00.000Z").toISOString();
 
@@ -296,7 +298,7 @@ const captures = [
     file: "collections-page.webp",
     waitFor: ".collections-page-panel",
     beforeCapture: async (page) => {
-      await page.getByText("Collection root").waitFor();
+      await page.getByRole("heading", { name: "PostNot API", exact: true }).waitFor();
       await page.getByText("Create onboarding note").first().waitFor();
     }
   },
@@ -318,9 +320,6 @@ const captures = [
 
 const freshnessInputs = [
   { path: "scripts/capture-docs-screenshots.mjs" },
-  { path: "docs/index.html" },
-  { path: "docs/site.css" },
-  { path: "docs/site.js" },
   { path: "src/routes", extensions: [".svelte"] },
   { path: "src/lib/components", extensions: [".svelte"] },
   { path: "src/lib/styles", extensions: [".css"] }
@@ -375,6 +374,7 @@ async function buildScreenshotManifest() {
     version: manifestVersion,
     generatedAt: new Date().toISOString(),
     viewport,
+    responsiveScreenshotWidth,
     captures: captures.map(({ path, file, waitFor }) => ({ path, file, waitFor })),
     inputHash: inputHash.digest("hex"),
     inputs
@@ -400,6 +400,7 @@ function comparableManifest(manifest) {
   return {
     version: manifest.version,
     viewport: manifest.viewport,
+    responsiveScreenshotWidth: manifest.responsiveScreenshotWidth,
     captures: manifest.captures,
     inputHash: manifest.inputHash
   };
@@ -435,7 +436,7 @@ async function checkScreenshotFreshness() {
   const current = await buildScreenshotManifest();
   const recorded = await readManifest();
   const missingAssets = captures
-    .map((capture) => capture.file)
+    .flatMap((capture) => [capture.file, capture.file.replace(/\.webp$/, `-${responsiveScreenshotWidth}.webp`)])
     .filter((file) => !existsSync(join(imageDir, file)));
   const issue = describeFreshnessIssue(current, recorded);
 
@@ -501,9 +502,10 @@ function spawnDevServer() {
   return child;
 }
 
-async function convertToWebp(pngPath, webpPath) {
+async function convertToWebp(pngPath, webpPath, resizeWidth = null) {
   await new Promise((resolve, reject) => {
-    const child = spawn("cwebp", ["-quiet", "-q", "88", pngPath, "-o", webpPath], {
+    const resizeArgs = resizeWidth ? ["-resize", String(resizeWidth), "0"] : [];
+    const child = spawn("cwebp", ["-quiet", "-q", "88", ...resizeArgs, pngPath, "-o", webpPath], {
       cwd: repoRoot,
       stdio: "inherit"
     });
@@ -518,6 +520,12 @@ async function convertToWebp(pngPath, webpPath) {
 async function main() {
   if (checkOnly) {
     await checkScreenshotFreshness();
+    return;
+  }
+
+  if (manifestOnly) {
+    await writeScreenshotManifest();
+    console.log("Updated docs/images/screenshot-manifest.json without recapturing app screenshots.");
     return;
   }
 
@@ -565,8 +573,13 @@ async function main() {
 
       const pngPath = join(tempDir, capture.file.replace(/\.webp$/, ".png"));
       const webpPath = join(imageDir, capture.file);
+      const responsiveWebpPath = join(
+        imageDir,
+        capture.file.replace(/\.webp$/, `-${responsiveScreenshotWidth}.webp`)
+      );
       await page.screenshot({ path: pngPath, fullPage: false });
       await convertToWebp(pngPath, webpPath);
+      await convertToWebp(pngPath, responsiveWebpPath, responsiveScreenshotWidth);
       console.log(`Captured docs/images/${capture.file}`);
     }
 

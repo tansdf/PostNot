@@ -1,453 +1,488 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>PostNot - local-first desktop API client</title>
+    <title>PostNot — private, local-first desktop API client</title>
     <meta
       name="description"
-      content="PostNot is a free local-first desktop API client built with Rust and Tauri. Send HTTP requests, manage collections, Playbooks, environments, imports, exports, OAuth2 helpers, OS-backed secrets, and request scripts on your machine."
+      content="PostNot is a free and open-source desktop API client. Send, organize, automate, import, and export API requests without an account or cloud workspace."
     />
-    <meta property="og:title" content="PostNot - local-first desktop API client" />
+    <meta name="theme-color" content="#111917" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="canonical" href="https://post-not.com/" />
+    <meta property="og:title" content="PostNot — Post APIs. Not your data." />
     <meta
       property="og:description"
-      content="Post APIs. Not your data. Free desktop API work with local persistence, Dark and Forest themes, Playbooks, imports, OS-backed secrets, environments, and scriptable helper HTTP requests."
+      content="A private, local-first desktop API client with no account and no cloud workspace. Free and open source under Apache-2.0."
     />
     <meta property="og:type" content="website" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
-      rel="stylesheet"
+    <meta property="og:url" content="https://post-not.com/" />
+    <meta property="og:image" content="https://post-not.com/social-preview.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="PostNot local-first desktop API client" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="PostNot — Post APIs. Not your data." />
+    <meta
+      name="twitter:description"
+      content="A private, local-first desktop API client with no account and no cloud workspace."
     />
-    <link rel="stylesheet" href="site.css" />
+    <meta name="twitter:image" content="https://post-not.com/social-preview.png" />
+    <link rel="manifest" href="site.webmanifest" />
     <link rel="icon" type="image/svg+xml" href="icon.svg" />
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
+    <link rel="stylesheet" href="site.css" />
     <script src="site.js" defer></script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "PostNot",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "Windows, macOS, Linux",
+        "url": "https://post-not.com/",
+        "downloadUrl": "https://github.com/tansdf/PostNot/releases/latest",
+        "softwareVersion": "0.21.0",
+        "license": "https://www.apache.org/licenses/LICENSE-2.0",
+        "isAccessibleForFree": true,
+        "description": "A private, local-first desktop API client with no account or cloud workspace.",
+        "codeRepository": "https://github.com/tansdf/PostNot"
+      }
+    </script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
-    <header class="site-header">
+    <header class="site-header" data-site-header>
       <div class="site-header__inner">
-        <a class="brand" href="index.html">
+        <a class="brand" href="index.html" aria-label="PostNot home">
           <img src="icon.svg" width="36" height="36" alt="" />
           <span>PostNot</span>
         </a>
-        <nav aria-label="Primary">
+        <button
+          class="menu-toggle"
+          type="button"
+          data-menu-toggle
+          aria-expanded="false"
+          aria-controls="site-nav"
+        >
+          <span class="menu-toggle__label">Menu</span>
+          <span class="menu-toggle__icon" aria-hidden="true"></span>
+        </button>
+        <nav id="site-nav" class="site-nav" data-site-nav aria-label="Primary">
           <ul class="nav-links">
-            <li><a href="#features">Features</a></li>
-            <li><a href="#design">Design</a></li>
-            <li><a href="#screenshots">Screenshots</a></li>
+            <li><a href="#product">Product</a></li>
             <li><a href="scripting.html">Scripting</a></li>
             <li><a href="#privacy">Privacy</a></li>
-            <li><a href="https://github.com/tansdf/PostNot/blob/master/docs/tech-design.md" rel="noopener noreferrer">Technical design</a></li>
-            <li>
-              <a href="https://github.com/tansdf/PostNot" rel="noopener noreferrer">GitHub</a>
-            </li>
+            <li><a class="nav-links__download" href="#download">Download</a></li>
+            <li><a href="https://github.com/tansdf/PostNot" rel="noopener noreferrer">GitHub</a></li>
           </ul>
         </nav>
       </div>
     </header>
 
     <main id="main">
-      <section class="hero">
+      <section class="hero" aria-labelledby="hero-heading">
         <div class="hero__copy">
-          <p class="eyebrow">Rust + Tauri desktop client</p>
-          <div class="hero__badges">
-            <a href="https://github.com/tansdf/PostNot" rel="noopener noreferrer"
-              ><img
-                src="https://img.shields.io/badge/built%20with-AI%20agents-ff9b54"
-                alt="Built with AI agents"
-            /></a>
-            <a href="https://github.com/tansdf/PostNot" rel="noopener noreferrer"
-              ><img
-                src="https://img.shields.io/badge/code%20authorship-100%25%20AI%20generated-2f855a"
-                alt="Code authorship 100 percent AI generated"
-            /></a>
-          </div>
-          <h1>Post APIs. Not your data.</h1>
+          <p class="eyebrow">Private desktop API workbench</p>
+          <h1 id="hero-heading">Post APIs.<br />Not your data.</h1>
           <p class="hero__tagline">
-            PostNot is a free, local-first API client for focused HTTP workflows: native request
-            execution, restored request tabs, resolved previews before send, collections, Playbooks,
-            environments, OS-backed secrets, imports from Postman, OpenAPI, and cURL, redacted export
-            flows, OAuth2 helpers, saved request scripting, and a tokenized light/dark/Forest design
-            system built for dense desktop work.
+            A local-first desktop API client for sending, organizing, and automating requests—without
+            an account or cloud workspace.
           </p>
-          <div class="hero__highlights" aria-label="Key product highlights">
-            <span>Rust-native sending</span>
-            <span>SQLite-backed local data</span>
-            <span>OS-backed secret storage</span>
-          </div>
           <div class="cta-row">
-            <a
-              class="btn btn--primary"
-              href="https://github.com/tansdf/PostNot/releases/latest"
-              rel="noopener noreferrer"
-              >Download latest release</a
-            >
+            <a class="btn btn--primary" href="#download">Download PostNot</a>
             <a
               class="btn btn--secondary"
               href="https://github.com/tansdf/PostNot"
               rel="noopener noreferrer"
-              >Browse source</a
-            >
+            >Browse source</a>
           </div>
-          <p class="hero__note">
-            PostNot is fully free and open source. It is also a fully AI-generated software project:
-            the repository code was produced end-to-end by AI agents.
+          <p class="license-promise">
+            Free and open source under <a href="https://github.com/tansdf/PostNot/blob/master/LICENSE">Apache-2.0</a>.
           </p>
+          <ul class="hero__proof" aria-label="Why PostNot">
+            <li><strong>Your workspace stays local</strong><span>SQLite data on your machine</span></li>
+            <li><strong>Requests run natively</strong><span>Rust networking, outside browser CORS</span></li>
+            <li><strong>Your data stays portable</strong><span>Postman, OpenAPI, cURL, and JSON</span></li>
+          </ul>
         </div>
 
         <div class="hero__preview">
           <div class="preview-shell">
-            <div class="preview-shell__bar">
-              <span>Request workspace</span>
-              <span>Desktop UI</span>
-            </div>
+            <div class="preview-shell__bar"><span>Request workspace</span><span>Dark theme</span></div>
             <button
               class="screenshot-trigger screenshot-trigger--hero"
               type="button"
               data-screenshot-src="images/requests-page.webp"
               data-screenshot-title="Request workspace"
-              data-screenshot-alt="PostNot request workspace showing request tabs, a request editor, response panel, and history"
+              data-screenshot-alt="PostNot request workspace with tabs, request editor, response panel, and history"
             >
               <img
                 src="images/requests-page.webp"
+                srcset="images/requests-page-960.webp 960w, images/requests-page.webp 1995w"
+                sizes="(min-width: 960px) 46vw, 100vw"
                 width="1995"
                 height="1179"
-                alt="PostNot request workspace showing request tabs, a request editor, response panel, and history"
+                alt="PostNot request workspace with tabs, request editor, response panel, and history"
+                fetchpriority="high"
               />
-              <span class="screenshot-trigger__label">View larger</span>
+              <span class="screenshot-trigger__label">Open full screenshot</span>
             </button>
           </div>
-          <div class="preview-caption">
-            Captured in the Dark theme used by the desktop app screenshot set.
-          </div>
+          <p class="preview-caption">A dense desktop workspace, available in Light, Dark, and Forest themes.</p>
         </div>
       </section>
 
-      <section id="features" aria-labelledby="features-heading">
-        <div class="section-heading">
-          <p class="eyebrow">Core workflow</p>
-          <h2 id="features-heading">Built for dense desktop API sessions</h2>
-        </div>
-        <p class="section-lead">
-          PostNot keeps request editing, multi-tab workspace state, history, imports, automation,
-          and secrets close to the machine you are working on.
-        </p>
-        <div class="feature-grid">
-          <article class="card">
-            <h3>HTTP workspace</h3>
-            <p>
-              Compose and send requests from restored local tabs, with native cancellation and full
-              response body reads.
-            </p>
-          </article>
-          <article class="card">
-            <h3>Resolved preview</h3>
-            <p>
-              Inspect the outgoing URL, query, headers, auth, and body before send, with private
-              values masked.
-            </p>
-          </article>
-          <article class="card">
-            <h3>Collections and folders</h3>
-            <p>
-              Save requests into collections and nested folders, then browse them with aligned tree
-              guides, search, reorder, and drag-and-drop moves.
-            </p>
-          </article>
-          <article class="card">
-            <h3>Playbooks</h3>
-            <p>
-              Run saved requests in order with per-step delays, stop-on-failure behavior, scripts,
-              environments, history, and grouped run logs.
-            </p>
-          </article>
-          <article class="card">
-            <h3>Environments</h3>
-            <p>
-              Use environments and <span class="code-inline">{{variable}}</span> substitution across
-              requests, with autosave and keyboard save support.
-            </p>
-          </article>
-          <article class="card">
-            <h3>Dynamic variables</h3>
-            <p>Built-in values like <span class="code-inline">$guid</span> and <span class="code-inline">$timestamp</span>.</p>
-          </article>
-          <article class="card">
-            <h3>Secrets</h3>
-            <p>Store secret environment values in the OS credential store instead of plain SQLite.</p>
-          </article>
-          <article class="card">
-            <h3>History</h3>
-            <p>
-              Inspect request history locally, collapse the Requests history panel, and restore a past
-              request into a new tab.
-            </p>
-          </article>
-          <article class="card">
-            <h3>Import and export</h3>
-            <p>
-              Import from Postman, OpenAPI 3, or cURL, export collections and environments, and export
-              the active request as redacted cURL or PostNot JSON.
-            </p>
-          </article>
-          <article class="card">
-            <h3>OAuth2 helpers</h3>
-            <p>
-              Fetch client-credentials bearer tokens from the request editor and optionally store them
-              in the active environment as secrets.
-            </p>
-          </article>
-          <article class="card">
-            <h3>Multipart and files</h3>
-            <p>Attach local files to multipart requests without leaving the app workflow.</p>
-          </article>
-          <article class="card">
-            <h3>Scripts</h3>
-            <p>
-              Run inherited collection, folder, and request scripts around each send, including
-              async helper HTTP calls and active environment variable updates.
-              <a href="scripting.html">Read the scripting docs</a>.
-            </p>
-          </article>
-        </div>
-      </section>
+      <aside class="trust-strip" aria-label="Product trust highlights">
+        <span><strong>SQLite</strong> local persistence</span>
+        <span><strong>OS credential store</strong> for secrets</span>
+        <span><strong>Redacted</strong> request exports</span>
+        <span><strong>Signed</strong> updater artifacts</span>
+        <span><strong>Postman · OpenAPI · cURL</strong> imports</span>
+      </aside>
 
-      <section id="design" aria-labelledby="design-heading">
-        <div class="section-heading">
-          <p class="eyebrow">Design system</p>
-          <h2 id="design-heading">Theme-aware, compact, and desktop-native</h2>
+      <section id="product" aria-labelledby="product-heading">
+        <div class="section-heading section-heading--wide">
+          <p class="eyebrow">The complete workflow</p>
+          <h2 id="product-heading">Everything important stays close to the request</h2>
+          <p>
+            PostNot covers the daily API loop without turning your local workspace into a hosted service.
+          </p>
         </div>
-        <p class="section-lead">
-          PostNot's UI uses semantic tokens, shared controls, accessible dialogs, keyboard
-          fallbacks for drag-and-drop movement, and synchronized theme bootstrapping so the app opens
-          directly into the selected look without a flash.
-        </p>
-        <div class="theme-grid" aria-label="Available interface themes">
-          <button class="theme-card" type="button" data-site-theme="light" aria-pressed="false">
-            <div class="theme-card__swatches" aria-hidden="true">
-              <span style="background: #f2efe7"></span>
-              <span style="background: #172c2b"></span>
-              <span style="background: #d96c3b"></span>
+
+        <div class="workflow-list">
+          <article class="workflow workflow--image-right">
+            <div class="workflow__copy">
+              <p class="workflow__number">01</p>
+              <h3>Send and inspect requests</h3>
+              <p>
+                Compose requests in restored tabs, preview the fully resolved outgoing request with
+                private values masked, cancel native sends, and inspect complete response bodies.
+              </p>
+              <ul class="check-list">
+                <li>Headers, query, auth, multipart files, and body editing</li>
+                <li>OAuth2 client-credentials helper</li>
+                <li>Searchable response and local request history</li>
+              </ul>
             </div>
-            <h3>Light</h3>
-            <p>Cream surfaces, deep teal structure, and warm action color for daytime work.</p>
+            <figure class="product-shot">
+              <button
+                class="screenshot-trigger"
+                type="button"
+                data-screenshot-src="images/request-preview.webp"
+                data-screenshot-title="Resolved request preview"
+                data-screenshot-alt="PostNot resolved request preview with masked private values"
+              >
+                <img
+                  src="images/request-preview-960.webp"
+                  srcset="images/request-preview-960.webp 960w, images/request-preview.webp 1995w"
+                  sizes="(min-width: 860px) 52vw, 100vw"
+                  width="1995"
+                  height="1179"
+                  alt="PostNot resolved request preview with masked private values"
+                  loading="lazy"
+                />
+                <span class="screenshot-trigger__label">Open full screenshot</span>
+              </button>
+              <figcaption>Inspect resolved URL, headers, auth, and body before anything leaves your machine.</figcaption>
+            </figure>
+          </article>
+
+          <article class="workflow">
+            <div class="workflow__copy">
+              <p class="workflow__number">02</p>
+              <h3>Organize and automate</h3>
+              <p>
+                Build nested collections, find saved requests quickly, and run repeatable Playbooks
+                with delays, scripts, stop-on-failure behavior, and grouped logs.
+              </p>
+              <ul class="check-list">
+                <li>Folders, search, reorder, and drag-and-drop moves</li>
+                <li>Inherited collection, folder, and request scripts</li>
+                <li>Sequential Playbooks that reuse the normal send path</li>
+              </ul>
+              <a class="text-link" href="scripting.html">Explore the scripting API <span aria-hidden="true">→</span></a>
+            </div>
+            <figure class="product-shot">
+              <button
+                class="screenshot-trigger"
+                type="button"
+                data-screenshot-src="images/playbooks-page.webp"
+                data-screenshot-title="Playbooks"
+                data-screenshot-alt="PostNot Playbooks with ordered saved-request steps and run logs"
+              >
+                <img
+                  src="images/playbooks-page-960.webp"
+                  srcset="images/playbooks-page-960.webp 960w, images/playbooks-page.webp 1995w"
+                  sizes="(min-width: 860px) 52vw, 100vw"
+                  width="1995"
+                  height="1179"
+                  alt="PostNot Playbooks with ordered saved-request steps and run logs"
+                  loading="lazy"
+                />
+                <span class="screenshot-trigger__label">Open full screenshot</span>
+              </button>
+              <figcaption>Run saved requests in order while preserving scripts, environments, and history.</figcaption>
+            </figure>
+          </article>
+
+          <article class="workflow workflow--image-right">
+            <div class="workflow__copy">
+              <p class="workflow__number">03</p>
+              <h3>Import, export, and migrate</h3>
+              <p>
+                Bring existing work from Postman, OpenAPI 3, or cURL. Export collections and
+                environments in familiar formats, or share a single redacted request as cURL or PostNot JSON.
+              </p>
+              <ul class="check-list">
+                <li>Postman collection and environment round trips</li>
+                <li>OpenAPI 3 collection and request-draft import</li>
+                <li>Broad cURL flag coverage and portable JSON exports</li>
+              </ul>
+            </div>
+            <figure class="product-shot">
+              <button
+                class="screenshot-trigger"
+                type="button"
+                data-screenshot-src="images/collections-page.webp"
+                data-screenshot-title="Collections"
+                data-screenshot-alt="PostNot collections with nested folders and saved requests"
+              >
+                <img
+                  src="images/collections-page-960.webp"
+                  srcset="images/collections-page-960.webp 960w, images/collections-page.webp 1995w"
+                  sizes="(min-width: 860px) 52vw, 100vw"
+                  width="1995"
+                  height="1179"
+                  alt="PostNot collections with nested folders and saved requests"
+                  loading="lazy"
+                />
+                <span class="screenshot-trigger__label">Open full screenshot</span>
+              </button>
+              <figcaption>Keep imported work organized and ready to move again when you choose.</figcaption>
+            </figure>
+          </article>
+
+          <article class="workflow">
+            <div class="workflow__copy">
+              <p class="workflow__number">04</p>
+              <h3>Protect local data and secrets</h3>
+              <p>
+                Use environment variables without storing secret values in plain SQLite. PostNot masks
+                private previews, keeps unresolved secret references in history, and redacts exports by default.
+              </p>
+              <ul class="check-list">
+                <li>OS-backed secret storage</li>
+                <li>Built-in dynamic variables and script-driven updates</li>
+                <li>Explicit control over non-secret variable inclusion</li>
+              </ul>
+            </div>
+            <figure class="product-shot">
+              <button
+                class="screenshot-trigger"
+                type="button"
+                data-screenshot-src="images/environments-page.webp"
+                data-screenshot-title="Environments"
+                data-screenshot-alt="PostNot environment editor with local and secret variables"
+              >
+                <img
+                  src="images/environments-page-960.webp"
+                  srcset="images/environments-page-960.webp 960w, images/environments-page.webp 1995w"
+                  sizes="(min-width: 860px) 52vw, 100vw"
+                  width="1995"
+                  height="1179"
+                  alt="PostNot environment editor with local and secret variables"
+                  loading="lazy"
+                />
+                <span class="screenshot-trigger__label">Open full screenshot</span>
+              </button>
+              <figcaption>Choose which values are ordinary local data and which belong in the OS credential store.</figcaption>
+            </figure>
+          </article>
+        </div>
+      </section>
+
+      <section class="comparison-section" aria-labelledby="comparison-heading">
+        <div class="section-heading">
+          <p class="eyebrow">Why developers choose PostNot</p>
+          <h2 id="comparison-heading">A smaller boundary around your API work</h2>
+        </div>
+        <div class="comparison-grid">
+          <article class="comparison-card comparison-card--featured">
+            <p class="comparison-card__label">With PostNot</p>
+            <h3>Your machine is the workspace</h3>
+            <ul>
+              <li>No account required</li>
+              <li>Native requests are not limited by browser CORS</li>
+              <li>Project data stays in local SQLite and files</li>
+              <li>Open formats make leaving straightforward</li>
+            </ul>
+          </article>
+          <article class="comparison-card">
+            <p class="comparison-card__label">In cloud-first workflows</p>
+            <h3>The hosted service is part of the boundary</h3>
+            <ul>
+              <li>An identity or workspace may be required</li>
+              <li>Synchronization can be coupled to normal use</li>
+              <li>Storage and portability depend on service behavior</li>
+              <li>Browser networking constraints may shape the client</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section id="privacy" class="privacy-section" aria-labelledby="privacy-heading">
+        <div class="section-heading">
+          <p class="eyebrow">Where your data lives</p>
+          <h2 id="privacy-heading">Local by default, explicit when data moves</h2>
+        </div>
+        <ol class="data-flow">
+          <li>
+            <span class="data-flow__number">1</span>
+            <div><h3>Workspace</h3><p>Requests, collections, environments, settings, and history live under the Tauri app data directory in SQLite.</p></div>
+          </li>
+          <li>
+            <span class="data-flow__number">2</span>
+            <div><h3>Secrets</h3><p>Secret environment values go to the operating system credential store, not the application database.</p></div>
+          </li>
+          <li>
+            <span class="data-flow__number">3</span>
+            <div><h3>Network and exports</h3><p>Data leaves when you send or export. Previews mask private values and single-request exports redact credentials by default.</p></div>
+          </li>
+        </ol>
+      </section>
+
+      <section class="themes-section" aria-labelledby="themes-heading">
+        <div class="section-heading">
+          <p class="eyebrow">A workbench that fits</p>
+          <h2 id="themes-heading">Compact in every theme</h2>
+          <p>Try the site palette—the desktop app uses the same Light, Dark, and Forest direction.</p>
+        </div>
+        <div class="theme-grid" aria-label="Preview a site theme">
+          <button class="theme-card" type="button" data-site-theme="light" aria-pressed="false">
+            <span class="theme-card__swatches" aria-hidden="true"><i></i><i></i><i></i></span>
+            <strong>Light</strong><span>Warm cream, deep teal, burnt orange</span>
           </button>
           <button class="theme-card theme-card--active" type="button" data-site-theme="dark" aria-pressed="true">
-            <div class="theme-card__swatches" aria-hidden="true">
-              <span style="background: #111917"></span>
-              <span style="background: #eaf0ea"></span>
-              <span style="background: #de7c4f"></span>
-            </div>
-            <h3>Dark</h3>
-            <p>Low-glare teal surfaces with the same hierarchy and controls used in these screenshots.</p>
+            <span class="theme-card__swatches" aria-hidden="true"><i></i><i></i><i></i></span>
+            <strong>Dark</strong><span>Low-glare teal surfaces</span>
           </button>
           <button class="theme-card" type="button" data-site-theme="forest" aria-pressed="false">
-            <div class="theme-card__swatches" aria-hidden="true">
-              <span style="background: #101713"></span>
-              <span style="background: #eef5ed"></span>
-              <span style="background: #2f7d55"></span>
-            </div>
-            <h3>Forest</h3>
-            <p>A deeper green workbench palette with softer contrast for long API sessions.</p>
+            <span class="theme-card__swatches" aria-hidden="true"><i></i><i></i><i></i></span>
+            <strong>Forest</strong><span>Deep green with a cooler accent</span>
           </button>
         </div>
-        <div class="status-callout status-callout--spaced">
-          <p>
-            The implementation guide lives in
-            <a href="https://github.com/tansdf/PostNot/blob/master/docs/design-system.md" rel="noopener noreferrer">docs/design-system.md</a>.
-            It documents tokens, shared controls, panels, dialogs, notification states, tree affordances,
-            and release checks for light, dark, system, and Forest theme behavior.
-          </p>
-        </div>
       </section>
 
-      <section id="screenshots" aria-labelledby="screenshots-heading">
-        <div class="section-heading">
-          <p class="eyebrow">Interface</p>
-          <h2 id="screenshots-heading">Product screenshots</h2>
+      <section id="download" class="download-section" aria-labelledby="download-heading">
+        <div class="section-heading section-heading--wide">
+          <p class="eyebrow">Download</p>
+          <h2 id="download-heading">Choose the build for your machine</h2>
+          <p>
+            Free and open source under Apache-2.0. No account, trial, paid tier, or cloud workspace.
+          </p>
         </div>
-        <p class="section-lead">
-          A quick look at the Dark-theme UI across collections, Playbooks, environments, and
-          settings. The request workspace is shown above.
+        <div class="release-summary" aria-live="polite">
+          <div>
+            <span class="release-summary__label">Latest stable</span>
+            <strong data-release-version>Loading current release…</strong>
+          </div>
+          <div>
+            <span class="release-summary__label">Published</span>
+            <span data-release-date>Checking GitHub Releases</span>
+          </div>
+          <div class="release-summary__links">
+            <a data-release-notes href="https://github.com/tansdf/PostNot/releases/latest" rel="noopener noreferrer">Release notes</a>
+            <a href="https://github.com/tansdf/PostNot/blob/master/CHANGELOG.md" rel="noopener noreferrer">Changelog</a>
+          </div>
+        </div>
+
+        <div class="download-grid" data-download-grid>
+          <article class="download-card" data-download-platform="windows">
+            <div class="download-card__heading"><span class="platform-mark" aria-hidden="true">⊞</span><div><h3>Windows</h3><p>x86-64 · Windows 7+ · WebView2</p></div></div>
+            <div class="asset-list">
+              <a class="asset-row" data-asset-match="_x64-setup\.exe$" href="https://github.com/tansdf/PostNot/releases/latest" rel="noopener noreferrer"><span><strong>Setup executable</strong><small data-asset-meta>Latest stable release</small></span><span aria-hidden="true">↓</span></a>
+              <a class="asset-row" data-asset-match="_x64_en-US\.msi$" href="https://github.com/tansdf/PostNot/releases/latest" rel="noopener noreferrer"><span><strong>MSI installer</strong><small data-asset-meta>Latest stable release</small></span><span aria-hidden="true">↓</span></a>
+            </div>
+            <p class="install-note">Windows may show a reputation warning until platform code signing is configured. Verify the GitHub-published SHA-256 digest when required.</p>
+          </article>
+
+          <article class="download-card" data-download-platform="macos">
+            <div class="download-card__heading"><span class="platform-mark" aria-hidden="true">●</span><div><h3>macOS</h3><p>10.15+ · Apple Silicon and Intel</p></div></div>
+            <div class="asset-list">
+              <a class="asset-row" data-asset-match="_aarch64\.dmg$" href="https://github.com/tansdf/PostNot/releases/latest" rel="noopener noreferrer"><span><strong>Apple Silicon DMG</strong><small data-asset-meta>ARM64 · latest stable release</small></span><span aria-hidden="true">↓</span></a>
+              <a class="asset-row" data-asset-match="_x64\.dmg$" href="https://github.com/tansdf/PostNot/releases/latest" rel="noopener noreferrer"><span><strong>Intel DMG</strong><small data-asset-meta>x86-64 · latest stable release</small></span><span aria-hidden="true">↓</span></a>
+            </div>
+            <p class="install-note">macOS may require explicit approval in Privacy &amp; Security until Apple notarization is configured.</p>
+          </article>
+
+          <article class="download-card" data-download-platform="linux">
+            <div class="download-card__heading"><span class="platform-mark" aria-hidden="true">⌁</span><div><h3>Linux</h3><p>x86-64 desktop distributions</p></div></div>
+            <div class="asset-list">
+              <a class="asset-row" data-asset-match="_amd64\.AppImage$" href="https://github.com/tansdf/PostNot/releases/latest" rel="noopener noreferrer"><span><strong>AppImage</strong><small data-asset-meta>Portable · latest stable release</small></span><span aria-hidden="true">↓</span></a>
+              <a class="asset-row" data-asset-match="_amd64\.deb$" href="https://github.com/tansdf/PostNot/releases/latest" rel="noopener noreferrer"><span><strong>Debian package</strong><small data-asset-meta>Ubuntu / Debian</small></span><span aria-hidden="true">↓</span></a>
+              <a class="asset-row" data-asset-match="\.x86_64\.rpm$" href="https://github.com/tansdf/PostNot/releases/latest" rel="noopener noreferrer"><span><strong>RPM package</strong><small data-asset-meta>Fedora / RPM-based</small></span><span aria-hidden="true">↓</span></a>
+            </div>
+            <p class="install-note">Requires the WebKitGTK runtime provided by the target distribution. Package signatures are available beside signed updater artifacts.</p>
+          </article>
+        </div>
+        <div class="release-fallback" data-release-fallback>
+          <p data-release-status>
+            Installer details load from the public GitHub release. Every download link still opens the latest release if that lookup is unavailable.
+          </p>
+          <a class="btn btn--secondary" href="https://github.com/tansdf/PostNot/releases/latest" rel="noopener noreferrer">View all release assets</a>
+        </div>
+        <p class="requirements-source">
+          Runtime baselines follow the
+          <a href="https://v2.tauri.app/start/prerequisites/" rel="noopener noreferrer">Tauri 2 platform prerequisites</a>;
+          Linux library availability varies by distribution.
         </p>
-        <div class="gallery">
-          <figure class="figure-card">
-            <button
-              class="screenshot-trigger"
-              type="button"
-              data-screenshot-src="images/collections-page.webp"
-              data-screenshot-title="Collections"
-              data-screenshot-alt="PostNot collections view with sidebar navigation and nested request folders"
-            >
-              <img
-                src="images/collections-page.webp"
-                width="1995"
-                height="1179"
-                alt="PostNot collections view with sidebar navigation and nested request folders"
-                loading="lazy"
-              />
-              <span class="screenshot-trigger__label">View larger</span>
-            </button>
-            <figcaption>Collections - nested folders, search, and drag-and-drop saved requests.</figcaption>
-          </figure>
-          <figure class="figure-card">
-            <button
-              class="screenshot-trigger"
-              type="button"
-              data-screenshot-src="images/playbooks-page.webp"
-              data-screenshot-title="Playbooks"
-              data-screenshot-alt="PostNot playbooks view with ordered saved-request steps and run logs"
-            >
-              <img
-                src="images/playbooks-page.webp"
-                width="1995"
-                height="1179"
-                alt="PostNot playbooks view with ordered saved-request steps and run logs"
-                loading="lazy"
-              />
-              <span class="screenshot-trigger__label">View larger</span>
-            </button>
-            <figcaption>Playbooks - sequential saved-request runs with delays, scripts, and grouped logs.</figcaption>
-          </figure>
-          <figure class="figure-card">
-            <button
-              class="screenshot-trigger"
-              type="button"
-              data-screenshot-src="images/environments-page.webp"
-              data-screenshot-title="Environments"
-              data-screenshot-alt="PostNot environments editor with variable names, values, and secret handling"
-            >
-              <img
-                src="images/environments-page.webp"
-                width="1995"
-                height="1179"
-                alt="PostNot environments editor with variable names, values, and secret handling"
-                loading="lazy"
-              />
-              <span class="screenshot-trigger__label">View larger</span>
-            </button>
-            <figcaption>
-              Environments - <span class="code-inline">{{variable}}</span> substitution and secret
-              storage.
-            </figcaption>
-          </figure>
-          <figure class="figure-card">
-            <button
-              class="screenshot-trigger"
-              type="button"
-              data-screenshot-src="images/settings-page.webp"
-              data-screenshot-title="Settings and updates"
-              data-screenshot-alt="PostNot settings surface with preferences and update information"
-            >
-              <img
-                src="images/settings-page.webp"
-                width="1995"
-                height="1179"
-                alt="PostNot settings surface with preferences and update information"
-                loading="lazy"
-              />
-              <span class="screenshot-trigger__label">View larger</span>
-            </button>
-            <figcaption>Settings and updates - persisted preferences, signed checks, and download progress.</figcaption>
-          </figure>
+      </section>
+
+      <section class="project-section" aria-labelledby="project-heading">
+        <div class="section-heading">
+          <p class="eyebrow">Open development</p>
+          <h2 id="project-heading">Follow the project in public</h2>
+          <p>PostNot does not need invented social proof. Its code, changes, issues, and builds are available to inspect.</p>
+        </div>
+        <div class="project-links">
+          <a href="https://github.com/tansdf/PostNot" rel="noopener noreferrer"><strong>Source</strong><span>Read the complete codebase</span></a>
+          <a href="https://github.com/tansdf/PostNot/releases" rel="noopener noreferrer"><strong>Releases</strong><span>Download and review version history</span></a>
+          <a href="https://github.com/tansdf/PostNot/issues" rel="noopener noreferrer"><strong>Issues</strong><span>Report a problem or follow work</span></a>
+          <a href="https://github.com/tansdf/PostNot/blob/master/CHANGELOG.md" rel="noopener noreferrer"><strong>Changelog</strong><span>See what changed and why</span></a>
+        </div>
+        <div class="ai-disclosure">
+          <p><strong>Built in the open, by AI agents.</strong> PostNot is a fully AI-generated software project; repository code is produced end-to-end by AI agents.</p>
+          <div class="hero__badges" aria-label="Project authorship">
+            <span>Built with AI agents</span><span>100% AI-generated code</span>
+          </div>
         </div>
       </section>
 
-      <section id="why" aria-labelledby="why-heading">
-        <div class="section-heading">
-          <p class="eyebrow">Why PostNot</p>
-          <h2 id="why-heading">A smaller surface area, with the parts that matter</h2>
-        </div>
-        <div class="two-col">
-          <article class="card">
-            <h3>Local-first</h3>
-            <p>Request data and app state live on your machine.</p>
-          </article>
-          <article class="card">
-            <h3>Desktop-native</h3>
-            <p>Rust request execution and Tauri packaging instead of a browser-only shell.</p>
-          </article>
-          <article class="card">
-            <h3>Portable when you need it</h3>
-            <p>
-              Bring data in from Postman, OpenAPI, or cURL, keep working locally, and export it back
-              out later.
-            </p>
-          </article>
-          <article class="card">
-            <h3>Safer environment handling</h3>
-            <p>
-              Secrets stay out of SQLite, request previews mask private values, and request exports
-              redact credential-looking fields by default.
-            </p>
-          </article>
-        </div>
-      </section>
-
-      <section id="privacy" aria-labelledby="privacy-heading">
-        <div class="section-heading">
-          <p class="eyebrow">Storage model</p>
-          <h2 id="privacy-heading">Privacy and persistence</h2>
-        </div>
-        <ul class="privacy-list">
-          <li>SQLite-backed app data lives under the Tauri app data directory on your system.</li>
-          <li>Secret environment variables are stored in the operating system credential store.</li>
-          <li>
-            When requests use secret variables, history keeps unresolved
-            <span class="code-inline">{{variable}}</span> references rather than resolved secret
-            values.
-          </li>
-          <li>
-            Single-request cURL and PostNot JSON exports redact credential-looking values by default,
-            with an option to include active non-secret environment variables.
-          </li>
-        </ul>
-      </section>
-
-      <section id="releases" aria-labelledby="releases-heading">
-        <div class="section-heading">
-          <p class="eyebrow">Releases</p>
-          <h2 id="releases-heading">Signed builds and release notes</h2>
-        </div>
-        <div class="status-callout">
-          <p>
-            Signed desktop builds are published through GitHub Releases, and the in-app updater checks
-            the stable latest-release feed. Follow
-            <a
-              href="https://github.com/tansdf/PostNot/blob/master/CHANGELOG.md"
-              rel="noopener noreferrer"
-              >CHANGELOG.md</a
-            >
-            and
-            <a href="https://github.com/tansdf/PostNot/releases" rel="noopener noreferrer">Releases</a>
-            for version history and downloads.
-          </p>
+      <section class="closing-cta" aria-labelledby="closing-heading">
+        <p class="eyebrow">Ready when you are</p>
+        <h2 id="closing-heading">Keep the client. Keep the data.</h2>
+        <div class="cta-row">
+          <a class="btn btn--primary" href="#download">Download PostNot</a>
+          <a class="btn btn--secondary" href="https://github.com/tansdf/PostNot" rel="noopener noreferrer">Browse source</a>
         </div>
       </section>
     </main>
 
     <footer class="site-footer">
       <div class="site-footer__inner">
-        <p>
-          PostNot is licensed under the
-          <a href="https://github.com/tansdf/PostNot/blob/master/LICENSE" rel="noopener noreferrer"
-            >Apache License 2.0</a
-          >.
-        </p>
+        <div><a class="brand brand--footer" href="index.html"><img src="icon.svg" width="32" height="32" alt="" /><span>PostNot</span></a><p>Post APIs. Not your data.</p></div>
         <div class="footer-links">
-          <a href="https://github.com/tansdf/PostNot" rel="noopener noreferrer">GitHub</a>
-          <a href="https://github.com/tansdf/PostNot/releases" rel="noopener noreferrer">Releases</a>
-          <a href="scripting.html">Scripting</a>
-          <a href="https://github.com/tansdf/PostNot/blob/master/docs/tech-design.md" rel="noopener noreferrer">Technical design</a>
+          <a href="#product">Product</a><a href="#download">Download</a><a href="scripting.html">Scripting</a><a href="#privacy">Privacy</a><a href="https://github.com/tansdf/PostNot">GitHub</a>
         </div>
+        <p class="site-footer__license">Permanently free and open source under <a href="https://github.com/tansdf/PostNot/blob/master/LICENSE">Apache-2.0</a>.</p>
       </div>
     </footer>
 
     <div class="screenshot-modal" role="dialog" aria-modal="true" aria-labelledby="screenshot-modal-title" hidden>
       <button class="screenshot-modal__backdrop" type="button" data-modal-close aria-label="Close screenshot viewer"></button>
-      <div class="screenshot-modal__panel">
+      <div class="screenshot-modal__panel" tabindex="-1">
         <div class="screenshot-modal__header">
           <h2 id="screenshot-modal-title">Screenshot</h2>
           <button class="screenshot-modal__close" type="button" data-modal-close aria-label="Close screenshot viewer">Close</button>
