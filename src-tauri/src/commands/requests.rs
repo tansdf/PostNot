@@ -46,7 +46,7 @@ pub async fn send_request(
     persist_history: Option<bool>,
 ) -> AppResult<SendRequestResult> {
     let should_persist_history = persist_history.unwrap_or(true);
-    let (request_id, cancel_rx) = state.start_request()?;
+    let (request_guard, cancel_rx) = state.start_request()?;
     let settings = settings_service::get_settings(state.db()).await?;
     let active_environment =
         environments_service::get_active_environment(state.db(), state.secret_store()).await?;
@@ -59,7 +59,7 @@ pub async fn send_request(
     );
 
     let progress_app = app.clone();
-    let progress_request_id = request_id.clone();
+    let progress_request_id = request_guard.id().to_owned();
     let progress_sink: http_client::ResponseProgressSink = Arc::new(move |progress| {
         let _ = progress_app.emit(
             RESPONSE_PROGRESS_EVENT,
@@ -77,7 +77,7 @@ pub async fn send_request(
         &settings,
         cancel_rx,
         Some(progress_sink),
-        Some(state.response_bodies()),
+        state.response_bodies(),
     )
     .await;
 
@@ -124,7 +124,6 @@ pub async fn send_request(
         },
     };
 
-    state.finish_request(&request_id);
     result
 }
 
@@ -139,13 +138,13 @@ pub async fn preview_request(
     let resolved_request =
         environments_service::resolve_request(&payload, active_environment.as_ref());
 
-    Ok(request_preview_service::build_request_preview(
+    request_preview_service::build_request_preview(
         &payload,
         &resolved_request.payload,
         &resolved_request.secret_usage,
         &settings,
         active_environment.as_ref(),
-    ))
+    )
 }
 
 #[tauri::command]

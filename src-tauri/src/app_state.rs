@@ -15,6 +15,23 @@ struct InFlightRequest {
     cancel_tx: watch::Sender<bool>,
 }
 
+pub struct RequestGuard<'a> {
+    state: &'a AppState,
+    id: String,
+}
+
+impl RequestGuard<'_> {
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+}
+
+impl Drop for RequestGuard<'_> {
+    fn drop(&mut self) {
+        self.state.finish_request(&self.id);
+    }
+}
+
 pub struct AppState {
     db: SqlitePool,
     secret_store: Arc<dyn SecretStore>,
@@ -50,7 +67,7 @@ impl AppState {
         Arc::clone(&self.secret_store)
     }
 
-    pub fn start_request(&self) -> AppResult<(String, watch::Receiver<bool>)> {
+    pub fn start_request(&self) -> AppResult<(RequestGuard<'_>, watch::Receiver<bool>)> {
         let mut in_flight_request = self
             .in_flight_request
             .lock()
@@ -70,7 +87,13 @@ impl AppState {
             cancel_tx,
         });
 
-        Ok((request_id, cancel_rx))
+        Ok((
+            RequestGuard {
+                state: self,
+                id: request_id,
+            },
+            cancel_rx,
+        ))
     }
 
     pub fn finish_request(&self, request_id: &str) {
@@ -126,5 +149,44 @@ impl AppState {
 
         *pending_update = None;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{path::PathBuf, sync::Arc};
+
+    use sqlx::SqlitePool;
+
+    use super::AppState;
+    use crate::services::{
+        response_body_service::ResponseBodyStore, secret_store_service::InMemorySecretStore,
+    };
+
+    fn test_state() -> AppState {
+        AppState::new(
+            SqlitePool::connect_lazy("sqlite::memory:").expect("create lazy test pool"),
+            Arc::new(InMemorySecretStore::default()),
+            ResponseBodyStore::new(PathBuf::from("test-response-bodies")),
+        )
+    }
+
+    #[tokio::test]
+    async fn request_guard_releases_matching_request_on_drop() {
+        let state = test_state();
+        let (guard, _) = state.start_request().expect("start request");
+        drop(guard);
+        assert!(state.start_request().is_ok());
+    }
+
+    #[tokio::test]
+    async fn finishing_an_old_request_does_not_clear_a_new_request() {
+        let state = test_state();
+        let (first, _) = state.start_request().expect("first request");
+        let first_id = first.id().to_owned();
+        drop(first);
+        let (_second, _) = state.start_request().expect("second request");
+        state.finish_request(&first_id);
+        assert!(state.start_request().is_err());
     }
 }

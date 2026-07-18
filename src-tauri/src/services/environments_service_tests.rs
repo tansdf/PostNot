@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use sqlx::SqlitePool;
+use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
 use uuid::Uuid;
 
 use crate::{
@@ -15,7 +15,16 @@ use crate::{
 };
 
 async fn setup_test_db() -> SqlitePool {
-    let pool = SqlitePool::connect("sqlite::memory:")
+    setup_test_db_with_connections(1).await
+}
+
+async fn setup_test_db_with_connections(max_connections: u32) -> SqlitePool {
+    let database_name = format!("environment-tests-{}", Uuid::new_v4());
+    let pool = SqlitePoolOptions::new()
+        .max_connections(max_connections)
+        .connect(&format!(
+            "sqlite:file:{database_name}?mode=memory&cache=shared"
+        ))
         .await
         .expect("in-memory database");
 
@@ -37,6 +46,86 @@ async fn setup_test_db() -> SqlitePool {
     .expect("create environments table");
 
     pool
+}
+
+#[tokio::test]
+async fn environment_integrity_migration_keeps_most_recent_active_environment() {
+    let pool = setup_test_db().await;
+
+    sqlx::query(
+        "INSERT INTO environments (id, name, is_active, variables_json, created_at, updated_at) VALUES (?1, ?2, 1, '[]', ?3, ?4)",
+    )
+    .bind("older")
+    .bind("Older")
+    .bind("2026-01-01T00:00:00Z")
+    .bind("2026-01-01T00:00:00Z")
+    .execute(&pool)
+    .await
+    .expect("insert older active environment");
+    sqlx::query(
+        "INSERT INTO environments (id, name, is_active, variables_json, created_at, updated_at) VALUES (?1, ?2, 1, '[]', ?3, ?4)",
+    )
+    .bind("newer")
+    .bind("Newer")
+    .bind("2026-01-01T00:00:00Z")
+    .bind("2026-01-02T00:00:00Z")
+    .execute(&pool)
+    .await
+    .expect("insert newer active environment");
+
+    sqlx::raw_sql(include_str!(
+        "../../migrations/0008_environment_integrity.sql"
+    ))
+    .execute(&pool)
+    .await
+    .expect("apply environment integrity migration");
+
+    let active_ids: Vec<String> =
+        sqlx::query_scalar("SELECT id FROM environments WHERE is_active = 1 ORDER BY id")
+            .fetch_all(&pool)
+            .await
+            .expect("load active environments");
+
+    assert_eq!(active_ids, vec!["newer"]);
+}
+
+#[tokio::test]
+async fn competing_activations_leave_at_most_one_active_environment() {
+    let pool = setup_test_db_with_connections(2).await;
+    sqlx::raw_sql(include_str!(
+        "../../migrations/0008_environment_integrity.sql"
+    ))
+    .execute(&pool)
+    .await
+    .expect("apply environment integrity migration");
+    let first = environments_service::create_environment(&pool)
+        .await
+        .expect("create first environment");
+    let second = environments_service::create_environment(&pool)
+        .await
+        .expect("create second environment");
+
+    let (first_result, second_result) = tokio::join!(
+        environments_service::set_active_environment(&pool, Some(&first.id)),
+        environments_service::set_active_environment(&pool, Some(&second.id)),
+    );
+
+    for result in [first_result, second_result] {
+        if let Err(error) = result {
+            assert_eq!(
+                error.to_string(),
+                "Environment activation changed concurrently. Please try again."
+            );
+        }
+    }
+
+    let active_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM environments WHERE is_active = 1")
+            .fetch_one(&pool)
+            .await
+            .expect("count active environments");
+
+    assert!(active_count <= 1);
 }
 
 fn environment_input() -> EnvironmentInput {

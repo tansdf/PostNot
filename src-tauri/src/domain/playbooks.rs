@@ -2,6 +2,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::collections::SavedRequestDetail;
 
+#[rustfmt::skip]
+macro_rules! status_enum { ($name:ident { $($variant:ident => $wire:literal),+ $(,)? }) => {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)] #[serde(rename_all = "lowercase")]
+    pub enum $name { $($variant),+ }
+    impl $name { pub fn as_str(self) -> &'static str { match self { $(Self::$variant => $wire),+ } } }
+};}
+status_enum!(PlaybookRunStatus { Running => "running", Passed => "passed", Failed => "failed", Canceled => "canceled" });
+status_enum!(PlaybookRunStepStatus { Passed => "passed", Failed => "failed", Skipped => "skipped", Canceled => "canceled" });
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlaybookSummary {
@@ -154,7 +163,7 @@ pub struct CreatePlaybookRunInput {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FinishPlaybookRunInput {
-    pub status: String,
+    pub status: PlaybookRunStatus,
     pub stopped_reason: String,
     pub total_duration_ms: i64,
 }
@@ -167,7 +176,7 @@ pub struct RecordPlaybookRunStepInput {
     pub saved_request_name: String,
     pub method: String,
     pub url: String,
-    pub status: String,
+    pub status: PlaybookRunStepStatus,
     pub status_code: Option<i64>,
     pub duration_ms: i64,
     pub response_size_bytes: i64,

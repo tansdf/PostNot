@@ -13,9 +13,8 @@ use crate::{
         },
         settings::AppSettings,
     },
-    services::{
-        environments_service::RequestSecretUsage, request_url_service::normalize_request_url,
-    },
+    error::AppResult,
+    services::{environments_service::RequestSecretUsage, request_plan_service::prepare_request},
 };
 
 const REDACTED_VALUE: &str = "{{redacted}}";
@@ -27,17 +26,24 @@ pub fn build_request_preview(
     secret_usage: &RequestSecretUsage,
     settings: &AppSettings,
     active_environment: Option<&EnvironmentDetail>,
-) -> RequestPreview {
+) -> AppResult<RequestPreview> {
     let mut warnings = Vec::new();
-    let query_params = preview_query_params(original, resolved, secret_usage);
-    let final_url = preview_final_url(resolved, &query_params, secret_usage.url, &mut warnings);
-    let headers = preview_headers(original, resolved, secret_usage, &mut warnings);
+    let prepared = prepare_request(resolved)?;
+    let query_params = preview_query_params(original, &prepared.query_params, secret_usage);
+    let final_url = preview_final_url(prepared.base_url, &query_params, secret_usage.url);
+    let headers = preview_headers(
+        original,
+        resolved,
+        &prepared.headers,
+        secret_usage,
+        &mut warnings,
+    );
     let body = preview_body(original, resolved, secret_usage, &mut warnings);
     let auth = preview_auth(original, resolved, secret_usage);
 
     append_request_warnings(resolved, &mut warnings);
 
-    RequestPreview {
+    Ok(RequestPreview {
         name: resolved.name.clone(),
         method: resolved.method.clone(),
         final_url,
@@ -53,57 +59,27 @@ pub fn build_request_preview(
         },
         warnings,
         notes: preview_notes(original),
-    }
+    })
 }
 
 fn preview_query_params(
     original: &SendRequestPayload,
-    resolved: &SendRequestPayload,
+    prepared_rows: &[KeyValueRow],
     secret_usage: &RequestSecretUsage,
 ) -> Vec<KeyValueRow> {
-    let mut rows: Vec<KeyValueRow> = resolved
-        .query_params
+    prepared_rows
         .iter()
         .filter(|row| row.enabled && !row.key.trim().is_empty())
         .map(|row| {
             let original_row = original.query_params.iter().find(|item| item.id == row.id);
-            let used_secret = secret_usage.query_param_ids.contains(&row.id);
+            let used_secret = secret_usage.query_param_ids.contains(&row.id)
+                || row.id == "preview-auth-api-key-query";
             redact_key_value_row(original_row, row, used_secret, is_sensitive_key(&row.key))
         })
-        .collect();
-
-    if resolved.auth.auth_type == "api-key"
-        && resolved.auth.api_key_in == "query"
-        && !resolved.auth.api_key_name.trim().is_empty()
-    {
-        rows.push(KeyValueRow {
-            id: "preview-auth-api-key-query".to_string(),
-            key: resolved.auth.api_key_name.clone(),
-            value: redact_if_present(&resolved.auth.api_key_value),
-            enabled: true,
-        });
-    }
-
-    rows
+        .collect()
 }
 
-fn preview_final_url(
-    resolved: &SendRequestPayload,
-    query_params: &[KeyValueRow],
-    url_used_secret: bool,
-    warnings: &mut Vec<String>,
-) -> String {
-    let Ok(mut url) = Url::parse(&normalize_request_url(&resolved.url)) else {
-        warnings.push(
-            "URL is invalid and cannot be sent until it parses as an absolute URL.".to_string(),
-        );
-        return if url_used_secret {
-            REDACTED_VALUE.to_string()
-        } else {
-            resolved.url.clone()
-        };
-    };
-
+fn preview_final_url(mut url: Url, query_params: &[KeyValueRow], url_used_secret: bool) -> String {
     for row in query_params
         .iter()
         .filter(|row| row.enabled && !row.key.trim().is_empty())
@@ -118,86 +94,44 @@ fn preview_final_url(
 fn preview_headers(
     original: &SendRequestPayload,
     resolved: &SendRequestPayload,
+    prepared_rows: &[KeyValueRow],
     secret_usage: &RequestSecretUsage,
     warnings: &mut Vec<String>,
 ) -> Vec<KeyValueRow> {
-    let mut rows: Vec<KeyValueRow> = resolved
-        .headers
+    let mut rows: Vec<KeyValueRow> = prepared_rows
         .iter()
-        .filter(|row| row.enabled && !row.key.trim().is_empty())
+        .filter(|row| {
+            row.enabled
+                && !row.key.trim().is_empty()
+                && !(matches!(
+                    row.id.as_str(),
+                    "preview-auth-bearer" | "preview-auth-oauth2"
+                ) && row.value.trim() == "Bearer")
+        })
         .map(|row| {
+            if matches!(
+                row.id.as_str(),
+                "preview-auth-bearer" | "preview-auth-oauth2"
+            ) {
+                return KeyValueRow {
+                    value: "Bearer {{redacted}}".to_string(),
+                    ..row.clone()
+                };
+            }
             let original_row = original.headers.iter().find(|item| item.id == row.id);
-            let used_secret = secret_usage.header_ids.contains(&row.id);
+            let used_secret = secret_usage.header_ids.contains(&row.id)
+                || row.id == "preview-auth-api-key-header";
             redact_key_value_row(original_row, row, used_secret, is_sensitive_key(&row.key))
         })
         .collect();
 
-    match resolved.auth.auth_type.as_str() {
-        "basic" => rows.push(KeyValueRow {
-            id: "preview-auth-basic".to_string(),
-            key: "Authorization".to_string(),
-            value: redact_if_present(&format!(
-                "Basic {}:{}",
-                resolved.auth.basic_username, resolved.auth.basic_password
-            )),
-            enabled: true,
-        }),
-        "bearer" if !resolved.auth.bearer_token.trim().is_empty() => rows.push(KeyValueRow {
-            id: "preview-auth-bearer".to_string(),
-            key: "Authorization".to_string(),
-            value: "Bearer {{redacted}}".to_string(),
-            enabled: true,
-        }),
-        "oauth2" => {
-            let token = if resolved.auth.oauth2_access_token.trim().is_empty() {
-                &resolved.auth.bearer_token
-            } else {
-                &resolved.auth.oauth2_access_token
-            };
-
-            if !token.trim().is_empty() {
-                rows.push(KeyValueRow {
-                    id: "preview-auth-oauth2".to_string(),
-                    key: "Authorization".to_string(),
-                    value: "Bearer {{redacted}}".to_string(),
-                    enabled: true,
-                });
-            }
-        }
-        "api-key"
-            if resolved.auth.api_key_in == "header"
-                && !resolved.auth.api_key_name.trim().is_empty() =>
-        {
-            rows.push(KeyValueRow {
-                id: "preview-auth-api-key-header".to_string(),
-                key: resolved.auth.api_key_name.clone(),
-                value: redact_if_present(&resolved.auth.api_key_value),
-                enabled: true,
-            });
-        }
-        _ => {}
-    }
-
-    match resolved.body.mode.as_str() {
-        "json" => rows.push(KeyValueRow {
-            id: "preview-content-type-json".to_string(),
-            key: "content-type".to_string(),
-            value: "application/json".to_string(),
-            enabled: true,
-        }),
-        "form-urlencoded" => rows.push(KeyValueRow {
-            id: "preview-content-type-form".to_string(),
-            key: "content-type".to_string(),
-            value: "application/x-www-form-urlencoded".to_string(),
-            enabled: true,
-        }),
-        "multipart" => rows.push(KeyValueRow {
+    if resolved.body.mode == "multipart" {
+        rows.push(KeyValueRow {
             id: "preview-content-type-multipart".to_string(),
             key: "content-type".to_string(),
             value: "multipart/form-data; boundary=(generated by reqwest)".to_string(),
             enabled: true,
-        }),
-        _ => {}
+        });
     }
 
     for row in &rows {
@@ -715,6 +649,90 @@ fn collect_variables_from_string(value: &str, target: &mut BTreeSet<String>) {
             target.insert(format!("{{{{{key}}}}}"));
         }
         rest = &after_start[end + 2..];
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_request_preview;
+    use crate::{
+        domain::{
+            requests::{RequestAuth, RequestBody, SendRequestPayload},
+            settings::AppSettings,
+        },
+        services::environments_service::RequestSecretUsage,
+    };
+
+    #[test]
+    fn preview_rejects_the_same_invalid_modes_as_send() {
+        let mut payload = request();
+        payload.body.mode = "unsupported".into();
+        assert!(build_request_preview(
+            &payload,
+            &payload,
+            &RequestSecretUsage::default(),
+            &settings(),
+            None,
+        )
+        .is_err());
+
+        payload.body.mode = "none".into();
+        payload.auth.api_key_in = "unsupported".into();
+        assert!(build_request_preview(
+            &payload,
+            &payload,
+            &RequestSecretUsage::default(),
+            &settings(),
+            None,
+        )
+        .is_err());
+    }
+
+    fn request() -> SendRequestPayload {
+        SendRequestPayload {
+            name: "request".into(),
+            method: "GET".into(),
+            url: "https://example.test".into(),
+            query_params: Vec::new(),
+            headers: Vec::new(),
+            body: RequestBody {
+                mode: "none".into(),
+                raw: String::new(),
+                form: Vec::new(),
+                files: Vec::new(),
+            },
+            auth: RequestAuth {
+                auth_type: "none".into(),
+                basic_username: String::new(),
+                basic_password: String::new(),
+                bearer_token: String::new(),
+                api_key_name: String::new(),
+                api_key_value: String::new(),
+                api_key_in: "header".into(),
+                oauth2_access_token: String::new(),
+                oauth2_token_url: String::new(),
+                oauth2_client_id: String::new(),
+                oauth2_client_secret: String::new(),
+                oauth2_scope: String::new(),
+            },
+            pre_request_script: String::new(),
+            test_script: String::new(),
+        }
+    }
+
+    fn settings() -> AppSettings {
+        AppSettings {
+            theme: "system".into(),
+            ui_scale: 1.0,
+            request_timeout_ms: 30_000,
+            follow_redirects: true,
+            validate_tls: true,
+            history_limit: 100,
+            is_history_collapsed: false,
+            environment_autosave: true,
+            notification_timeout_ms: 4_000,
+            last_update_checked_at: None,
+        }
     }
 }
 

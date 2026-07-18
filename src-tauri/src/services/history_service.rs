@@ -27,13 +27,23 @@ pub async fn record_success(
     app: &AppHandle,
     body_store: &ResponseBodyStore,
 ) -> AppResult<()> {
+    let bodies_dir = paths::response_bodies_dir(app)?;
+    record_success_in_dir(pool, request, response, &bodies_dir, body_store).await
+}
+
+pub(crate) async fn record_success_in_dir(
+    pool: &SqlitePool,
+    request: &SendRequestPayload,
+    response: &ResponsePayload,
+    bodies_dir: &Path,
+    body_store: &ResponseBodyStore,
+) -> AppResult<()> {
     let history_id = Uuid::new_v4().to_string();
     let request_snapshot_json = serde_json::to_string(request)?;
     let response_headers_json = serde_json::to_string(&response.headers)?;
-    let bodies_dir = paths::response_bodies_dir(app)?;
-    tokio::fs::create_dir_all(&bodies_dir).await?;
+    tokio::fs::create_dir_all(bodies_dir).await?;
     let final_path = bodies_dir.join(format!("{history_id}.body"));
-    let (response_body_path, response_body_preview, content_type, charset, presentation) =
+    let (response_body_preview, content_type, charset, presentation, handle_id) =
         match &response.body {
             ResponseBody::Inline {
                 text,
@@ -44,11 +54,11 @@ pub async fn record_success(
             } => {
                 tokio::fs::write(&final_path, text.as_bytes()).await?;
                 (
-                    Some(path_to_string(final_path)),
                     preview(text),
                     content_type.clone(),
                     charset.clone(),
                     *presentation,
+                    None,
                 )
             }
             ResponseBody::File {
@@ -59,20 +69,18 @@ pub async fn record_success(
                 presentation,
                 ..
             } => {
-                let source = body_store.path_for(handle_id)?;
-                ResponseBodyStore::move_file(&source, &final_path).await?;
-                body_store.mark_history_owned(handle_id, final_path.clone())?;
+                body_store.copy_to(handle_id, &final_path).await?;
                 (
-                    Some(path_to_string(final_path)),
                     preview(preview_text),
                     content_type.clone(),
                     charset.clone(),
                     *presentation,
+                    Some(handle_id.as_str()),
                 )
             }
         };
 
-    sqlx::query(
+    let result = sqlx::query(
         "INSERT INTO history_entries (id, request_name, method, url, request_snapshot_json, status_code, duration_ms, response_headers_json, response_body_path, response_body_preview, error_text, executed_at, response_size_bytes, response_content_type, response_charset, response_presentation) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
     )
     .bind(&history_id)
@@ -83,7 +91,7 @@ pub async fn record_success(
     .bind(response.status_code.map(i64::from))
     .bind(response.duration_ms as i64)
     .bind(response_headers_json)
-    .bind(response_body_path)
+    .bind(path_to_string(final_path.clone()))
     .bind(response_body_preview)
     .bind(&response.error_text)
     .bind(&response.executed_at)
@@ -92,7 +100,15 @@ pub async fn record_success(
     .bind(charset)
     .bind(presentation_name(presentation))
     .execute(pool)
-    .await?;
+    .await;
+
+    if let Err(error) = result {
+        delete_response_body_file(&final_path).await?;
+        return Err(error.into());
+    }
+    if let Some(handle_id) = handle_id {
+        body_store.mark_history_owned(handle_id, final_path)?;
+    }
 
     prune(pool, Some(body_store)).await
 }
@@ -206,14 +222,13 @@ pub async fn get_history_entry(
 }
 
 pub async fn clear_history(pool: &SqlitePool, body_store: &ResponseBodyStore) -> AppResult<()> {
-    for path in stored_response_body_paths(pool).await? {
-        body_store.delete_path_when_released(&path)?;
-    }
-
-    sqlx::query("DELETE FROM history_entries")
-        .execute(pool)
-        .await?;
-    Ok(())
+    let paths = delete_history_entries(
+        pool,
+        "DELETE FROM history_entries WHERE id IN (SELECT id FROM history_entries LIMIT -1 OFFSET ?1) RETURNING response_body_path",
+        0,
+    )
+    .await?;
+    delete_committed_paths(paths, Some(body_store)).await
 }
 
 async fn prune(pool: &SqlitePool, body_store: Option<&ResponseBodyStore>) -> AppResult<()> {
@@ -221,31 +236,44 @@ async fn prune(pool: &SqlitePool, body_store: Option<&ResponseBodyStore>) -> App
         .await
         .unwrap_or(DEFAULT_HISTORY_LIMIT);
 
-    let paths_to_delete = sqlx::query(
-        "SELECT response_body_path FROM history_entries WHERE id IN (SELECT id FROM history_entries ORDER BY executed_at DESC LIMIT -1 OFFSET ?1)",
+    let paths = delete_history_entries(
+        pool,
+        "DELETE FROM history_entries WHERE id IN (SELECT id FROM history_entries ORDER BY executed_at DESC LIMIT -1 OFFSET ?1) RETURNING response_body_path",
+        i64::from(history_limit),
     )
-    .bind(i64::from(history_limit))
-    .fetch_all(pool)
     .await?;
+    delete_committed_paths(paths, body_store).await
+}
 
-    for row in paths_to_delete {
-        let path: Option<String> = row.get("response_body_path");
-        if let Some(path) = path {
-            if let Some(store) = body_store {
-                store.delete_path_when_released(Path::new(&path))?;
-            } else {
-                delete_response_body_file(Path::new(&path)).await?;
-            }
+async fn delete_history_entries(
+    pool: &SqlitePool,
+    query: &str,
+    offset: i64,
+) -> AppResult<Vec<PathBuf>> {
+    let mut transaction = pool.begin().await?;
+    let paths = sqlx::query(query)
+        .bind(offset)
+        .fetch_all(&mut *transaction)
+        .await?
+        .into_iter()
+        .filter_map(|row| row.get::<Option<String>, _>("response_body_path"))
+        .map(PathBuf::from)
+        .collect();
+    transaction.commit().await?;
+    Ok(paths)
+}
+
+async fn delete_committed_paths(
+    paths: Vec<PathBuf>,
+    body_store: Option<&ResponseBodyStore>,
+) -> AppResult<()> {
+    for path in paths {
+        if let Some(store) = body_store {
+            store.delete_path_when_released(&path)?;
+        } else {
+            delete_response_body_file(&path).await?;
         }
     }
-
-    sqlx::query(
-        "DELETE FROM history_entries WHERE id IN (SELECT id FROM history_entries ORDER BY executed_at DESC LIMIT -1 OFFSET ?1)",
-    )
-    .bind(i64::from(history_limit))
-    .execute(pool)
-    .await?;
-
     Ok(())
 }
 
@@ -272,11 +300,14 @@ fn presentation_from_name(value: &str) -> ResponsePresentation {
 }
 
 async fn delete_response_body_file(path: &Path) -> AppResult<()> {
-    match tokio::fs::remove_file(path).await {
-        Ok(()) => Ok(()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error.into()),
+    for path in [path.to_path_buf(), path.with_extension("idx")] {
+        match tokio::fs::remove_file(path).await {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
     }
+    Ok(())
 }
 
 pub(crate) async fn stored_response_body_paths(pool: &SqlitePool) -> AppResult<Vec<PathBuf>> {

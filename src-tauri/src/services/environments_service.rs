@@ -1,10 +1,11 @@
 use std::{
     collections::{HashMap, HashSet},
+    future::Future,
     sync::Arc,
 };
 
 use chrono::{SecondsFormat, Utc};
-use sqlx::{Row, SqlitePool};
+use sqlx::{Row, Sqlite, SqlitePool, Transaction};
 use uuid::Uuid;
 
 use crate::{
@@ -142,84 +143,35 @@ pub async fn update_environment(
     }
 
     let existing = fetch_environment_record(pool, environment_id).await?;
-    let previous_secret_snapshot = load_secret_snapshot(
-        secret_store.clone(),
-        environment_id.to_string(),
-        &existing.variables,
-    )
-    .await?;
     let next_secret_snapshot = collect_secret_snapshot(&input.variables);
     let affected_secret_ids = secret_ids_union(&existing.variables, &input.variables);
 
-    if let Err(error) = sync_secret_snapshot(
+    let stored_variables = serde_json::to_string(&strip_secret_values(&input.variables))?;
+    with_secret_store_compensation(
         secret_store.clone(),
-        environment_id.to_string(),
-        next_secret_snapshot.clone(),
-        affected_secret_ids.clone(),
-    )
-    .await
-    {
-        if let Err(rollback_err) = sync_secret_snapshot(
-            secret_store,
-            environment_id.to_string(),
-            previous_secret_snapshot,
-            affected_secret_ids,
-        )
-        .await
-        {
-            log::warn!(
-                "Secret store rollback failed after sync error for environment {environment_id}: {rollback_err}"
-            );
-        }
-        return Err(error);
-    }
+        environment_id,
+        &existing.variables,
+        next_secret_snapshot,
+        affected_secret_ids,
+        async {
+            let result = sqlx::query(
+                "UPDATE environments SET name = ?2, variables_json = ?3, updated_at = ?4 WHERE id = ?1",
+            )
+            .bind(environment_id)
+            .bind(name)
+            .bind(stored_variables)
+            .bind(now_iso())
+            .execute(pool)
+            .await?;
 
-    let update_result = sqlx::query(
-        "UPDATE environments SET name = ?2, variables_json = ?3, updated_at = ?4 WHERE id = ?1",
-    )
-    .bind(environment_id)
-    .bind(name)
-    .bind(serde_json::to_string(&strip_secret_values(
-        &input.variables,
-    ))?)
-    .bind(now_iso())
-    .execute(pool)
-    .await;
-
-    match update_result {
-        Ok(result) => {
             if result.rows_affected() == 0 {
-                if let Err(rollback_err) = sync_secret_snapshot(
-                    secret_store.clone(),
-                    environment_id.to_string(),
-                    previous_secret_snapshot,
-                    affected_secret_ids,
-                )
-                .await
-                {
-                    log::warn!(
-                        "Secret store rollback failed after missing environment row for {environment_id}: {rollback_err}"
-                    );
-                }
                 return Err(AppError::Message("Environment not found.".to_string()));
             }
-        }
-        Err(error) => {
-            if let Err(rollback_err) = sync_secret_snapshot(
-                secret_store.clone(),
-                environment_id.to_string(),
-                previous_secret_snapshot,
-                affected_secret_ids,
-            )
-            .await
-            {
-                log::warn!(
-                    "Secret store rollback failed after SQLite error updating environment {environment_id}: {rollback_err}"
-                );
-            }
-            return Err(error.into());
-        }
-    }
+
+            Ok(())
+        },
+    )
+    .await?;
 
     get_environment(pool, secret_store, environment_id).await
 }
@@ -258,12 +210,6 @@ pub async fn delete_environment(
         return Ok(());
     };
 
-    let previous_secret_snapshot = load_secret_snapshot(
-        secret_store.clone(),
-        environment_id.to_string(),
-        &existing.variables,
-    )
-    .await?;
     let affected_secret_ids: HashSet<String> = existing
         .variables
         .iter()
@@ -271,48 +217,21 @@ pub async fn delete_environment(
         .map(|item| item.id.clone())
         .collect();
 
-    if let Err(error) = sync_secret_snapshot(
-        secret_store.clone(),
-        environment_id.to_string(),
+    with_secret_store_compensation(
+        secret_store,
+        environment_id,
+        &existing.variables,
         HashMap::new(),
-        affected_secret_ids.clone(),
+        affected_secret_ids,
+        async {
+            sqlx::query("DELETE FROM environments WHERE id = ?1")
+                .bind(environment_id)
+                .execute(pool)
+                .await?;
+            Ok(())
+        },
     )
-    .await
-    {
-        if let Err(rollback_err) = sync_secret_snapshot(
-            secret_store,
-            environment_id.to_string(),
-            previous_secret_snapshot,
-            affected_secret_ids,
-        )
-        .await
-        {
-            log::warn!(
-                "Secret store rollback failed after delete sync error for environment {environment_id}: {rollback_err}"
-            );
-        }
-        return Err(error);
-    }
-
-    if let Err(error) = sqlx::query("DELETE FROM environments WHERE id = ?1")
-        .bind(environment_id)
-        .execute(pool)
-        .await
-    {
-        if let Err(rollback_err) = sync_secret_snapshot(
-            secret_store,
-            environment_id.to_string(),
-            previous_secret_snapshot,
-            affected_secret_ids,
-        )
-        .await
-        {
-            log::warn!(
-                "Secret store rollback failed after SQLite delete error for environment {environment_id}: {rollback_err}"
-            );
-        }
-        return Err(error.into());
-    }
+    .await?;
 
     Ok(())
 }
@@ -321,37 +240,55 @@ pub async fn set_active_environment(
     pool: &SqlitePool,
     environment_id: Option<&str>,
 ) -> AppResult<()> {
-    let mut transaction = pool.begin().await?;
+    let mut transaction = pool
+        .begin_with("BEGIN IMMEDIATE")
+        .await
+        .map_err(activation_error)?;
 
+    apply_active_environment(&mut transaction, environment_id).await?;
+    transaction.commit().await.map_err(activation_error)
+}
+
+async fn apply_active_environment(
+    transaction: &mut Transaction<'_, Sqlite>,
+    environment_id: Option<&str>,
+) -> AppResult<()> {
     if let Some(environment_id) = environment_id {
-        let exists: Option<String> =
-            sqlx::query_scalar("SELECT id FROM environments WHERE id = ?1")
-                .bind(environment_id)
-                .fetch_optional(&mut *transaction)
-                .await?;
-
-        if exists.is_none() {
+        if sqlx::query_scalar::<_, String>("SELECT id FROM environments WHERE id = ?1")
+            .bind(environment_id)
+            .fetch_optional(&mut **transaction)
+            .await
+            .map_err(activation_error)?
+            .is_none()
+        {
             return Err(AppError::Message("Environment not found.".to_string()));
         }
     }
 
     sqlx::query("UPDATE environments SET is_active = 0")
-        .execute(&mut *transaction)
-        .await?;
+        .execute(&mut **transaction)
+        .await
+        .map_err(activation_error)?;
 
     if let Some(environment_id) = environment_id {
-        let result = sqlx::query("UPDATE environments SET is_active = 1 WHERE id = ?1")
+        sqlx::query("UPDATE environments SET is_active = 1 WHERE id = ?1")
             .bind(environment_id)
-            .execute(&mut *transaction)
-            .await?;
-
-        if result.rows_affected() == 0 {
-            return Err(AppError::Message("Environment not found.".to_string()));
-        }
+            .execute(&mut **transaction)
+            .await
+            .map_err(activation_error)?;
     }
 
-    transaction.commit().await?;
     Ok(())
+}
+
+fn activation_error(error: sqlx::Error) -> AppError {
+    if matches!(&error, sqlx::Error::Database(database_error) if database_error.is_unique_violation())
+    {
+        return AppError::Message(
+            "Environment activation changed concurrently. Please try again.".to_string(),
+        );
+    }
+    error.into()
 }
 
 pub async fn get_active_environment(
@@ -821,6 +758,51 @@ async fn sync_secret_snapshot(
         Ok(())
     })
     .await?
+}
+
+async fn with_secret_store_compensation<T>(
+    secret_store: Arc<dyn SecretStore>,
+    environment_id: &str,
+    previous_variables: &[EnvironmentVariable],
+    next_secret_snapshot: HashMap<String, String>,
+    affected_secret_ids: HashSet<String>,
+    operation: impl Future<Output = AppResult<T>>,
+) -> AppResult<T> {
+    let previous_secret_snapshot = load_secret_snapshot(
+        secret_store.clone(),
+        environment_id.to_string(),
+        previous_variables,
+    )
+    .await?;
+
+    let result = match sync_secret_snapshot(
+        secret_store.clone(),
+        environment_id.to_string(),
+        next_secret_snapshot,
+        affected_secret_ids.clone(),
+    )
+    .await
+    {
+        Ok(()) => operation.await,
+        Err(error) => Err(error),
+    };
+
+    if result.is_err() {
+        if let Err(rollback_error) = sync_secret_snapshot(
+            secret_store,
+            environment_id.to_string(),
+            previous_secret_snapshot,
+            affected_secret_ids,
+        )
+        .await
+        {
+            log::warn!(
+                "Failed to restore credential-store secrets for environment {environment_id}: {rollback_error}"
+            );
+        }
+    }
+
+    result
 }
 
 fn collect_secret_snapshot(variables: &[EnvironmentVariable]) -> HashMap<String, String> {

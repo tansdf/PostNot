@@ -6,6 +6,26 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.21.1] - 2026-07-18
+
+### Added
+
+- Added a focused backend quality CI gate for correctness-oriented Clippy checks.
+
+### Changed
+
+- Unified native request sending and resolved previews around one validated request plan, with deterministic generated-header precedence and reliable active-request cleanup on every exit path.
+- Replaced the manually synchronized collection-search shadow table with direct searches over current collection data while preserving ranking and result limits.
+- Made playbook mutations, settings saves, and active-environment changes transactional, with database enforcement that at most one environment is active.
+- Reduced backend production code while expanding failure, rollback, migration, and large-sibling regression coverage.
+
+### Fixed
+
+- Prevented failed history writes, clears, and pruning from losing live response bodies or leaving staged files behind.
+- Rejected malformed JSON before formatting and cleaned temporary body files consistently after cancellation or failure.
+- Kept collection moves and playbook step updates atomic, including sibling resequencing, run counters, and inherited folder-script loading.
+- Restored credential-store secrets when an environment update or deletion fails after secret synchronization.
+
 ## [0.21.0] - 2026-07-12
 
 ### Added

@@ -1,5 +1,5 @@
 use chrono::Utc;
-use sqlx::{Row, SqlitePool};
+use sqlx::{Row, Sqlite, SqlitePool, Transaction};
 use uuid::Uuid;
 
 use crate::{
@@ -8,9 +8,9 @@ use crate::{
         playbooks::{
             AddPlaybookStepInput, CreatePlaybookRunInput, FinishPlaybookRunInput, PlaybookDetail,
             PlaybookExecutionContext, PlaybookFolderScripts, PlaybookInheritedScripts,
-            PlaybookInput, PlaybookRunDetail, PlaybookRunStep, PlaybookRunSummary, PlaybookStep,
-            PlaybookSummary, RecordPlaybookRunStepInput, ReorderPlaybookStepsInput,
-            UpdatePlaybookStepInput,
+            PlaybookInput, PlaybookRunDetail, PlaybookRunStatus, PlaybookRunStep,
+            PlaybookRunSummary, PlaybookStep, PlaybookSummary, RecordPlaybookRunStepInput,
+            ReorderPlaybookStepsInput, UpdatePlaybookStepInput,
         },
         requests::SendRequestPayload,
     },
@@ -136,37 +136,35 @@ pub async fn update_playbook(
 }
 
 pub async fn duplicate_playbook(pool: &SqlitePool, playbook_id: &str) -> AppResult<PlaybookDetail> {
-    let source = get_playbook(pool, playbook_id).await?;
-    let duplicate = create_playbook(
-        pool,
-        &PlaybookInput {
-            name: format!("{} copy", source.name),
-            description: source.description,
-            default_delay_ms: source.default_delay_ms,
-            stop_on_failure: source.stop_on_failure,
-            fail_on_http_error: source.fail_on_http_error,
-        },
+    let mut transaction = pool.begin_with("BEGIN IMMEDIATE").await?;
+    let id = Uuid::new_v4().to_string();
+    let now = now_iso();
+    let inserted = sqlx::query(
+        "INSERT INTO playbooks (id, name, description, default_delay_ms, stop_on_failure, fail_on_http_error, created_at, updated_at) SELECT ?1, name || ' copy', description, default_delay_ms, stop_on_failure, fail_on_http_error, ?3, ?3 FROM playbooks WHERE id = ?2",
     )
+    .bind(&id)
+    .bind(playbook_id)
+    .bind(&now)
+    .execute(&mut *transaction)
     .await?;
-
-    for step in source.steps {
-        if let Some(saved_request_id) = step.saved_request_id {
-            add_playbook_step(
-                pool,
-                &duplicate.id,
-                &AddPlaybookStepInput {
-                    saved_request_id,
-                    name_override: step.name_override,
-                    notes: step.notes,
-                    enabled: step.enabled,
-                    delay_after_ms: step.delay_after_ms,
-                },
-            )
-            .await?;
-        }
+    if inserted.rows_affected() == 0 {
+        return Err(AppError::Message("Playbook not found.".to_string()));
     }
+    sqlx::query(
+        r#"INSERT INTO playbook_steps (id, playbook_id, saved_request_id, saved_request_name, name_override, notes, enabled, sort_order, delay_after_ms, created_at, updated_at)
+        SELECT lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-4' || substr(hex(randomblob(2)), 2) || '-' || substr('89ab', (random() & 3) + 1, 1) || substr(hex(randomblob(2)), 2) || '-' || hex(randomblob(6))),
+          ?1, steps.saved_request_id, COALESCE(requests.name, steps.saved_request_name), TRIM(steps.name_override), TRIM(steps.notes), steps.enabled,
+          ROW_NUMBER() OVER (ORDER BY steps.sort_order, steps.created_at) - 1, steps.delay_after_ms, ?3, ?3
+        FROM playbook_steps steps LEFT JOIN collection_items requests ON requests.id = steps.saved_request_id WHERE steps.playbook_id = ?2 AND steps.saved_request_id IS NOT NULL"#,
+    )
+    .bind(&id)
+    .bind(playbook_id)
+    .bind(&now)
+    .execute(&mut *transaction)
+    .await?;
+    transaction.commit().await?;
 
-    get_playbook(pool, &duplicate.id).await
+    get_playbook(pool, &id).await
 }
 
 pub async fn delete_playbook(pool: &SqlitePool, playbook_id: &str) -> AppResult<()> {
@@ -237,12 +235,10 @@ pub async fn add_playbook_step(
     let sort_order = next_step_sort_order(pool, playbook_id).await?;
 
     sqlx::query(
-        r#"
-        INSERT INTO playbook_steps (
+        r#"INSERT INTO playbook_steps (
           id, playbook_id, saved_request_id, saved_request_name, name_override,
           notes, enabled, sort_order, delay_after_ms, created_at, updated_at
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
-        "#,
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10)"#,
     )
     .bind(&id)
     .bind(playbook_id)
@@ -254,11 +250,13 @@ pub async fn add_playbook_step(
     .bind(sort_order)
     .bind(input.delay_after_ms)
     .bind(&now)
-    .bind(&now)
     .execute(pool)
     .await?;
-
-    touch_playbook(pool, playbook_id).await?;
+    sqlx::query("UPDATE playbooks SET updated_at = ?2 WHERE id = ?1")
+        .bind(playbook_id)
+        .bind(&now)
+        .execute(pool)
+        .await?;
     get_playbook_step(pool, &id).await
 }
 
@@ -270,6 +268,7 @@ pub async fn update_playbook_step(
     validate_delay_option(input.delay_after_ms)?;
     let playbook_id = playbook_id_for_step(pool, step_id).await?;
     let now = now_iso();
+    let mut transaction = pool.begin().await?;
 
     sqlx::query(
         r#"
@@ -288,10 +287,11 @@ pub async fn update_playbook_step(
     .bind(bool_to_i64(input.enabled))
     .bind(input.delay_after_ms)
     .bind(&now)
-    .execute(pool)
+    .execute(&mut *transaction)
     .await?;
 
-    touch_playbook(pool, &playbook_id).await?;
+    touch_playbook(&mut transaction, &playbook_id, &now).await?;
+    transaction.commit().await?;
     get_playbook_step(pool, step_id).await
 }
 
@@ -300,16 +300,21 @@ pub async fn reorder_playbook_steps(
     playbook_id: &str,
     input: &ReorderPlaybookStepsInput,
 ) -> AppResult<Vec<PlaybookStep>> {
-    ensure_playbook_exists(pool, playbook_id).await?;
-    let existing = list_playbook_steps(pool, playbook_id).await?;
-    if existing.len() != input.step_ids.len() {
+    let mut transaction = pool.begin_with("BEGIN IMMEDIATE").await?;
+    ensure_playbook_exists_in_transaction(&mut transaction, playbook_id).await?;
+    let existing_ids: std::collections::HashSet<String> =
+        sqlx::query_scalar("SELECT id FROM playbook_steps WHERE playbook_id = ?1")
+            .bind(playbook_id)
+            .fetch_all(&mut *transaction)
+            .await?
+            .into_iter()
+            .collect();
+    if existing_ids.len() != input.step_ids.len() {
         return Err(AppError::Message(
             "Reorder payload must include every playbook step.".to_string(),
         ));
     }
 
-    let existing_ids: std::collections::HashSet<String> =
-        existing.into_iter().map(|step| step.id).collect();
     let requested_ids: std::collections::HashSet<String> = input.step_ids.iter().cloned().collect();
     if existing_ids != requested_ids {
         return Err(AppError::Message(
@@ -318,27 +323,41 @@ pub async fn reorder_playbook_steps(
     }
 
     let now = now_iso();
-    for (index, step_id) in input.step_ids.iter().enumerate() {
-        sqlx::query("UPDATE playbook_steps SET sort_order = ?2, updated_at = ?3 WHERE id = ?1")
-            .bind(step_id)
-            .bind(index as i64)
-            .bind(&now)
-            .execute(pool)
-            .await?;
-    }
-
-    touch_playbook(pool, playbook_id).await?;
+    sqlx::query(
+        "UPDATE playbook_steps SET sort_order = (SELECT key FROM json_each(?2) WHERE value = playbook_steps.id), updated_at = ?3 WHERE playbook_id = ?1",
+    )
+    .bind(playbook_id)
+    .bind(serde_json::to_string(&input.step_ids)?)
+    .bind(&now)
+    .execute(&mut *transaction)
+    .await?;
+    touch_playbook(&mut transaction, playbook_id, &now).await?;
+    transaction.commit().await?;
     list_playbook_steps(pool, playbook_id).await
 }
 
 pub async fn delete_playbook_step(pool: &SqlitePool, step_id: &str) -> AppResult<()> {
-    let playbook_id = playbook_id_for_step(pool, step_id).await?;
+    let mut transaction = pool.begin_with("BEGIN IMMEDIATE").await?;
+    let (playbook_id, sort_order): (String, i64) =
+        sqlx::query_as("SELECT playbook_id, sort_order FROM playbook_steps WHERE id = ?1")
+            .bind(step_id)
+            .fetch_optional(&mut *transaction)
+            .await?
+            .ok_or_else(|| AppError::Message("Playbook step not found.".to_string()))?;
+    let now = now_iso();
     sqlx::query("DELETE FROM playbook_steps WHERE id = ?1")
         .bind(step_id)
-        .execute(pool)
+        .execute(&mut *transaction)
         .await?;
-    touch_playbook(pool, &playbook_id).await?;
-    renumber_steps(pool, &playbook_id).await
+    sqlx::query("UPDATE playbook_steps SET sort_order = sort_order - 1, updated_at = ?3 WHERE playbook_id = ?1 AND sort_order > ?2")
+        .bind(&playbook_id)
+        .bind(sort_order)
+        .bind(&now)
+        .execute(&mut *transaction)
+        .await?;
+    touch_playbook(&mut transaction, &playbook_id, &now).await?;
+    transaction.commit().await?;
+    Ok(())
 }
 
 pub async fn get_playbook_execution_context(
@@ -415,19 +434,13 @@ pub async fn finish_playbook_run(
     run_id: &str,
     input: &FinishPlaybookRunInput,
 ) -> AppResult<PlaybookRunSummary> {
-    let status = input.status.trim();
-    if !matches!(status, "passed" | "failed" | "canceled" | "running") {
-        return Err(AppError::Message(
-            "Unsupported playbook run status.".to_string(),
-        ));
-    }
     if input.total_duration_ms < 0 {
         return Err(AppError::Message(
             "Total duration cannot be negative.".to_string(),
         ));
     }
 
-    let finished_at = if status == "running" {
+    let finished_at = if input.status == PlaybookRunStatus::Running {
         None
     } else {
         Some(now_iso())
@@ -444,7 +457,7 @@ pub async fn finish_playbook_run(
         "#,
     )
     .bind(run_id)
-    .bind(status)
+    .bind(input.status.as_str())
     .bind(finished_at)
     .bind(input.total_duration_ms)
     .bind(input.stopped_reason.trim())
@@ -459,16 +472,8 @@ pub async fn record_playbook_run_step(
     run_id: &str,
     input: &RecordPlaybookRunStepInput,
 ) -> AppResult<PlaybookRunStep> {
-    ensure_run_exists(pool, run_id).await?;
-    if !matches!(
-        input.status.as_str(),
-        "passed" | "failed" | "skipped" | "canceled"
-    ) {
-        return Err(AppError::Message(
-            "Unsupported playbook step status.".to_string(),
-        ));
-    }
-
+    let mut transaction = pool.begin_with("BEGIN IMMEDIATE").await?;
+    ensure_run_exists_in_transaction(&mut transaction, run_id).await?;
     let id = Uuid::new_v4().to_string();
     let now = now_iso();
 
@@ -488,7 +493,7 @@ pub async fn record_playbook_run_step(
     .bind(input.saved_request_name.trim())
     .bind(input.method.trim())
     .bind(input.url.trim())
-    .bind(input.status.trim())
+    .bind(input.status.as_str())
     .bind(input.status_code)
     .bind(input.duration_ms)
     .bind(input.response_size_bytes)
@@ -497,10 +502,22 @@ pub async fn record_playbook_run_step(
     .bind(input.test_error_text.trim())
     .bind(input.error_text.trim())
     .bind(&now)
-    .execute(pool)
+    .execute(&mut *transaction)
     .await?;
-
-    refresh_run_counts(pool, run_id).await?;
+    sqlx::query(
+        r#"
+        UPDATE playbook_runs SET
+          passed_steps = passed_steps + CASE WHEN ?2 = 'passed' THEN 1 ELSE 0 END,
+          failed_steps = failed_steps + CASE WHEN ?2 = 'failed' THEN 1 ELSE 0 END,
+          skipped_steps = skipped_steps + CASE WHEN ?2 = 'skipped' THEN 1 ELSE 0 END
+        WHERE id = ?1
+        "#,
+    )
+    .bind(run_id)
+    .bind(input.status.as_str())
+    .execute(&mut *transaction)
+    .await?;
+    transaction.commit().await?;
     get_playbook_run_step(pool, &id).await
 }
 
@@ -663,85 +680,35 @@ async fn folder_script_path(
     collection_id: &str,
     folder_id: &str,
 ) -> AppResult<Vec<PlaybookFolderScripts>> {
-    let mut current_id = Some(folder_id.to_string());
-    let mut reversed = Vec::new();
-
-    while let Some(id) = current_id {
-        let row = sqlx::query(
-            r#"
-            SELECT id, parent_id, name, prerequest_script, test_script
-            FROM collection_items
-            WHERE id = ?1 AND collection_id = ?2 AND kind = 'folder'
-            "#,
+    let rows = sqlx::query(
+        r#"
+        WITH RECURSIVE path AS (
+          SELECT id, parent_id, name, prerequest_script, test_script, 0 AS depth FROM collection_items
+          WHERE id = ?1 AND collection_id = ?2 AND kind = 'folder' UNION ALL
+          SELECT parent.id, parent.parent_id, parent.name, parent.prerequest_script, parent.test_script, path.depth + 1
+          FROM collection_items parent JOIN path ON path.parent_id = parent.id
+          WHERE parent.collection_id = ?2 AND parent.kind = 'folder'
         )
-        .bind(&id)
-        .bind(collection_id)
-        .fetch_optional(pool)
-        .await?
-        .ok_or_else(|| AppError::Message("Collection folder not found.".to_string()))?;
-
-        reversed.push(PlaybookFolderScripts {
+        SELECT name, prerequest_script, test_script FROM path ORDER BY depth DESC
+        "#,
+    )
+    .bind(folder_id)
+    .bind(collection_id)
+    .fetch_all(pool)
+    .await?;
+    if rows.is_empty() {
+        return Err(AppError::Message(
+            "Collection folder not found.".to_string(),
+        ));
+    }
+    Ok(rows
+        .into_iter()
+        .map(|row| PlaybookFolderScripts {
             name: row.get("name"),
             pre_request_script: row.get("prerequest_script"),
             test_script: row.get("test_script"),
-        });
-        current_id = row.get("parent_id");
-    }
-
-    reversed.reverse();
-    Ok(reversed)
-}
-
-async fn refresh_run_counts(pool: &SqlitePool, run_id: &str) -> AppResult<()> {
-    let counts = sqlx::query(
-        r#"
-        SELECT
-          SUM(CASE WHEN status = 'passed' THEN 1 ELSE 0 END) AS passed_steps,
-          SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed_steps,
-          SUM(CASE WHEN status = 'skipped' THEN 1 ELSE 0 END) AS skipped_steps
-        FROM playbook_run_steps
-        WHERE run_id = ?1
-        "#,
-    )
-    .bind(run_id)
-    .fetch_one(pool)
-    .await?;
-
-    let passed_steps: i64 = counts.get::<Option<i64>, _>("passed_steps").unwrap_or(0);
-    let failed_steps: i64 = counts.get::<Option<i64>, _>("failed_steps").unwrap_or(0);
-    let skipped_steps: i64 = counts.get::<Option<i64>, _>("skipped_steps").unwrap_or(0);
-
-    sqlx::query(
-        r#"
-        UPDATE playbook_runs
-        SET passed_steps = ?2,
-            failed_steps = ?3,
-            skipped_steps = ?4
-        WHERE id = ?1
-        "#,
-    )
-    .bind(run_id)
-    .bind(passed_steps)
-    .bind(failed_steps)
-    .bind(skipped_steps)
-    .execute(pool)
-    .await?;
-
-    Ok(())
-}
-
-async fn renumber_steps(pool: &SqlitePool, playbook_id: &str) -> AppResult<()> {
-    let steps = list_playbook_steps(pool, playbook_id).await?;
-    let now = now_iso();
-    for (index, step) in steps.iter().enumerate() {
-        sqlx::query("UPDATE playbook_steps SET sort_order = ?2, updated_at = ?3 WHERE id = ?1")
-            .bind(&step.id)
-            .bind(index as i64)
-            .bind(&now)
-            .execute(pool)
-            .await?;
-    }
-    Ok(())
+        })
+        .collect())
 }
 
 async fn ensure_playbook_exists(pool: &SqlitePool, playbook_id: &str) -> AppResult<()> {
@@ -757,10 +724,27 @@ async fn ensure_playbook_exists(pool: &SqlitePool, playbook_id: &str) -> AppResu
     Ok(())
 }
 
-async fn ensure_run_exists(pool: &SqlitePool, run_id: &str) -> AppResult<()> {
+async fn ensure_playbook_exists_in_transaction(
+    transaction: &mut Transaction<'_, Sqlite>,
+    playbook_id: &str,
+) -> AppResult<()> {
+    let exists: Option<String> = sqlx::query_scalar("SELECT id FROM playbooks WHERE id = ?1")
+        .bind(playbook_id)
+        .fetch_optional(&mut **transaction)
+        .await?;
+    if exists.is_none() {
+        return Err(AppError::Message("Playbook not found.".to_string()));
+    }
+    Ok(())
+}
+
+async fn ensure_run_exists_in_transaction(
+    transaction: &mut Transaction<'_, Sqlite>,
+    run_id: &str,
+) -> AppResult<()> {
     let exists: Option<String> = sqlx::query_scalar("SELECT id FROM playbook_runs WHERE id = ?1")
         .bind(run_id)
-        .fetch_optional(pool)
+        .fetch_optional(&mut **transaction)
         .await?;
 
     if exists.is_none() {
@@ -788,11 +772,15 @@ async fn next_step_sort_order(pool: &SqlitePool, playbook_id: &str) -> AppResult
     Ok(next.unwrap_or(0))
 }
 
-async fn touch_playbook(pool: &SqlitePool, playbook_id: &str) -> AppResult<()> {
+async fn touch_playbook(
+    transaction: &mut Transaction<'_, Sqlite>,
+    playbook_id: &str,
+    now: &str,
+) -> AppResult<()> {
     sqlx::query("UPDATE playbooks SET updated_at = ?2 WHERE id = ?1")
         .bind(playbook_id)
-        .bind(now_iso())
-        .execute(pool)
+        .bind(now)
+        .execute(&mut **transaction)
         .await?;
     Ok(())
 }

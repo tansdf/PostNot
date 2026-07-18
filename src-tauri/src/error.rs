@@ -11,6 +11,24 @@ pub enum AppError {
     Message(String),
     #[error("Request canceled.")]
     Cancelled,
+    #[error("{}", error_with_sources(.0))]
+    Http(#[from] reqwest::Error),
+    #[error(transparent)]
+    Url(#[from] url::ParseError),
+    #[error(transparent)]
+    InvalidHeaderName(#[from] reqwest::header::InvalidHeaderName),
+    #[error(transparent)]
+    InvalidHeaderValue(#[from] reqwest::header::InvalidHeaderValue),
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+    #[error(transparent)]
+    Sql(#[from] sqlx::Error),
+    #[error(transparent)]
+    Json(#[from] serde_json::Error),
+    #[error(transparent)]
+    Join(#[from] tokio::task::JoinError),
+    #[error(transparent)]
+    Tauri(#[from] tauri::Error),
 }
 
 impl Serialize for AppError {
@@ -19,60 +37,6 @@ impl Serialize for AppError {
         S: Serializer,
     {
         serializer.serialize_str(&self.to_string())
-    }
-}
-
-impl From<reqwest::Error> for AppError {
-    fn from(value: reqwest::Error) -> Self {
-        Self::Message(error_with_sources(&value))
-    }
-}
-
-impl From<url::ParseError> for AppError {
-    fn from(value: url::ParseError) -> Self {
-        Self::Message(value.to_string())
-    }
-}
-
-impl From<reqwest::header::InvalidHeaderName> for AppError {
-    fn from(value: reqwest::header::InvalidHeaderName) -> Self {
-        Self::Message(value.to_string())
-    }
-}
-
-impl From<reqwest::header::InvalidHeaderValue> for AppError {
-    fn from(value: reqwest::header::InvalidHeaderValue) -> Self {
-        Self::Message(value.to_string())
-    }
-}
-
-impl From<std::io::Error> for AppError {
-    fn from(value: std::io::Error) -> Self {
-        Self::Message(value.to_string())
-    }
-}
-
-impl From<sqlx::Error> for AppError {
-    fn from(value: sqlx::Error) -> Self {
-        Self::Message(value.to_string())
-    }
-}
-
-impl From<serde_json::Error> for AppError {
-    fn from(value: serde_json::Error) -> Self {
-        Self::Message(value.to_string())
-    }
-}
-
-impl From<tokio::task::JoinError> for AppError {
-    fn from(value: tokio::task::JoinError) -> Self {
-        Self::Message(value.to_string())
-    }
-}
-
-impl From<tauri::Error> for AppError {
-    fn from(value: tauri::Error) -> Self {
-        Self::Message(value.to_string())
     }
 }
 
@@ -96,4 +60,38 @@ fn error_with_sources(error: &dyn Error) -> String {
     }
 
     message
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AppError;
+
+    #[test]
+    fn stable_domain_errors_serialize_as_strings() {
+        assert_eq!(
+            serde_json::to_string(&AppError::Message("stable message".to_owned()))
+                .expect("serialize message"),
+            "\"stable message\""
+        );
+        assert_eq!(
+            serde_json::to_string(&AppError::Cancelled).expect("serialize cancellation"),
+            "\"Request canceled.\""
+        );
+    }
+
+    #[test]
+    fn standard_errors_keep_typed_causes() {
+        assert!(matches!(
+            AppError::from(std::io::Error::other("disk failure")),
+            AppError::Io(_)
+        ));
+        assert!(matches!(
+            AppError::from(url::ParseError::EmptyHost),
+            AppError::Url(_)
+        ));
+        assert!(matches!(
+            AppError::from(serde_json::from_str::<serde_json::Value>("{").unwrap_err()),
+            AppError::Json(_)
+        ));
+    }
 }

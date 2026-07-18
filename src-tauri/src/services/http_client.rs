@@ -8,18 +8,17 @@ use std::{
 use chrono::Utc;
 use reqwest::header::{HeaderName, HeaderValue};
 use reqwest::redirect::Policy;
-use reqwest::{multipart, Body, Client, Method, Response};
+use reqwest::{multipart, Body, Client, Response};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::watch;
 use tokio_util::io::ReaderStream;
-use url::Url;
 
 use crate::domain::{
     requests::{KeyValueRow, ResponseBody, ResponsePayload, SendRequestPayload},
     settings::AppSettings,
 };
 use crate::error::{AppError, AppResult};
-use crate::services::request_url_service::normalize_request_url;
+use crate::services::request_plan_service::{prepare_request, PreparedBodyMode};
 use crate::services::response_body_service::{
     decode_text, describe_inline, ResponseBodyStore, ResponseRowIndexBuilder, BODY_PREVIEW_LIMIT,
     INLINE_BODY_LIMIT,
@@ -122,119 +121,39 @@ fn client_for_settings(settings: &AppSettings) -> AppResult<Client> {
     Ok(client)
 }
 
-pub async fn send_request(
-    payload: &SendRequestPayload,
-    settings: &AppSettings,
-    cancel_rx: watch::Receiver<bool>,
-    progress_sink: Option<ResponseProgressSink>,
-) -> AppResult<ResponsePayload> {
-    send_request_with_store(payload, settings, cancel_rx, progress_sink, None).await
-}
-
 pub async fn send_request_with_store(
     payload: &SendRequestPayload,
     settings: &AppSettings,
     cancel_rx: watch::Receiver<bool>,
     progress_sink: Option<ResponseProgressSink>,
-    body_store: Option<&ResponseBodyStore>,
+    body_store: &ResponseBodyStore,
 ) -> AppResult<ResponsePayload> {
     let mut cancel_rx = cancel_rx;
     let client = client_for_settings(settings)?;
-    let mut url = Url::parse(&normalize_request_url(&payload.url))?;
+    let plan = prepare_request(payload)?;
+    let mut request = client.request(plan.method, plan.url);
 
-    for query in payload
-        .query_params
-        .iter()
-        .filter(|item| item.enabled && !item.key.trim().is_empty())
-    {
-        url.query_pairs_mut().append_pair(&query.key, &query.value);
-    }
-
-    if payload.auth.auth_type == "api-key"
-        && payload.auth.api_key_in == "query"
-        && !payload.auth.api_key_name.trim().is_empty()
-    {
-        url.query_pairs_mut()
-            .append_pair(&payload.auth.api_key_name, &payload.auth.api_key_value);
-    }
-
-    let method = Method::from_bytes(payload.method.as_bytes())
-        .map_err(|error| AppError::Message(error.to_string()))?;
-    let mut request = client.request(method, url);
-
-    for header in payload
-        .headers
-        .iter()
-        .filter(|item| item.enabled && !item.key.trim().is_empty())
-    {
+    for header in plan.headers {
         let name = HeaderName::from_bytes(header.key.as_bytes())?;
         let value = HeaderValue::from_str(&header.value)?;
         request = request.header(name, value);
     }
 
-    match payload.auth.auth_type.as_str() {
-        "basic" => {
-            request = request.basic_auth(
-                &payload.auth.basic_username,
-                Some(&payload.auth.basic_password),
-            );
+    match plan.body_mode {
+        PreparedBodyMode::Json | PreparedBodyMode::Raw => request = request.body(plan.body_raw),
+        PreparedBodyMode::FormUrlencoded => {
+            let mut serializer = url::form_urlencoded::Serializer::new(String::new());
+            serializer.extend_pairs(plan.body_fields);
+            request = request.body(serializer.finish());
         }
-        "bearer" => {
-            request = request.bearer_auth(&payload.auth.bearer_token);
-        }
-        "oauth2" => {
-            let token = if payload.auth.oauth2_access_token.trim().is_empty() {
-                &payload.auth.bearer_token
-            } else {
-                &payload.auth.oauth2_access_token
-            };
-            request = request.bearer_auth(token);
-        }
-        "api-key"
-            if payload.auth.api_key_in == "header"
-                && !payload.auth.api_key_name.trim().is_empty() =>
-        {
-            request = request.header(&payload.auth.api_key_name, &payload.auth.api_key_value);
-        }
-        _ => {}
-    }
-
-    match payload.body.mode.as_str() {
-        "json" => {
-            request = request.header("content-type", "application/json");
-            request = request.body(payload.body.raw.clone());
-        }
-        "raw" => {
-            request = request.body(payload.body.raw.clone());
-        }
-        "form-urlencoded" => {
-            let form_fields: Vec<(String, String)> = payload
-                .body
-                .form
-                .iter()
-                .filter(|item| item.enabled && !item.key.trim().is_empty())
-                .map(|item| (item.key.clone(), item.value.clone()))
-                .collect();
-            request = request.form(&form_fields);
-        }
-        "multipart" => {
+        PreparedBodyMode::Multipart => {
             let mut form = multipart::Form::new();
 
-            for item in payload
-                .body
-                .form
-                .iter()
-                .filter(|entry| entry.enabled && !entry.key.trim().is_empty())
-            {
-                form = form.text(item.key.clone(), item.value.clone());
+            for (key, value) in plan.body_fields {
+                form = form.text(key, value);
             }
 
-            for file in payload
-                .body
-                .files
-                .iter()
-                .filter(|file| file.enabled && !file.path.trim().is_empty())
-            {
+            for file in plan.body_files {
                 let field_name = match file.name.trim() {
                     "" => "file",
                     value => value,
@@ -264,7 +183,7 @@ pub async fn send_request_with_store(
 
             request = request.multipart(form);
         }
-        _ => {}
+        PreparedBodyMode::None => {}
     }
 
     let started_at = Instant::now();
@@ -335,7 +254,7 @@ async fn read_response_body(
     cancel_rx: &mut watch::Receiver<bool>,
     progress_sink: Option<&ResponseProgressSink>,
     content_length: Option<u64>,
-    body_store: Option<&ResponseBodyStore>,
+    body_store: &ResponseBodyStore,
     content_type: Option<String>,
 ) -> AppResult<ResponseBody> {
     let mut bytes = Vec::new();
@@ -346,7 +265,7 @@ async fn read_response_body(
     let mut spill: Option<(String, std::path::PathBuf, tokio::fs::File)> = None;
     let mut downloaded_bytes = 0usize;
     let mut last_progress_emit = Instant::now();
-    let mut row_index = body_store.map(|_| ResponseRowIndexBuilder::new());
+    let mut row_index = ResponseRowIndexBuilder::new();
     let mut cleanup = TemporaryBodyCleanup::new();
 
     loop {
@@ -359,31 +278,24 @@ async fn read_response_body(
             if let Some((handle_id, path, mut file)) = spill {
                 file.flush().await?;
                 drop(file);
-                let store = body_store.expect("spill requires body store");
-                let response_body = store.register_temporary_with_index(
+                let response_body = body_store.register_temporary_with_index(
                     handle_id,
                     path,
                     content_type,
                     &preview,
                     downloaded_bytes as u64,
-                    row_index
-                        .take()
-                        .expect("file-backed response has row index")
-                        .finish(),
+                    row_index.finish(),
                 )?;
                 cleanup.disarm();
                 return Ok(response_body.into());
             }
             let descriptor = describe_inline(&bytes, content_type);
-            if body_store.is_some()
-                && matches!(
-                    descriptor.presentation,
-                    crate::services::response_body_service::ResponsePresentation::Image
-                        | crate::services::response_body_service::ResponsePresentation::Binary
-                )
-            {
+            if matches!(
+                descriptor.presentation,
+                crate::services::response_body_service::ResponsePresentation::Image
+                    | crate::services::response_body_service::ResponsePresentation::Binary
+            ) {
                 return Ok(body_store
-                    .expect("checked body store")
                     .store_bytes(&bytes, descriptor.content_type.as_deref())
                     .await?
                     .into());
@@ -398,22 +310,16 @@ async fn read_response_body(
         };
 
         downloaded_bytes = downloaded_bytes.saturating_add(chunk.len());
-        if let Some(index) = row_index.as_mut() {
-            index.push(&chunk);
-        }
+        row_index.push(&chunk);
         if preview.len() < BODY_PREVIEW_LIMIT {
             let remaining = BODY_PREVIEW_LIMIT - preview.len();
             preview.extend_from_slice(&chunk[..chunk.len().min(remaining)]);
         }
 
-        if spill.is_none()
-            && body_store.is_some()
-            && bytes.len().saturating_add(chunk.len()) > INLINE_BODY_LIMIT
-        {
-            let store = body_store.expect("checked body store");
-            tokio::fs::create_dir_all(store.root()).await?;
+        if spill.is_none() && bytes.len().saturating_add(chunk.len()) > INLINE_BODY_LIMIT {
+            tokio::fs::create_dir_all(body_store.root()).await?;
             let handle_id = uuid::Uuid::new_v4().to_string();
-            let path = store.root().join(format!("{handle_id}.body"));
+            let path = body_store.root().join(format!("{handle_id}.body"));
             let mut file = tokio::fs::File::create(&path).await?;
             cleanup.track(path.clone());
             file.write_all(&bytes).await?;
@@ -458,9 +364,7 @@ async fn wait_for_cancellation(cancel_rx: &mut watch::Receiver<bool>) {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        send_request, send_request_with_store, ResponseDownloadProgress, ResponseProgressSink,
-    };
+    use super::{send_request_with_store, ResponseDownloadProgress, ResponseProgressSink};
     use crate::domain::{
         requests::{KeyValueRow, RequestAuth, RequestBody, SendRequestPayload},
         settings::AppSettings,
@@ -486,8 +390,9 @@ mod tests {
             "HTTP/1.1 201 Created\r\ncontent-type: application/json\r\ncontent-length: 11\r\n\r\n{\"ok\":true}",
         );
         let (_cancel_tx, cancel_rx) = watch::channel(false);
+        let store = test_store();
 
-        let response = send_request(
+        let response = send_request_with_store(
             &SendRequestPayload {
                 name: "Create thing".to_string(),
                 method: "POST".to_string(),
@@ -511,6 +416,7 @@ mod tests {
             &default_settings(),
             cancel_rx,
             None,
+            &store,
         )
         .await
         .expect("request should succeed");
@@ -545,8 +451,9 @@ mod tests {
             spawn_test_server("HTTP/1.1 200 OK\r\ncontent-length: 2\r\n\r\nok");
         let port = url.rsplit_once(':').expect("test server url has port").1;
         let (_cancel_tx, cancel_rx) = watch::channel(false);
+        let store = test_store();
 
-        let response = send_request(
+        let response = send_request_with_store(
             &SendRequestPayload {
                 name: "Localhost".to_string(),
                 method: "GET".to_string(),
@@ -566,6 +473,7 @@ mod tests {
             &default_settings(),
             cancel_rx,
             None,
+            &store,
         )
         .await
         .expect("localhost without scheme should send");
@@ -589,8 +497,9 @@ mod tests {
         );
         let (url, _captured_rx) = spawn_test_server(&response_message);
         let (_cancel_tx, cancel_rx) = watch::channel(false);
+        let store = test_store();
 
-        let response = send_request(
+        let response = send_request_with_store(
             &SendRequestPayload {
                 name: "Large JSON".to_string(),
                 method: "GET".to_string(),
@@ -610,15 +519,16 @@ mod tests {
             &default_settings(),
             cancel_rx,
             None,
+            &store,
         )
         .await
         .expect("large response should succeed");
 
         assert_eq!(response.status_code, Some(200));
-        let body_text = response
-            .body
-            .inline_text()
-            .expect("test response is inline");
+        let body_text = store
+            .read_all_text(response.body.handle_id().expect("large response is stored"))
+            .await
+            .expect("read stored response");
         assert_eq!(response.size_bytes, body.len() as u64);
         assert_eq!(body_text.len(), body.len());
         assert!(body_text.starts_with("{\"data\":\"xxx"));
@@ -657,7 +567,7 @@ mod tests {
             &default_settings(),
             cancel_rx,
             None,
-            Some(&store),
+            &store,
         )
         .await
         .expect("large response should succeed");
@@ -700,7 +610,7 @@ mod tests {
             &default_settings(),
             cancel_rx,
             None,
-            Some(&store),
+            &store,
         )
         .await
         .expect("small image response");
@@ -728,6 +638,7 @@ mod tests {
         );
         let (url, _captured_rx) = spawn_test_server(&response_message);
         let (_cancel_tx, cancel_rx) = watch::channel(false);
+        let store = test_store();
         let progress_events = Arc::new(Mutex::new(Vec::<ResponseDownloadProgress>::new()));
         let captured_progress_events = Arc::clone(&progress_events);
         let progress_sink: ResponseProgressSink = Arc::new(move |progress| {
@@ -737,7 +648,7 @@ mod tests {
                 .push(progress);
         });
 
-        let response = send_request(
+        let response = send_request_with_store(
             &SendRequestPayload {
                 name: "Progress".to_string(),
                 method: "GET".to_string(),
@@ -757,6 +668,7 @@ mod tests {
             &default_settings(),
             cancel_rx,
             Some(progress_sink),
+            &store,
         )
         .await
         .expect("response should succeed");
@@ -790,8 +702,9 @@ mod tests {
         );
         let (url, captured_rx) = spawn_test_server_bytes(response_message);
         let (_cancel_tx, cancel_rx) = watch::channel(false);
+        let store = test_store();
 
-        let response = send_request(
+        let response = send_request_with_store(
             &SendRequestPayload {
                 name: "Compressed JSON".to_string(),
                 method: "GET".to_string(),
@@ -811,6 +724,7 @@ mod tests {
             &default_settings(),
             cancel_rx,
             None,
+            &store,
         )
         .await
         .expect("compressed response should decode");
@@ -835,6 +749,12 @@ mod tests {
 
     fn spawn_test_server(response: &str) -> (String, mpsc::Receiver<CapturedRequest>) {
         spawn_test_server_bytes(response.as_bytes().to_vec())
+    }
+
+    fn test_store() -> ResponseBodyStore {
+        ResponseBodyStore::new(
+            std::env::temp_dir().join(format!("postnot-http-test-{}", uuid::Uuid::new_v4())),
+        )
     }
 
     fn spawn_test_server_bytes(response: Vec<u8>) -> (String, mpsc::Receiver<CapturedRequest>) {

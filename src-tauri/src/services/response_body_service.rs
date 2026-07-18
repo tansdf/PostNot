@@ -108,6 +108,22 @@ struct BodyEntry {
     charset: Option<String>,
 }
 
+struct TemporaryBodyFile(Option<PathBuf>);
+
+impl TemporaryBodyFile {
+    fn retain(mut self) {
+        self.0 = None;
+    }
+}
+
+impl Drop for TemporaryBodyFile {
+    fn drop(&mut self) {
+        if let Some(path) = self.0.as_ref() {
+            let _ = remove_body_files(path);
+        }
+    }
+}
+
 #[derive(Clone)]
 pub(crate) struct RowLocation {
     row_index: u64,
@@ -372,29 +388,28 @@ impl ResponseBodyStore {
         };
 
         if let Some(path) = path_to_delete {
-            match std::fs::remove_file(&path) {
-                Ok(()) => {}
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                Err(error) => return Err(error.into()),
-            }
-            let _ = std::fs::remove_file(index_path(&path));
-            let _ = std::fs::remove_file(display_path(&path));
+            remove_body_files(&path)?;
         }
         Ok(())
     }
 
     pub fn mark_history_owned(&self, handle_id: &str, path: PathBuf) -> AppResult<()> {
         let mut entries = self.lock_entries()?;
-        let entry = entries
-            .get_mut(handle_id)
+        let previous_path = entries
+            .get(handle_id)
+            .map(|entry| entry.path.clone())
             .ok_or_else(|| AppError::Message("Response body is no longer available.".into()))?;
-        let previous_index = index_path(&entry.path);
-        let next_index = index_path(&path);
-        if previous_index.exists() {
-            let _ = std::fs::rename(previous_index, next_index);
-        }
-        entry.path = path;
+        let shared = entries
+            .iter()
+            .any(|(id, entry)| id != handle_id && entry.path == previous_path);
+        let entry = entries.get_mut(handle_id).expect("entry exists");
         entry.delete_on_release = false;
+        if previous_path != path {
+            entry.path = path;
+            if !shared {
+                remove_body_files(&previous_path)?;
+            }
+        }
         Ok(())
     }
 
@@ -406,13 +421,7 @@ impl ResponseBodyStore {
             leased |= entry.leases > 0;
         }
         if !leased {
-            match std::fs::remove_file(path) {
-                Ok(()) => {}
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                Err(error) => return Err(error.into()),
-            }
-            let _ = std::fs::remove_file(index_path(path));
-            let _ = std::fs::remove_file(display_path(path));
+            remove_body_files(path)?;
         }
         Ok(leased)
     }
@@ -870,29 +879,52 @@ impl ResponseBodyStore {
     ) -> AppResult<StoredResponseBody> {
         tokio::fs::create_dir_all(&self.root).await?;
         let source_path = self.path_for(handle_id)?;
-        let mut source = tokio::fs::File::open(source_path).await?;
+        let mut source = tokio::fs::File::open(&source_path).await?;
         let total_bytes = source.metadata().await?.len();
         let formatted_id = Uuid::new_v4().to_string();
         let formatted_path = self.root.join(format!("{formatted_id}.formatted.body"));
+        let temporary = TemporaryBodyFile(Some(formatted_path.clone()));
         let mut destination = tokio::fs::File::create(&formatted_path).await?;
+        validate_json(&source_path)?;
         let mut buffer = vec![0u8; SEARCH_BUFFER_SIZE];
         let mut preview = Vec::with_capacity(BODY_PREVIEW_LIMIT);
         let mut in_string = false;
         let mut escaped = false;
         let mut depth = 0usize;
-        let mut containers = Vec::new();
         let mut written = 0u64;
         let mut row_index = ResponseRowIndexBuilder::new();
         let mut processed_bytes = 0u64;
         let mut last_progress = std::time::Instant::now();
+        macro_rules! write_bytes {
+            ($bytes:expr) => {
+                write_format_bytes(
+                    &mut destination,
+                    $bytes,
+                    &mut preview,
+                    &mut written,
+                    &mut row_index,
+                )
+                .await?
+            };
+        }
+        macro_rules! indent {
+            () => {
+                write_indent(
+                    &mut destination,
+                    depth,
+                    &mut preview,
+                    &mut written,
+                    &mut row_index,
+                )
+                .await?
+            };
+        }
 
         loop {
             if cancelled
                 .map(|flag| flag.load(Ordering::Relaxed))
                 .unwrap_or(false)
             {
-                drop(destination);
-                let _ = tokio::fs::remove_file(&formatted_path).await;
                 return Err(AppError::Cancelled);
             }
             let read = source.read(&mut buffer).await?;
@@ -902,14 +934,7 @@ impl ResponseBodyStore {
             processed_bytes += read as u64;
             for byte in &buffer[..read] {
                 if in_string {
-                    write_format_bytes(
-                        &mut destination,
-                        &[*byte],
-                        &mut preview,
-                        &mut written,
-                        &mut row_index,
-                    )
-                    .await?;
+                    write_bytes!(&[*byte]);
                     if escaped {
                         escaped = false;
                     } else if *byte == b'\\' {
@@ -923,101 +948,25 @@ impl ResponseBodyStore {
                 match *byte {
                     b'"' => {
                         in_string = true;
-                        write_format_bytes(
-                            &mut destination,
-                            b"\"",
-                            &mut preview,
-                            &mut written,
-                            &mut row_index,
-                        )
-                        .await?;
+                        write_bytes!(b"\"");
                     }
                     b'{' | b'[' => {
-                        containers.push(*byte);
                         depth += 1;
-                        write_format_bytes(
-                            &mut destination,
-                            &[*byte],
-                            &mut preview,
-                            &mut written,
-                            &mut row_index,
-                        )
-                        .await?;
-                        write_indent(
-                            &mut destination,
-                            depth,
-                            &mut preview,
-                            &mut written,
-                            &mut row_index,
-                        )
-                        .await?;
+                        write_bytes!(&[*byte]);
+                        indent!();
                     }
                     b'}' | b']' => {
-                        let expected = if *byte == b'}' { b'{' } else { b'[' };
-                        if containers.pop() != Some(expected) {
-                            drop(destination);
-                            let _ = tokio::fs::remove_file(&formatted_path).await;
-                            return Err(AppError::Message(
-                                "Response body is not valid JSON.".into(),
-                            ));
-                        }
                         depth = depth.saturating_sub(1);
-                        write_indent(
-                            &mut destination,
-                            depth,
-                            &mut preview,
-                            &mut written,
-                            &mut row_index,
-                        )
-                        .await?;
-                        write_format_bytes(
-                            &mut destination,
-                            &[*byte],
-                            &mut preview,
-                            &mut written,
-                            &mut row_index,
-                        )
-                        .await?;
+                        indent!();
+                        write_bytes!(&[*byte]);
                     }
                     b',' => {
-                        write_format_bytes(
-                            &mut destination,
-                            b",",
-                            &mut preview,
-                            &mut written,
-                            &mut row_index,
-                        )
-                        .await?;
-                        write_indent(
-                            &mut destination,
-                            depth,
-                            &mut preview,
-                            &mut written,
-                            &mut row_index,
-                        )
-                        .await?;
+                        write_bytes!(b",");
+                        indent!();
                     }
-                    b':' => {
-                        write_format_bytes(
-                            &mut destination,
-                            b": ",
-                            &mut preview,
-                            &mut written,
-                            &mut row_index,
-                        )
-                        .await?;
-                    }
+                    b':' => write_bytes!(b": "),
                     byte if byte.is_ascii_whitespace() => {}
-                    _ => {
-                        write_format_bytes(
-                            &mut destination,
-                            &[*byte],
-                            &mut preview,
-                            &mut written,
-                            &mut row_index,
-                        )
-                        .await?
-                    }
+                    _ => write_bytes!(&[*byte]),
                 }
             }
             if let (Some(progress), Some(job_id)) = (progress, job_id) {
@@ -1032,11 +981,6 @@ impl ResponseBodyStore {
                 }
             }
         }
-        if in_string || !containers.is_empty() {
-            drop(destination);
-            let _ = tokio::fs::remove_file(&formatted_path).await;
-            return Err(AppError::Message("Response body is not valid JSON.".into()));
-        }
         destination.flush().await?;
         if let (Some(progress), Some(job_id)) = (progress, job_id) {
             progress(ResponseBodyJobProgress {
@@ -1047,14 +991,16 @@ impl ResponseBodyStore {
             });
         }
         drop(destination);
-        self.register_temporary_with_index(
+        let stored = self.register_temporary_with_index(
             formatted_id,
             formatted_path,
             Some("application/json; charset=utf-8".into()),
             &preview,
             written,
             row_index.finish(),
-        )
+        )?;
+        temporary.retain();
+        Ok(stored)
     }
 
     pub async fn read_preview(path: &Path) -> AppResult<Vec<u8>> {
@@ -1234,6 +1180,17 @@ fn display_path(body_path: &Path) -> PathBuf {
     body_path.with_extension("utf8")
 }
 
+fn remove_body_files(path: &Path) -> AppResult<()> {
+    for path in [path.to_path_buf(), index_path(path), display_path(path)] {
+        match std::fs::remove_file(path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+    }
+    Ok(())
+}
+
 fn transcode_display_file(
     source: &Path,
     destination: &Path,
@@ -1315,6 +1272,14 @@ fn read_row_index(body_path: &Path) -> AppResult<RowIndex> {
         anchors,
         total_rows,
     })
+}
+
+fn validate_json(path: &Path) -> AppResult<()> {
+    let input = std::io::BufReader::new(std::fs::File::open(path)?);
+    let mut deserializer = serde_json::Deserializer::from_reader(input);
+    serde::de::IgnoredAny::deserialize(&mut deserializer)?;
+    deserializer.end()?;
+    Ok(())
 }
 
 async fn write_indent(

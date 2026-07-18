@@ -1,6 +1,16 @@
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use super::response_body_service::{ResponseBodyStore, ResponsePresentation};
+use crate::{
+    domain::requests::{
+        RequestAuth, RequestBody, ResponseBody, ResponsePayload, SendRequestPayload,
+    },
+    services::history_service,
+};
+use sqlx::SqlitePool;
 use tokio::io::AsyncWriteExt;
 
 fn test_dir(name: &str) -> PathBuf {
@@ -153,6 +163,62 @@ async fn formats_json_without_changing_string_contents() {
     store
         .release(&formatted.handle_id)
         .expect("release formatted");
+    fs::remove_dir_all(root).ok();
+}
+
+#[tokio::test]
+async fn rejects_malformed_json_before_formatting() {
+    let root = test_dir("body-invalid-json");
+    let store = ResponseBodyStore::new(root.clone());
+    let invalid_cases: &[&[u8]] = &[
+        br#"{"a":}"#,
+        br#"{"a":1 "b":2}"#,
+        b"01",
+        b"true false",
+        br#"{"a":"unterminated}"#,
+    ];
+
+    for invalid in invalid_cases {
+        let stored = store
+            .store_bytes(invalid, Some("application/json"))
+            .await
+            .expect("store malformed JSON");
+        assert!(
+            store.format_json(&stored.handle_id).await.is_err(),
+            "formatter accepted malformed JSON: {invalid:?}"
+        );
+        store.release(&stored.handle_id).expect("release source");
+        assert_eq!(body_files(&root), Vec::<PathBuf>::new());
+    }
+
+    fs::remove_dir_all(root).ok();
+}
+
+#[tokio::test]
+async fn formats_valid_nested_json_into_parseable_output() {
+    let root = test_dir("body-nested-json");
+    let store = ResponseBodyStore::new(root.clone());
+    let stored = store
+        .store_bytes(
+            br#"{"outer":[{"nested":{"value":true}},null]}"#,
+            Some("application/json"),
+        )
+        .await
+        .expect("store nested JSON");
+    let formatted = store
+        .format_json(&stored.handle_id)
+        .await
+        .expect("format nested JSON");
+    let text = store
+        .read_all_text(&formatted.handle_id)
+        .await
+        .expect("read formatted JSON");
+
+    assert!(serde_json::from_str::<serde_json::Value>(&text).is_ok());
+    store.release(&stored.handle_id).expect("release source");
+    store
+        .release(&formatted.handle_id)
+        .expect("release formatted body");
     fs::remove_dir_all(root).ok();
 }
 
@@ -387,4 +453,225 @@ async fn write_large_fixture(path: &std::path::Path, mebibytes: usize) {
         file.write_all(&block).await.expect("write fixture block");
     }
     file.flush().await.expect("flush fixture");
+}
+
+struct HistoryFixture {
+    root: PathBuf,
+    history_dir: PathBuf,
+    pool: SqlitePool,
+    store: ResponseBodyStore,
+    handle: String,
+    request: SendRequestPayload,
+    response: ResponsePayload,
+}
+
+impl HistoryFixture {
+    async fn record_file_response(&self) -> crate::error::AppResult<()> {
+        history_service::record_success_in_dir(
+            &self.pool,
+            &self.request,
+            &self.response,
+            &self.history_dir,
+            &self.store,
+        )
+        .await
+    }
+}
+
+impl Drop for HistoryFixture {
+    fn drop(&mut self) {
+        fs::remove_dir_all(&self.root).ok();
+    }
+}
+
+async fn history_fixture() -> HistoryFixture {
+    let root = test_dir("history-failures");
+    let history_dir = root.join("history");
+    let store = ResponseBodyStore::new(root.join("live"));
+    let stored = store
+        .store_bytes(b"body", Some("text/plain"))
+        .await
+        .expect("store live body");
+    let handle = stored.handle_id.clone();
+    let pool = SqlitePool::connect("sqlite::memory:")
+        .await
+        .expect("in-memory database");
+    for statement in [
+        "CREATE TABLE history_entries (id TEXT PRIMARY KEY, request_name TEXT NOT NULL DEFAULT '', method TEXT NOT NULL, url TEXT NOT NULL, request_snapshot_json TEXT NOT NULL, status_code INTEGER NULL, duration_ms INTEGER NOT NULL, response_headers_json TEXT NOT NULL DEFAULT '[]', response_body_path TEXT NULL, response_body_preview TEXT NOT NULL DEFAULT '', error_text TEXT NOT NULL DEFAULT '', executed_at TEXT NOT NULL, response_size_bytes INTEGER NOT NULL DEFAULT 0, response_content_type TEXT NULL, response_charset TEXT NULL, response_presentation TEXT NOT NULL DEFAULT 'text')",
+        "CREATE TABLE app_settings (key TEXT PRIMARY KEY, value_json TEXT NOT NULL, updated_at TEXT NOT NULL)",
+    ] {
+        sqlx::query(statement)
+            .execute(&pool)
+            .await
+            .expect("create history fixture schema");
+    }
+    let request = SendRequestPayload {
+        name: "Fixture".into(),
+        method: "GET".into(),
+        url: "https://example.test".into(),
+        query_params: Vec::new(),
+        headers: Vec::new(),
+        body: RequestBody {
+            mode: "none".into(),
+            raw: String::new(),
+            form: Vec::new(),
+            files: Vec::new(),
+        },
+        auth: RequestAuth {
+            auth_type: "none".into(),
+            basic_username: String::new(),
+            basic_password: String::new(),
+            bearer_token: String::new(),
+            api_key_name: String::new(),
+            api_key_value: String::new(),
+            api_key_in: "header".into(),
+            oauth2_access_token: String::new(),
+            oauth2_token_url: String::new(),
+            oauth2_client_id: String::new(),
+            oauth2_client_secret: String::new(),
+            oauth2_scope: String::new(),
+        },
+        pre_request_script: String::new(),
+        test_script: String::new(),
+    };
+    let response = ResponsePayload {
+        status_code: Some(200),
+        status_text: "OK".into(),
+        duration_ms: 1,
+        size_bytes: 4,
+        headers: Vec::new(),
+        body: ResponseBody::from(stored),
+        error_text: String::new(),
+        executed_at: "2026-01-01T00:00:00Z".into(),
+    };
+    HistoryFixture {
+        root,
+        history_dir,
+        pool,
+        store,
+        handle,
+        request,
+        response,
+    }
+}
+
+fn body_files(directory: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = fs::read_dir(directory) else {
+        return Vec::new();
+    };
+    let mut files = entries
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.extension()
+                .is_some_and(|extension| extension == "body")
+        })
+        .collect::<Vec<_>>();
+    files.sort();
+    files
+}
+
+async fn add_history_body(fixture: &HistoryFixture, id: &str) -> PathBuf {
+    fs::create_dir_all(&fixture.history_dir).expect("create history directory");
+    let path = fixture.history_dir.join(format!("{id}.body"));
+    fs::write(&path, b"body").expect("write history body");
+    sqlx::query("INSERT INTO history_entries (id, method, url, request_snapshot_json, duration_ms, response_headers_json, response_body_path, executed_at) VALUES (?1, 'GET', 'https://example.test', '{}', 0, '[]', ?2, '2026-01-01T00:00:00Z')")
+        .bind(id)
+        .bind(path.to_string_lossy().to_string())
+        .execute(&fixture.pool)
+        .await
+        .expect("insert history body");
+    path
+}
+
+#[tokio::test]
+async fn successful_history_adoption_removes_old_body_and_sidecars() {
+    let fixture = history_fixture().await;
+    let source = fixture
+        .store
+        .path_for(&fixture.handle)
+        .expect("source body path");
+    let source_index = source.with_extension("idx");
+    let source_display = source.with_extension("utf8");
+    fixture
+        .store
+        .read_window(&fixture.handle, 0, 1, 1024)
+        .await
+        .expect("create source index");
+    fs::write(&source_display, b"body").expect("write source display");
+
+    fixture
+        .record_file_response()
+        .await
+        .expect("record successful response");
+
+    assert!(!source.exists(), "old live body must be removed");
+    assert!(!source_index.exists(), "old index sidecar must be removed");
+    assert!(
+        !source_display.exists(),
+        "old display sidecar must be removed"
+    );
+    let adopted = fixture
+        .store
+        .path_for(&fixture.handle)
+        .expect("adopted body path");
+    assert!(adopted.starts_with(&fixture.history_dir));
+    assert_eq!(
+        fixture.store.read_all_text(&fixture.handle).await.unwrap(),
+        "body"
+    );
+}
+
+#[tokio::test]
+async fn failed_history_insert_preserves_live_body_and_removes_staged_copy() {
+    let fixture = history_fixture().await;
+    sqlx::query("DROP TABLE history_entries")
+        .execute(&fixture.pool)
+        .await
+        .expect("drop history table");
+    assert!(fixture.record_file_response().await.is_err());
+    assert_eq!(
+        fixture.store.read_all_text(&fixture.handle).await.unwrap(),
+        "body"
+    );
+    assert_eq!(body_files(&fixture.history_dir), Vec::<PathBuf>::new());
+}
+
+#[tokio::test]
+async fn failed_history_clear_keeps_body_files() {
+    let fixture = history_fixture().await;
+    let path = add_history_body(&fixture, "clear").await;
+    sqlx::query("CREATE TRIGGER reject_history_clear BEFORE DELETE ON history_entries BEGIN SELECT RAISE(ROLLBACK, 'reject clear'); END")
+        .execute(&fixture.pool)
+        .await
+        .expect("reject clear");
+    assert!(
+        history_service::clear_history(&fixture.pool, &fixture.store)
+            .await
+            .is_err()
+    );
+    assert!(path.exists());
+}
+
+#[tokio::test]
+async fn failed_history_prune_keeps_body_files() {
+    let fixture = history_fixture().await;
+    let path = add_history_body(&fixture, "prune").await;
+    sqlx::query("INSERT INTO app_settings (key, value_json, updated_at) VALUES ('history_limit', '0', '2026-01-01T00:00:00Z')")
+        .execute(&fixture.pool)
+        .await
+        .expect("set history limit");
+    sqlx::query("CREATE TRIGGER reject_history_prune BEFORE DELETE ON history_entries BEGIN SELECT RAISE(ROLLBACK, 'reject prune'); END")
+        .execute(&fixture.pool)
+        .await
+        .expect("reject prune");
+    assert!(history_service::record_failure(
+        &fixture.pool,
+        &fixture.request,
+        "fixture failure",
+        &fixture.store,
+    )
+    .await
+    .is_err());
+    assert!(path.exists());
 }

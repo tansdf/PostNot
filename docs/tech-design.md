@@ -65,7 +65,7 @@ Responsibilities:
 - Persist request history
 - Persist request workspace state through `app_settings`
 - Load environment metadata from SQLite while storing secret environment values in the OS credential store
-- Build resolved request previews without executing scripts or network traffic, using the same environment and dynamic-variable resolution path as sends and masking credential-looking values before returning data to the UI
+- Build one canonical prepared-request model for both sends and resolved previews after environment and dynamic-variable resolution, then mask credential-looking values before preview data returns to the UI
 - Coordinate signed release checks against GitHub Releases' stable `latest` updater manifest, Linux installer-target selection, download progress events, retryable failure handling, and install handoff for the Settings updater flow
 - Resolve app data paths
 - Expose a stable Tauri command surface to the UI
@@ -74,14 +74,14 @@ Responsibilities:
 
 1. User edits a request in the UI
 2. The frontend keeps that draft inside the active request tab and persists workspace changes locally through the settings-backed workspace store
-3. Before sending, the user may open a read-only resolved request preview; the frontend invokes the native `preview_request` command, which resolves the active environment and settings, assembles outgoing query/auth/header/body data, adds auth/body-generated headers, masks credential-looking values, validates URL/header/body/file state, and returns warnings and notes without executing scripts, helper requests, environment writes, or network traffic
+3. Before sending, the user may open a read-only resolved request preview; the frontend invokes the native `preview_request` command, which resolves the active environment and settings, prepares the same normalized URL, enabled query rows, generated auth/content headers, and body mode used by send, then masks credential-looking values and returns warnings and notes without executing scripts, helper requests, environment writes, or network traffic
 4. On send, the frontend runs inherited collection, folder, and saved-request pre-request scripts (if any) against a draft copy and either stops with a script error surface or proceeds with the mutated draft as the payload
 5. Frontend invokes `send_request` with that payload
 6. Rust loads persisted request settings from SQLite
 7. Rust resolves environment variables and built-in dynamic variables
-8. Rust executes the request with `reqwest`
+8. Rust creates a request guard, prepares the canonical outgoing request, and executes it with `reqwest`; dropping the guard releases only that matching active-request slot on success, failure, or cancellation
 9. Rust returns response metadata plus either an inline body (up to 1 MiB) or a managed file handle; large bodies never cross Tauri IPC in full
-10. Rust adopts the downloaded response file into history, writes its metadata and sparse row index, and redacts secret-derived environment substitutions back to their original `{{variable}}` form
+10. Rust copies the downloaded response into its history path, inserts the history row, adopts the copied file only after the insert succeeds, and redacts secret-derived environment substitutions back to their original `{{variable}}` form
 11. Frontend runs inherited collection, folder, and saved-request test scripts (if any) against the returned response for assertion output
 12. Frontend reloads history, updates the originating tab, and persists the refreshed workspace state
 
@@ -190,6 +190,11 @@ PostNot/
       0001_init.sql
       0002_collection_scripts.sql
       0003_playbooks.sql
+      0004_collection_search_fts.sql
+      0005_response_body_metadata.sql
+      0006_collection_integrity.sql
+      0007_playbook_integrity.sql
+      0008_environment_integrity.sql
     src/
       main.rs
       lib.rs
@@ -235,7 +240,10 @@ PostNot/
           shared.rs
         playbooks_service.rs
         playbooks_service_tests.rs
+        request_plan_service.rs
         request_preview_service.rs
+        response_body_service.rs
+        response_body_service_tests.rs
         secret_store_service.rs
         settings_service.rs
         updates_service.rs
@@ -320,7 +328,7 @@ Fields:
 
 ## 6. SQLite Storage Design
 
-The schema is created by the migrations in `src-tauri/migrations/`: `0001_init.sql` for the original app tables, `0002_collection_scripts.sql` for collection-level scripts, and `0003_playbooks.sql` for playbook definitions and grouped run logs.
+The schema is created by forward-only migrations in `src-tauri/migrations/`. Migrations `0001` through `0003` define the original tables, collection scripts, and playbooks; `0005` adds response-body metadata. Migration `0006` removes the superseded collection FTS shadow table and adds sibling-ordering support, `0007` adds the folder-chain index used by playbooks, and `0008` repairs competing active environments before enforcing the one-active-environment invariant. Released migrations, including the now-superseded `0004` FTS migration, remain unchanged so existing databases upgrade safely.
 
 ### Database Location
 
@@ -357,6 +365,8 @@ Keys written by the app:
 - `collection_sidebar_state`
 - `request_workspace_state`
 
+Settings reads load the stored rows once and merge them over Rust defaults without rewriting defaults on the read path. A full settings save upserts all normalized values in one transaction, while history pruning reads only the `history_limit` key.
+
 #### `history_entries`
 
 Stores request execution summaries and links to full response-body files.
@@ -381,10 +391,11 @@ CREATE TABLE history_entries (
 Implementation notes:
 
 - successful requests are persisted with a response preview
-- successful responses persist exact response bytes to a file path referenced by `response_body_path`; large downloads are atomically adopted instead of rewritten
+- successful responses persist exact response bytes to a file path referenced by `response_body_path`; file-backed responses use copy-insert-adopt ordering so a failed insert removes the staged history copy without invalidating the live response handle
 - file-backed bodies include content type, charset, presentation, actual byte size, and a sparse row index for bounded visible-range reads
 - failed requests are also persisted with `error_text`
 - history is pruned based on the persisted `history_limit` setting
+- clear and prune commit row deletion in a transaction before scheduling the corresponding files for lease-aware removal
 
 ### Other Tables
 
@@ -401,10 +412,11 @@ Implementation notes:
 - `kind` distinguishes folders from saved requests
 - `parent_id` allows nested folders and request placement inside folders
 - `prerequest_script` and `test_script` are persisted per collection, folder, and saved request; the UI runs inherited collection scripts first, then ancestor folder scripts from root to leaf, then saved-request scripts in the frontend (`request-scripts.ts`) before invoking Rust for send (pre-request) and after the response returns (tests), not inside the native HTTP layer
+- collection search loads current collection and item rows directly, builds ancestor paths from that snapshot, classifies and ranks matches in memory, and applies the result limit; committed renames and moves therefore require no shadow-index rebuild
 
 #### `environments`
 
-Stores environment metadata, active-state, and non-secret variable definitions. Secret values are kept in the OS credential store.
+Stores environment metadata, active-state, and non-secret variable definitions. Secret values are kept in the OS credential store. Activation validates the target, clears the previous active row, and sets the new row in one immediate transaction; a partial unique index enforces at most one `is_active = 1` row even across competing connections.
 
 #### `playbooks`
 
@@ -416,7 +428,7 @@ Stores ordered saved-request references for a Playbook, including per-step enabl
 
 #### `playbook_runs` and `playbook_run_steps`
 
-Store grouped Playbook execution summaries and per-step outcomes. Individual step sends still go through the normal request execution path and write normal request history entries.
+Store grouped Playbook execution summaries and per-step outcomes. Individual step sends still go through the normal request execution path and write normal request history entries. Duplicate, reorder, delete-and-renumber, and run-step/counter updates commit as logical transactions, while inherited folder scripts are loaded with one recursive parent-chain query.
 
 ## 7. Runtime Behavior
 
@@ -444,6 +456,8 @@ This means the settings page already changes actual network behavior, not just U
 
 Rust builds or reuses a `reqwest::Client` for the active combination of `validate_tls`, `follow_redirects`, and `request_timeout_ms` (cached up to a fixed number of distinct fingerprints) instead of constructing a new client on every request.
 
+`request_plan_service::prepare_request` is the single assembly boundary for send and preview. It normalizes bare localhost URLs, filters disabled query/header/body rows, applies generated authentication and content headers with deterministic precedence, parses the public string modes into private enums, and rejects unknown modes. The sender alone opens multipart files; preview never touches the filesystem.
+
 For each saved request send, the frontend may first run the collection pre-request script, then each ancestor folder pre-request script from root to leaf, and then the saved request's pre-request script against a draft copy (with the active environment's variables) to mutate headers, query params, URL, and related fields. Those scripts can also await helper HTTP calls through `pn.http.send(...)` and persist active-environment variable changes before the main request continues. Errors from that step surface in the UI without calling Rust.
 
 Helper HTTP calls are guarded by the script runtime: only one `pn.http.send(...)` helper request may be active at a time, and helper calls must be awaited before a script source finishes. This keeps scripts aligned with the native single-request boundary and prevents the main request from racing an unfinished helper request.
@@ -453,15 +467,17 @@ For each request send, Rust then:
 - loads the currently active environment, if one exists
 - resolves `{{variable}}` placeholders in URL, query params, headers, body text, form fields, and auth values
 - expands built-in dynamic variables such as `$guid`, `$timestamp`, and related runtime helpers
-- sends the resolved request payload
+- prepares and sends the resolved request payload
+
+`AppState::start_request` returns an owned `RequestGuard` and cancellation receiver. The guard's `Drop` implementation clears only its matching request ID, so early returns cannot strand the active slot and an older guard cannot clear a newer request.
 
 After Rust returns a response (or error), the frontend may run the collection test script, ancestor folder test scripts from root to leaf, and then the saved test script, recording assertion results for display in the response panel.
 
 ### Resolved Request Preview
 
-The Requests page can call `preview_request` before send. The command loads persisted settings, resolves the active environment and built-in dynamic variables, and passes both the original and resolved request through `request_preview_service`.
+The Requests page can call `preview_request` before send. The command loads persisted settings, resolves the active environment and built-in dynamic variables, and passes both the original and resolved request through `request_preview_service`, which consumes the same canonical prepared request as the native sender.
 
-The preview response is intentionally read-only. It does not execute pre-request scripts, helper HTTP calls, active-environment writes, or the main network request. It shows the final URL with enabled query parameters, auth-generated and body-generated headers, resolved auth/body data, active request settings, warnings for invalid URL/header/body/file state, unresolved-variable warnings, and notes about generated transport headers and sampled dynamic variables. Secret-derived values and credential-looking keys are masked before they reach the UI.
+The preview response is intentionally read-only. It does not execute pre-request scripts, helper HTTP calls, active-environment writes, or the main network request. Canonical preparation rejects an invalid method or URL and unknown auth, API-key-location, or body modes with the same error used by send. A successful preview shows the final URL with enabled query parameters, auth-generated and body-generated headers, resolved auth/body data, active request settings, non-fatal warnings for invalid headers or JSON, missing multipart files, missing OAuth tokens, and unresolved variables, plus notes about generated transport headers and sampled dynamic variables. Secret-derived values and credential-looking keys are masked before they reach the UI.
 
 ### Updater
 
@@ -480,6 +496,8 @@ On successful request execution:
 - active tabs and history details lease body handles so pruning or clearing history cannot invalidate an open response
 - responses at or below 1 MiB remain inline; larger responses stream to disk and expose only bounded windows to the WebView
 - history is pruned to the configured limit
+
+History recording never moves the live response before persistence succeeds. It copies file-backed responses to the final history path, inserts the database row, then marks the copied file history-owned; insertion failure removes the copy and its sidecar while the live handle remains readable. Clear and prune first commit database deletion, then remove committed paths only when active leases permit it.
 
 On failed request execution:
 
