@@ -4,6 +4,7 @@ use sqlx::{
     sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous},
     SqlitePool,
 };
+use std::path::Path;
 use tauri::AppHandle;
 
 use crate::{
@@ -17,6 +18,10 @@ static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
 pub async fn init(app: &AppHandle) -> AppResult<SqlitePool> {
     let database_path = paths::database_path(app)?;
 
+    init_path(&database_path).await
+}
+
+pub async fn init_path(database_path: &Path) -> AppResult<SqlitePool> {
     if let Some(parent) = database_path.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -40,4 +45,9 @@ pub async fn init(app: &AppHandle) -> AppResult<SqlitePool> {
         .map_err(|error| AppError::Message(error.to_string()))?;
 
     Ok(pool)
+}
+
+pub async fn ensure_application_defaults(pool: &SqlitePool) -> AppResult<()> {
+    crate::services::settings_service::ensure_defaults(pool).await?;
+    crate::services::collections_service::ensure_starter_collection(pool).await
 }

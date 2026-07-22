@@ -1,19 +1,23 @@
+use rmcp::schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::services::response_body_service::{ResponsePresentation, StoredResponseBody};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct KeyValueRow {
+    #[serde(default)]
     pub id: String,
     pub key: String,
     pub value: String,
+    #[serde(default = "default_true")]
     pub enabled: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct FileRow {
+    #[serde(default)]
     pub id: String,
     pub name: String,
     pub path: String,
@@ -21,19 +25,24 @@ pub struct FileRow {
     pub enabled: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RequestBody {
+    #[serde(default = "default_body_mode")]
     pub mode: String,
+    #[serde(default)]
     pub raw: String,
+    #[serde(default)]
     pub form: Vec<KeyValueRow>,
+    #[serde(default)]
     pub files: Vec<FileRow>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RequestAuth {
     #[serde(rename = "type")]
+    #[serde(default = "default_auth_type")]
     pub auth_type: String,
     #[serde(default)]
     pub basic_username: String,
@@ -59,15 +68,19 @@ pub struct RequestAuth {
     pub oauth2_scope: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SendRequestPayload {
     pub name: String,
     pub method: String,
     pub url: String,
+    #[serde(default)]
     pub query_params: Vec<KeyValueRow>,
+    #[serde(default)]
     pub headers: Vec<KeyValueRow>,
+    #[serde(default)]
     pub body: RequestBody,
+    #[serde(default)]
     pub auth: RequestAuth,
     #[serde(default)]
     pub pre_request_script: String,
@@ -186,4 +199,42 @@ fn default_true() -> bool {
 
 fn default_api_key_in() -> String {
     "header".to_string()
+}
+
+fn default_body_mode() -> String {
+    "none".to_string()
+}
+
+fn default_auth_type() -> String {
+    "none".to_string()
+}
+
+impl Default for RequestBody {
+    fn default() -> Self {
+        Self {
+            mode: default_body_mode(),
+            raw: String::new(),
+            form: Vec::new(),
+            files: Vec::new(),
+        }
+    }
+}
+
+impl Default for RequestAuth {
+    fn default() -> Self {
+        Self {
+            auth_type: default_auth_type(),
+            basic_username: String::new(),
+            basic_password: String::new(),
+            bearer_token: String::new(),
+            api_key_name: String::new(),
+            api_key_value: String::new(),
+            api_key_in: default_api_key_in(),
+            oauth2_access_token: String::new(),
+            oauth2_token_url: String::new(),
+            oauth2_client_id: String::new(),
+            oauth2_client_secret: String::new(),
+            oauth2_scope: String::new(),
+        }
+    }
 }

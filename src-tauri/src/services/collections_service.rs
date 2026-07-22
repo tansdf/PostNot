@@ -38,18 +38,20 @@ const STARTER_COLLECTION_NAME: &str = "My Collection";
 const STARTER_COLLECTION_DESCRIPTION: &str = "Default workspace for saved requests.";
 
 pub async fn ensure_starter_collection(pool: &SqlitePool) -> AppResult<()> {
+    let mut transaction = pool.begin_with("BEGIN IMMEDIATE").await?;
     let already_seeded: Option<String> =
         sqlx::query_scalar("SELECT value_json FROM app_settings WHERE key = ?1")
             .bind(STARTER_COLLECTION_SEEDED_KEY)
-            .fetch_optional(pool)
+            .fetch_optional(&mut *transaction)
             .await?;
 
     if matches!(already_seeded.as_deref(), Some("true")) {
+        transaction.commit().await?;
         return Ok(());
     }
 
     let collection_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM collections")
-        .fetch_one(pool)
+        .fetch_one(&mut *transaction)
         .await?;
 
     if collection_count == 0 {
@@ -68,7 +70,7 @@ pub async fn ensure_starter_collection(pool: &SqlitePool) -> AppResult<()> {
         .bind(STARTER_COLLECTION_DESCRIPTION)
         .bind(&now)
         .bind(&now)
-        .execute(pool)
+        .execute(&mut *transaction)
         .await?;
     }
 
@@ -77,8 +79,10 @@ pub async fn ensure_starter_collection(pool: &SqlitePool) -> AppResult<()> {
     )
     .bind(STARTER_COLLECTION_SEEDED_KEY)
     .bind(now_iso())
-    .execute(pool)
+    .execute(&mut *transaction)
     .await?;
+
+    transaction.commit().await?;
 
     Ok(())
 }
@@ -747,10 +751,86 @@ pub async fn save_request(
     get_saved_request_summary(pool, &item_id).await
 }
 
+pub async fn save_requests_atomic(
+    pool: &SqlitePool,
+    collection_id: &str,
+    parent_id: Option<&str>,
+    requests: &[SendRequestPayload],
+) -> AppResult<Vec<SavedRequestSummary>> {
+    if requests.is_empty() {
+        return Err(AppError::Message(
+            "At least one request is required.".to_string(),
+        ));
+    }
+    ensure_collection_exists(pool, collection_id).await?;
+    validate_parent_folder(pool, collection_id, parent_id).await?;
+
+    let mut transaction = pool.begin_with("BEGIN IMMEDIATE").await?;
+    let mut sort_order: i64 = sqlx::query_scalar(
+        r#"SELECT COALESCE(MAX(sort_order), -1) + 1 FROM collection_items
+           WHERE collection_id = ?1 AND ((?2 IS NULL AND parent_id IS NULL) OR parent_id = ?2)"#,
+    )
+    .bind(collection_id)
+    .bind(parent_id)
+    .fetch_one(&mut *transaction)
+    .await?;
+    let now = now_iso();
+    let mut ids = Vec::with_capacity(requests.len());
+
+    for request in requests {
+        let item_id = Uuid::new_v4().to_string();
+        let item_name = saved_request_name(request);
+        sqlx::query(
+            r#"INSERT INTO collection_items (
+              id, collection_id, parent_id, kind, name, sort_order, method, url,
+              query_params_json, headers_json, body_json, auth_json,
+              prerequest_script, test_script, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, 'request', ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)"#,
+        )
+        .bind(&item_id)
+        .bind(collection_id)
+        .bind(parent_id)
+        .bind(&item_name)
+        .bind(sort_order)
+        .bind(&request.method)
+        .bind(&request.url)
+        .bind(serde_json::to_string(&request.query_params)?)
+        .bind(serde_json::to_string(&request.headers)?)
+        .bind(serde_json::to_string(&request.body)?)
+        .bind(serde_json::to_string(&request.auth)?)
+        .bind(&request.pre_request_script)
+        .bind(&request.test_script)
+        .bind(&now)
+        .bind(&now)
+        .execute(&mut *transaction)
+        .await?;
+        ids.push(item_id);
+        sort_order += 1;
+    }
+
+    touch_collection_in_transaction(&mut transaction, collection_id, &now).await?;
+    transaction.commit().await?;
+
+    let mut summaries = Vec::with_capacity(ids.len());
+    for id in ids {
+        summaries.push(get_saved_request_summary(pool, &id).await?);
+    }
+    Ok(summaries)
+}
+
 pub async fn update_saved_request(
     pool: &SqlitePool,
     item_id: &str,
     request: &SendRequestPayload,
+) -> AppResult<SavedRequestSummary> {
+    update_saved_request_with_revision(pool, item_id, request, None).await
+}
+
+pub async fn update_saved_request_with_revision(
+    pool: &SqlitePool,
+    item_id: &str,
+    request: &SendRequestPayload,
+    expected_updated_at: Option<&str>,
 ) -> AppResult<SavedRequestSummary> {
     let collection_id: Option<String> = sqlx::query_scalar(
         "SELECT collection_id FROM collection_items WHERE id = ?1 AND kind = 'request'",
@@ -766,7 +846,7 @@ pub async fn update_saved_request(
     let item_name = saved_request_name(request);
     let now = now_iso();
 
-    sqlx::query(
+    let result = sqlx::query(
         r#"
         UPDATE collection_items
         SET name = ?2,
@@ -780,6 +860,7 @@ pub async fn update_saved_request(
             test_script = ?10,
             updated_at = ?11
         WHERE id = ?1 AND kind = 'request'
+          AND (?12 IS NULL OR updated_at = ?12)
         "#,
     )
     .bind(item_id)
@@ -793,8 +874,22 @@ pub async fn update_saved_request(
     .bind(&request.pre_request_script)
     .bind(&request.test_script)
     .bind(&now)
+    .bind(expected_updated_at)
     .execute(pool)
     .await?;
+
+    if result.rows_affected() == 0 {
+        let current_updated_at: Option<String> = sqlx::query_scalar(
+            "SELECT updated_at FROM collection_items WHERE id = ?1 AND kind = 'request'",
+        )
+        .bind(item_id)
+        .fetch_optional(pool)
+        .await?;
+        return match current_updated_at {
+            Some(current_updated_at) => Err(AppError::Conflict { current_updated_at }),
+            None => Err(AppError::Message("Saved request not found.".to_string())),
+        };
+    }
 
     touch_collection(pool, &collection_id).await?;
     get_saved_request_summary(pool, item_id).await

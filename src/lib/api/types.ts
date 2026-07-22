@@ -514,6 +514,8 @@ export type RequestWorkspaceTab = {
   savedRequestId: string | null;
   collectionId: string | null;
   parentId: string | null;
+  sourceUpdatedAt: string | null;
+  externallyChanged: boolean;
   request: RequestDraft;
   baselineRequest: RequestDraft | null;
   response: ResponsePayload | null;
@@ -524,6 +526,38 @@ export type RequestWorkspaceTab = {
 export type RequestWorkspaceState = {
   tabs: RequestWorkspaceTab[];
   activeTabId: string;
+};
+
+export type AgentActivityEntry = {
+  id: number;
+  batchId: string;
+  occurredAt: string;
+  actorName: string;
+  actorVersion: string;
+  sessionId: string;
+  operation: string;
+  outcome: "succeeded" | "failed";
+  targetKind: string;
+  targetId: string | null;
+  targetName: string;
+  collectionId: string | null;
+  changedFields: string[];
+  errorCode: string | null;
+  errorMessage: string | null;
+};
+
+export type AgentActivityPage = {
+  entries: AgentActivityEntry[];
+  latestId: number;
+};
+
+export type McpSetupInfo = {
+  executablePath: string;
+  arguments: string[];
+  genericConfigJson: string;
+  codexConfigToml: string;
+  claudeConfigJson: string;
+  cursorConfigJson: string;
 };
 
 function createId() {

@@ -45,6 +45,12 @@
           Playbooks
         </a>
         <a
+          class={["sidebar-link", page.url.pathname.startsWith("/activity") && "sidebar-link-active"]}
+          href={resolve("/activity")}
+        >
+          MCP Integration
+        </a>
+        <a
           class={["sidebar-link", page.url.pathname.startsWith("/settings") && "sidebar-link-active"]}
           href={resolve("/settings")}
         >

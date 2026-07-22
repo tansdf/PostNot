@@ -607,7 +607,7 @@
       value={collectionSearch.query}
       placeholder="Search collections"
       aria-label="Search collections, folders, and saved requests"
-      aria-controls="sidebar-collection-search-results"
+      aria-controls={collectionSearch.isActive && collectionSearch.results.length > 0 ? "sidebar-collection-search-results" : undefined}
       aria-activedescendant={collectionSearch.activeResult ? `sidebar-search-result-${collectionSearch.activeResult.id}` : undefined}
       autocapitalize="off"
       autocomplete="off"

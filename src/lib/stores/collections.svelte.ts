@@ -280,11 +280,11 @@ class CollectionsStore {
     }
   }
 
-  async updateExistingSavedRequest(itemId: string, collectionId: string, request: RequestDraft) {
+  async updateExistingSavedRequest(itemId: string, collectionId: string, request: RequestDraft, expectedUpdatedAt?: string | null) {
     this.isSavingRequest = true;
 
     try {
-      const savedRequest = await updateSavedRequestCommand(itemId, request);
+      const savedRequest = await updateSavedRequestCommand(itemId, request, expectedUpdatedAt);
       await Promise.all([this.loadCollections(collectionId), this.loadCollectionItems(collectionId)]);
       notifications.success(savedRequest.name, "Request updated");
       return savedRequest;

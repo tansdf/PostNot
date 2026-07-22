@@ -127,8 +127,15 @@ pub async fn update_saved_request(
     state: State<'_, AppState>,
     item_id: String,
     request: SendRequestPayload,
+    expected_updated_at: Option<String>,
 ) -> AppResult<SavedRequestSummary> {
-    collections_service::update_saved_request(state.db(), &item_id, &request).await
+    collections_service::update_saved_request_with_revision(
+        state.db(),
+        &item_id,
+        &request,
+        expected_updated_at.as_deref(),
+    )
+    .await
 }
 
 #[tauri::command]

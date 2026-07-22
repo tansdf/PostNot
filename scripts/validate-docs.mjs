@@ -77,6 +77,10 @@ for (const [relativePath, html] of [
 }
 
 requirePattern(indexHtml, /id="product"/, "docs/index.html: product section is missing");
+requirePattern(indexHtml, /href="#product">Features</, "docs/index.html: feature navigation label is missing");
+requirePattern(indexHtml, /id="agents"/, "docs/index.html: agent MCP section is missing");
+requirePattern(indexHtml, /agents cannot send or delete requests/i, "docs/index.html: MCP authoring boundary is missing");
+requirePattern(indexHtml, /agent-activity-page\.webp/, "docs/index.html: Agent Activity screenshot is missing");
 requirePattern(indexHtml, /id="download"/, "docs/index.html: download section is missing");
 requirePattern(indexHtml, /data-download-platform=/, "docs/index.html: platform download cards are missing");
 if ((indexHtml.match(/class="platform-mark__icon"/g) ?? []).length !== 3) {
@@ -91,8 +95,13 @@ requirePattern(indexHtml, /Free and open source[^<]*Apache-2\.0/i, "docs/index.h
 requirePattern(indexHtml, /SoftwareApplication/, "docs/index.html: SoftwareApplication JSON-LD is missing");
 
 requirePattern(scriptingHtml, /class="doc-mobile-toc"/, "docs/scripting.html: mobile table of contents is missing");
-requirePattern(scriptingHtml, /Back to product/, "docs/scripting.html: back-to-product link is missing");
+requirePattern(scriptingHtml, /Back to features/, "docs/scripting.html: back-to-features link is missing");
+requirePattern(scriptingHtml, /<p class="eyebrow">Scripting<\/p>/, "docs/scripting.html: scripting eyebrow is unclear");
 requirePattern(scriptingHtml, /class="heading-anchor"/, "docs/scripting.html: heading permalinks are missing");
+
+if (/Dark theme/.test(indexHtml)) {
+  fail("docs/index.html: redundant Dark theme label is still present in the hero preview");
+}
 
 requirePattern(siteJs, /api\.github\.com\/repos\/tansdf\/PostNot\/releases\/latest/, "docs/site.js: latest-release API integration is missing");
 requirePattern(siteJs, /request\.signal|AbortSignal|AbortController/, "docs/site.js: release request timeout is missing");

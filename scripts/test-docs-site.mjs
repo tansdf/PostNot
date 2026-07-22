@@ -134,8 +134,11 @@ async function testReleaseEnhancement(browser, baseUrl) {
   );
   assert.equal(releaseLinkBoxes.length, 2);
   assert.equal(releaseLinkBoxes[1].left - releaseLinkBoxes[0].right >= 12, true, "Release actions need a clear visual gap");
-  assert.equal(await page.locator(".trust-strip span > strong").count(), 5);
-  assert.equal(await page.locator(".trust-strip span > small").count(), 5);
+  assert.equal(await page.locator(".trust-strip span > strong").count(), 6);
+  assert.equal(await page.locator(".trust-strip span > small").count(), 6);
+  assert.equal(await page.locator(".trust-strip span > strong").first().textContent(), "Local persistence");
+  assert.equal(await page.locator('.preview-shell__bar').textContent(), "Request workspace");
+  assert.equal(await page.locator("#agents .workflow__boundary").getByText(/cannot send or delete/i).count(), 1);
   const setupLink = page.locator(".asset-row", { hasText: "Setup executable" });
   assert.match(await setupLink.getAttribute("href"), /PostNot_9\.8\.7_x64-setup\.exe$/);
   assert.match(await setupLink.locator("[data-asset-meta]").textContent(), /SHA-256/);
@@ -215,6 +218,7 @@ async function testDocumentation(browser, baseUrl) {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto(`${baseUrl}scripting.html`, { waitUntil: "networkidle" });
   assert.equal(await page.locator(".doc-mobile-toc").isVisible(), true);
+  assert.equal(await page.locator(".doc-hero > .eyebrow").textContent(), "Scripting");
   assert.equal(await page.locator(".heading-anchor").count() >= 12, true);
   await page.locator("[data-doc-mobile-toc]").selectOption("#examples");
   await page.waitForFunction(() => location.hash === "#examples" || document.querySelector("#examples").getBoundingClientRect().top < innerHeight);

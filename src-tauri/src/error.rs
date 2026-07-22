@@ -11,6 +11,8 @@ pub enum AppError {
     Message(String),
     #[error("Request canceled.")]
     Cancelled,
+    #[error("Saved request changed since it was read. Current revision: {current_updated_at}")]
+    Conflict { current_updated_at: String },
     #[error("{}", error_with_sources(.0))]
     Http(#[from] reqwest::Error),
     #[error(transparent)]
@@ -43,6 +45,20 @@ impl Serialize for AppError {
 impl AppError {
     pub fn is_cancelled(&self) -> bool {
         matches!(self, Self::Cancelled)
+    }
+
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::Conflict { .. } => "conflict",
+            Self::Sql(_) | Self::Io(_) => "storage_unavailable",
+            Self::Message(message) if message.contains("not found") => "not_found",
+            Self::Message(_)
+            | Self::Url(_)
+            | Self::InvalidHeaderName(_)
+            | Self::InvalidHeaderValue(_)
+            | Self::Json(_) => "validation_error",
+            _ => "internal_error",
+        }
     }
 }
 

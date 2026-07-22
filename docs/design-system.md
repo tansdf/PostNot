@@ -43,6 +43,8 @@ Always consume semantic tokens. Do not choose a literal color based only on its 
 | Sidebar | `--bg-sidebar` | Primary navigation background |
 | Primary action | `--bg-accent` | Send, save, and other dominant actions |
 | Primary action hover | `--bg-accent-strong` | Hover and stronger accent emphasis |
+| Primary button | `--button-primary-bg`, `--button-primary-bg-hover` | Accessible filled-button backgrounds per theme |
+| Primary button text | `--button-primary-text` | Theme-specific text with at least 4.5:1 contrast on primary buttons |
 | Accent tint | `--bg-accent-soft` | Selected or highlighted surfaces |
 | Subtle/quiet surface | `--surface-subtle`, `--surface-muted` | Nested cards and low-emphasis grouping |
 | Control surface | `--control-bg`, `--control-hover-bg` | Secondary controls and interactive rows |

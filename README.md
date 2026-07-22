@@ -42,6 +42,8 @@ PostNot is built for working with HTTP APIs on your own machine, with local pers
 - Inspect large responses with full body reads and JSON-friendly rendering
 - Use floating notifications, persisted settings, and signed in-app update checks with download progress
 - Autosave environment edits by default, with keyboard saves via `Ctrl+S` / `Cmd+S` on requests and environments
+- Connect local MCP-compatible agents so they can inspect collections and safely create or update requests for later manual use
+- Follow MCP-authored changes in the MCP Integration view with live collection refresh and stale-draft protection
 
 ## Why PostNot
 
@@ -56,6 +58,13 @@ PostNot is built for working with HTTP APIs on your own machine, with local pers
 - Secret environment variables are stored in the operating system credential store instead of SQLite.
 - When requests use secret environment variables, PostNot keeps the unresolved `{{variable}}` references in history snapshots rather than persisting the resolved secret values.
 - Single-request cURL and PostNot JSON exports redact credential-looking values by default, including bearer tokens, OAuth2 access tokens, client secrets, API keys, cookies, and basic-auth passwords; the export dialog can include active non-secret environment variables while keeping secrets redacted.
+- MCP runs locally over stdio via the installed PostNot executable. Secret environment values are omitted from discovery, saved credential literals are redacted on reads, and Agent Activity stores metadata rather than request values.
+
+## Agent Integration (MCP)
+
+Open **MCP Integration → Configure MCP** to copy configuration for Codex, Claude Desktop, Cursor, or another stdio MCP client. The generated configuration launches the installed PostNot executable with `--mcp`; the desktop window does not need to remain open.
+
+The first MCP release is intentionally authoring-only. Agents can list, search, inspect, preview, and create collection content, and can update saved requests with revision checks. MCP does not send requests, execute scripts, import specifications, modify environments, move items, or delete data.
 
 ## Building From Source
 
@@ -94,6 +103,8 @@ Rust:
 source "$HOME/.cargo/env"
 cargo check --manifest-path src-tauri/Cargo.toml
 ```
+
+Rustup automatically uses the repository's pinned toolchain from `rust-toolchain.toml`.
 
 ## Releases
 

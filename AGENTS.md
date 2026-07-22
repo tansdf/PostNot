@@ -12,7 +12,7 @@ PostNot is a local-first desktop API client built with:
 - TypeScript
 - SQLite
 
-The app already supports request execution, resolved request preview before send, full response body reads, history, collections with nested folders and drag-and-drop request/folder moves, sidebar collection search, playbooks for sequential saved-request execution, environments, secret environment storage, import/export flows including OpenAPI 3 import, broader cURL flag coverage, redacted-by-default single-request cURL/JSON export with optional non-secret environment variable inclusion, OAuth2 bearer auth helpers with client-credentials token fetch, notifications, settings, signed in-app update checks with download progress, inherited collection/folder/saved-request pre-request and test scripts (worker-backed frontend JavaScript execution around the native send), async script helper requests through `pn.http.send(...)`, and script-driven active-environment variable writes.
+The app already supports request execution, resolved request preview before send, full response body reads, history, collections with nested folders and drag-and-drop request/folder moves, sidebar collection search, playbooks for sequential saved-request execution, environments, secret environment storage, import/export flows including OpenAPI 3 import, broader cURL flag coverage, redacted-by-default single-request cURL/JSON export with optional non-secret environment variable inclusion, OAuth2 bearer auth helpers with client-credentials token fetch, notifications, settings, signed in-app update checks with download progress, inherited collection/folder/saved-request pre-request and test scripts (worker-backed frontend JavaScript execution around the native send), async script helper requests through `pn.http.send(...)`, script-driven active-environment variable writes, and a local authoring-only MCP server with Agent Activity.
 
 ## Canonical Working Directory
 
@@ -39,10 +39,14 @@ When onboarding into a fresh task, read these first:
 - [src-tauri/src/services/settings_service.rs](src-tauri/src/services/settings_service.rs): persisted settings
 - [src-tauri/src/services/history_service.rs](src-tauri/src/services/history_service.rs): request history
 - [src-tauri/src/services/environments_service.rs](src-tauri/src/services/environments_service.rs): environments, secret redaction, variable resolution
+- [src-tauri/src/mcp.rs](src-tauri/src/mcp.rs): headless stdio MCP tools, safe request projection, and mutation auditing
 
 ## Application Capabilities
 
 Implemented now:
+
+- headless `PostNot --mcp` authoring and inspection tools with no listening port
+- persistent Agent Activity, live collection invalidation, and optimistic saved-request updates
 
 - Tauri desktop shell
 - native HTTP execution in Rust
@@ -96,6 +100,8 @@ Rust:
 source "$HOME/.cargo/env"
 cargo check --manifest-path src-tauri/Cargo.toml
 ```
+
+Rustup automatically uses the repository's pinned toolchain from `rust-toolchain.toml`.
 
 Run the desktop app locally with:
 

@@ -6,6 +6,22 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-07-22
+
+### Added
+
+- Added a local stdio MCP server through the existing PostNot executable's headless `--mcp` mode, with tools for safe collection discovery, masked request inspection and preview, hierarchy creation, atomic request batches, and optimistic request updates.
+- Added persistent Agent Activity, live external-change refresh, grouped notifications, in-app client configuration examples, and stale request-tab protection.
+
+### Changed
+
+- Added a dedicated MCP Integration workspace with client-specific setup snippets, an authoring-safety summary, and a grouped activity feed.
+- Improved shared primary-button contrast across the Light, Dark, and Forest themes.
+
+### Security
+
+- MCP environment discovery omits secret values, credential-looking saved literals are redacted with preservation sentinels, and audit rows retain changed field names without request values.
+
 ## [0.21.1] - 2026-07-18
 
 ### Added

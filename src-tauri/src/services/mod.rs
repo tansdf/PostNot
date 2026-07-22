@@ -1,3 +1,4 @@
+pub mod activity_service;
 pub mod collections_service;
 pub mod environments_service;
 pub mod exports_service;

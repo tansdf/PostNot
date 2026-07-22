@@ -328,7 +328,7 @@ fn parse_openapi_document(source: &str) -> AppResult<OpenApiDocument> {
 fn build_openapi_requests(document: &OpenApiDocument) -> AppResult<Vec<OpenApiImportedRequest>> {
     let mut requests = Vec::new();
     let mut path_entries: Vec<_> = document.paths.iter().collect();
-    path_entries.sort_by(|(left, _), (right, _)| left.cmp(right));
+    path_entries.sort_by_key(|(path, _)| *path);
 
     for (path, path_item) in path_entries {
         push_openapi_operation(
@@ -913,7 +913,7 @@ fn openapi_schema_example_value(
         "object" => {
             let mut object = serde_json::Map::new();
             let mut properties: Vec<_> = schema.properties.iter().collect();
-            properties.sort_by(|(left, _), (right, _)| left.cmp(right));
+            properties.sort_by_key(|(name, _)| *name);
 
             for (name, property_schema) in properties {
                 let property_schema = resolve_openapi_schema(document, property_schema)?;
@@ -954,7 +954,7 @@ fn select_openapi_media_type(
     content: &HashMap<String, OpenApiMediaType>,
 ) -> Option<(&str, &OpenApiMediaType)> {
     let mut entries: Vec<_> = content.iter().collect();
-    entries.sort_by(|(left, _), (right, _)| left.cmp(right));
+    entries.sort_by_key(|(media_type, _)| *media_type);
 
     let preferred = [
         "application/json",

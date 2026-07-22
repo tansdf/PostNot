@@ -47,7 +47,10 @@ import {
   type ResponsePayload,
   type SendRequestResult,
   type SavedRequestDetail,
-  type SavedRequestSummary
+  type SavedRequestSummary,
+  type AgentActivityEntry,
+  type AgentActivityPage,
+  type McpSetupInfo
 } from "$lib/api/types";
 
 export function hasTauriRuntime() {
@@ -654,6 +657,104 @@ export async function getSettings(): Promise<AppSettings> {
   return invoke<AppSettings>("get_settings");
 }
 
+export async function getMcpSetupInfo(): Promise<McpSetupInfo> {
+  if (!hasTauriRuntime()) {
+    const executablePath = "/path/to/PostNot";
+    const desktop = JSON.stringify({ mcpServers: { postnot: { command: executablePath, args: ["--mcp"] } } }, null, 2);
+    return {
+      executablePath,
+      arguments: ["--mcp"],
+      genericConfigJson: JSON.stringify({ command: executablePath, args: ["--mcp"] }, null, 2),
+      codexConfigToml: `[mcp_servers.postnot]\ncommand = "${executablePath}"\nargs = ["--mcp"]`,
+      claudeConfigJson: desktop,
+      cursorConfigJson: desktop
+    };
+  }
+  return invoke<McpSetupInfo>("get_mcp_setup_info");
+}
+
+export async function listAgentActivity(afterId?: number, limit = 100): Promise<AgentActivityPage> {
+  if (!hasTauriRuntime()) {
+    if (new URLSearchParams(window.location.search).get("mockActivity") === "empty") {
+      return { entries: [], latestId: 0 };
+    }
+
+    const entries: AgentActivityEntry[] = [
+      {
+        id: 4,
+        batchId: "mock-agent-batch-3",
+        occurredAt: "2026-07-22T12:42:00.000Z",
+        actorName: "Codex",
+        actorVersion: "1.0",
+        sessionId: "session-mock-3",
+        operation: "update_request",
+        outcome: "succeeded",
+        targetKind: "request",
+        targetId: "mock-saved-request-1",
+        targetName: "Create onboarding note",
+        collectionId: "mock-collection-1",
+        changedFields: ["headers", "test script"],
+        errorCode: null,
+        errorMessage: null
+      },
+      {
+        id: 3,
+        batchId: "mock-agent-batch-2",
+        occurredAt: "2026-07-22T12:16:00.000Z",
+        actorName: "Claude Desktop",
+        actorVersion: "0.12",
+        sessionId: "session-mock-2",
+        operation: "create_requests",
+        outcome: "succeeded",
+        targetKind: "request",
+        targetId: "mock-saved-request-2",
+        targetName: "List notes",
+        collectionId: "mock-collection-1",
+        changedFields: ["request"],
+        errorCode: null,
+        errorMessage: null
+      },
+      {
+        id: 2,
+        batchId: "mock-agent-batch-2",
+        occurredAt: "2026-07-22T12:16:00.000Z",
+        actorName: "Claude Desktop",
+        actorVersion: "0.12",
+        sessionId: "session-mock-2",
+        operation: "create_requests",
+        outcome: "succeeded",
+        targetKind: "request",
+        targetId: "mock-saved-request-3",
+        targetName: "Archive note",
+        collectionId: "mock-collection-1",
+        changedFields: ["request"],
+        errorCode: null,
+        errorMessage: null
+      },
+      {
+        id: 1,
+        batchId: "mock-agent-batch-1",
+        occurredAt: "2026-07-22T11:58:00.000Z",
+        actorName: "Cursor",
+        actorVersion: "1.4",
+        sessionId: "session-mock-1",
+        operation: "create_folder",
+        outcome: "succeeded",
+        targetKind: "folder",
+        targetId: "mock-folder-1",
+        targetName: "Notes",
+        collectionId: "mock-collection-1",
+        changedFields: ["folder"],
+        errorCode: null,
+        errorMessage: null
+      }
+    ];
+    const filtered = entries.filter((entry) => afterId === undefined || entry.id > afterId).slice(0, limit);
+    return { entries: filtered, latestId: entries[0]?.id ?? 0 };
+  }
+  return invoke<AgentActivityPage>("list_agent_activity", { afterId: afterId ?? null, limit });
+}
+
 export async function updateSettings(settings: AppSettings): Promise<AppSettings> {
   if (!hasTauriRuntime()) {
     return settings;
@@ -796,6 +897,8 @@ export async function getRequestWorkspaceState(): Promise<RequestWorkspaceState 
           savedRequestId: savedRequest.id,
           collectionId: savedRequest.collectionId,
           parentId: savedRequest.parentId ?? null,
+          sourceUpdatedAt: savedRequest.updatedAt,
+          externallyChanged: false,
           request: savedRequest.request,
           baselineRequest: savedRequest.request,
           response: createMockResponse(savedRequest.request),
@@ -1050,7 +1153,7 @@ export async function saveRequestToCollection(
   return invoke<SavedRequestSummary>("save_request_to_collection", { collectionId, parentId, request });
 }
 
-export async function updateSavedRequest(itemId: string, request: RequestDraft): Promise<SavedRequestSummary> {
+export async function updateSavedRequest(itemId: string, request: RequestDraft, expectedUpdatedAt?: string | null): Promise<SavedRequestSummary> {
   if (!hasTauriRuntime()) {
     return {
       id: itemId,
@@ -1062,7 +1165,7 @@ export async function updateSavedRequest(itemId: string, request: RequestDraft):
     };
   }
 
-  return invoke<SavedRequestSummary>("update_saved_request", { itemId, request });
+  return invoke<SavedRequestSummary>("update_saved_request", { itemId, request, expectedUpdatedAt: expectedUpdatedAt ?? null });
 }
 
 export async function getSavedRequest(itemId: string): Promise<SavedRequestDetail> {

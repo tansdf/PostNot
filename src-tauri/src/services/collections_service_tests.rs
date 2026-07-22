@@ -3,7 +3,8 @@ use sqlx::{Row, SqlitePool};
 use super::{
     create_collection, create_collection_folder, delete_collection, ensure_starter_collection,
     list_collections, move_collection_item, save_request, search_collection_entities,
-    STARTER_COLLECTION_DESCRIPTION, STARTER_COLLECTION_NAME, STARTER_COLLECTION_SEEDED_KEY,
+    update_saved_request_with_revision, STARTER_COLLECTION_DESCRIPTION, STARTER_COLLECTION_NAME,
+    STARTER_COLLECTION_SEEDED_KEY,
 };
 use crate::domain::{
     collections::{CreateCollectionFolderInput, CreateCollectionInput, MoveCollectionItemInput},
@@ -68,6 +69,42 @@ async fn setup_test_db() -> SqlitePool {
     }
 
     pool
+}
+
+#[tokio::test]
+async fn optimistic_request_update_rejects_a_stale_revision() {
+    let pool = setup_test_db().await;
+    let collection = create_collection(&pool, &collection_input("Concurrency"))
+        .await
+        .expect("create collection");
+    let created = save_request(
+        &pool,
+        &collection.id,
+        None,
+        &request("Original", "GET", "https://example.test"),
+    )
+    .await
+    .expect("create request");
+
+    let updated = update_saved_request_with_revision(
+        &pool,
+        &created.id,
+        &request("First edit", "GET", "https://example.test"),
+        Some(&created.updated_at),
+    )
+    .await
+    .expect("first revision update");
+    assert_ne!(updated.updated_at, created.updated_at);
+
+    let stale = update_saved_request_with_revision(
+        &pool,
+        &created.id,
+        &request("Stale edit", "GET", "https://example.test"),
+        Some(&created.updated_at),
+    )
+    .await
+    .expect_err("stale revision must conflict");
+    assert!(matches!(stale, crate::error::AppError::Conflict { .. }));
 }
 
 fn collection_input(name: &str) -> CreateCollectionInput {

@@ -636,10 +636,7 @@ fn collect_variables_from_request(request: &SendRequestPayload) -> BTreeSet<Stri
 fn collect_variables_from_string(value: &str, target: &mut BTreeSet<String>) {
     let mut rest = value;
 
-    loop {
-        let Some(start) = rest.find("{{") else {
-            break;
-        };
+    while let Some(start) = rest.find("{{") {
         let after_start = &rest[start + 2..];
         let Some(end) = after_start.find("}}") else {
             break;

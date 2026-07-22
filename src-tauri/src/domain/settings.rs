@@ -2,6 +2,17 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct McpSetupInfo {
+    pub executable_path: String,
+    pub arguments: Vec<String>,
+    pub generic_config_json: String,
+    pub codex_config_toml: String,
+    pub claude_config_json: String,
+    pub cursor_config_json: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AppSettings {
     pub theme: String,
     pub ui_scale: f64,

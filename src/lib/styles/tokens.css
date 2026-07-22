@@ -12,6 +12,9 @@
   --bg-accent: #d96c3b;
   --bg-accent-strong: #b85024;
   --bg-accent-soft: rgba(217, 108, 59, 0.14);
+  --button-primary-bg: #b85024;
+  --button-primary-bg-hover: #9f431c;
+  --button-primary-text: #fffaf1;
   --surface: #fffaf1;
   --border-soft: rgba(23, 44, 43, 0.12);
   --border-strong: rgba(23, 44, 43, 0.24);
@@ -116,6 +119,9 @@
   --bg-accent: #de7c4f;
   --bg-accent-strong: #c86233;
   --bg-accent-soft: rgba(222, 124, 79, 0.22);
+  --button-primary-bg: #de7c4f;
+  --button-primary-bg-hover: #eb9066;
+  --button-primary-text: #111917;
   --surface: #1a2623;
   --border-soft: rgba(235, 242, 234, 0.12);
   --border-strong: rgba(235, 242, 234, 0.22);
@@ -184,6 +190,9 @@
   --bg-accent: #2f7d55;
   --bg-accent-strong: #3d9568;
   --bg-accent-soft: rgba(94, 176, 126, 0.2);
+  --button-primary-bg: #2f7d55;
+  --button-primary-bg-hover: #276b49;
+  --button-primary-text: #f2f8ef;
   --surface: #1b2a23;
   --border-soft: rgba(221, 235, 222, 0.12);
   --border-strong: rgba(221, 235, 222, 0.24);

@@ -54,6 +54,7 @@ function createWorkspaceTab(
     savedRequestId?: string | null;
     collectionId?: string | null;
     parentId?: string | null;
+    sourceUpdatedAt?: string | null;
     baselineRequest?: RequestDraft | null;
   } = {}
 ): RequestWorkspaceTab {
@@ -63,6 +64,8 @@ function createWorkspaceTab(
     savedRequestId: options.savedRequestId ?? null,
     collectionId: options.collectionId ?? null,
     parentId: options.parentId ?? null,
+    sourceUpdatedAt: options.sourceUpdatedAt ?? null,
+    externallyChanged: false,
     request: cloneRequestDraft(request),
     baselineRequest: options.baselineRequest ? cloneRequestDraft(options.baselineRequest) : null,
     response: null,
@@ -120,6 +123,8 @@ function normalizeWorkspaceTab(tab: RequestWorkspaceTab): RequestWorkspaceTab {
     savedRequestId: tab.savedRequestId ?? null,
     collectionId: tab.collectionId ?? null,
     parentId: tab.parentId ?? null,
+    sourceUpdatedAt: tab.sourceUpdatedAt ?? null,
+    externallyChanged: tab.externallyChanged ?? false,
     request: cloneRequestDraft(tab.request ?? createRequestDraft()),
     baselineRequest: tab.baselineRequest ? cloneRequestDraft(tab.baselineRequest) : null,
     response: tab.response ? cloneResponsePayload(tab.response) : null,
@@ -252,6 +257,7 @@ class RequestWorkspaceStore {
       savedRequestId: savedRequest.id,
       collectionId: savedRequest.collectionId,
       parentId: savedRequest.parentId ?? null,
+      sourceUpdatedAt: savedRequest.updatedAt,
       baselineRequest: savedRequest.request
     });
     this.insertAfterActive(nextTab);
@@ -307,6 +313,7 @@ class RequestWorkspaceStore {
       id: string;
       collectionId: string;
       parentId?: string | null;
+      updatedAt?: string;
     },
     request: RequestDraft
   ) {
@@ -315,8 +322,32 @@ class RequestWorkspaceStore {
       tab.savedRequestId = savedRequest.id;
       tab.collectionId = savedRequest.collectionId;
       tab.parentId = savedRequest.parentId ?? null;
+      tab.sourceUpdatedAt = savedRequest.updatedAt ?? tab.sourceUpdatedAt;
+      tab.externallyChanged = false;
       tab.request = cloneRequestDraft(request);
       tab.baselineRequest = cloneRequestDraft(request);
+      tab.errorText = "";
+    });
+    void this.persistNow();
+  }
+
+  markExternallyChanged(savedRequestIds: string[]) {
+    const ids = new Set(savedRequestIds);
+    if (ids.size === 0) return;
+    this.tabs = this.tabs.map((tab) => tab.savedRequestId && ids.has(tab.savedRequestId)
+      ? { ...tab, externallyChanged: true }
+      : tab);
+    void this.persistNow();
+  }
+
+  replaceSavedTab(tabId: string, savedRequest: SavedRequestDetail) {
+    this.updateTab(tabId, (tab) => {
+      tab.request = cloneRequestDraft(savedRequest.request);
+      tab.baselineRequest = cloneRequestDraft(savedRequest.request);
+      tab.collectionId = savedRequest.collectionId;
+      tab.parentId = savedRequest.parentId ?? null;
+      tab.sourceUpdatedAt = savedRequest.updatedAt;
+      tab.externallyChanged = false;
       tab.errorText = "";
     });
     void this.persistNow();

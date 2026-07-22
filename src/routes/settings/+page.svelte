@@ -185,7 +185,7 @@
     return sizeLabel;
   });
 
-  onMount(loadSettings);
+  onMount(() => void loadSettings());
 
   async function loadSettings() {
     isLoading = true;

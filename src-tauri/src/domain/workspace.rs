@@ -30,6 +30,10 @@ pub struct RequestWorkspaceTab {
     pub saved_request_id: Option<String>,
     pub collection_id: Option<String>,
     pub parent_id: Option<String>,
+    #[serde(default)]
+    pub source_updated_at: Option<String>,
+    #[serde(default)]
+    pub externally_changed: bool,
     pub request: SendRequestPayload,
     pub baseline_request: Option<SendRequestPayload>,
     pub response: Option<ResponsePayload>,

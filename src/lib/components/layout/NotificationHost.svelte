@@ -1,10 +1,20 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { goto } from "$app/navigation";
   import { fly, fade } from "svelte/transition";
   import DialogShell from "$lib/components/layout/DialogShell.svelte";
   import { notifications } from "$lib/stores/notifications.svelte";
 
   let prefersReducedMotion = $state(false);
+
+  function handleAction(notification: (typeof notifications.items)[number], action: (typeof notification.actions)[number]) {
+    if (action.kind === "navigate" && action.href) {
+      notifications.dismiss(notification.id);
+      void goto(action.href);
+      return;
+    }
+    notifications.openDetails(notification);
+  }
 
   onMount(() => {
     const query = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -36,7 +46,7 @@
                 <button
                   class="notification-action-button"
                   type="button"
-                  onclick={() => notifications.openDetails(notification)}
+                  onclick={() => handleAction(notification, action)}
                 >
                   {action.label}
                 </button>

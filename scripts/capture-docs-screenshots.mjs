@@ -276,6 +276,15 @@ const cache = {
 
 const captures = [
   {
+    path: "/activity",
+    file: "agent-activity-page.webp",
+    waitFor: ".mcp-page",
+    beforeCapture: async (page) => {
+      await page.getByRole("heading", { name: "MCP Integration", exact: true }).waitFor();
+      await page.getByText("Create onboarding note").waitFor();
+    }
+  },
+  {
     path: "/",
     file: "requests-page.webp",
     waitFor: ".workspace-grid",

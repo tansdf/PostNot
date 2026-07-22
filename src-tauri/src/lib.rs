@@ -10,6 +10,7 @@ pub mod commands;
 pub mod db;
 pub mod domain;
 pub mod error;
+pub mod mcp;
 pub mod services;
 pub mod storage;
 
@@ -22,10 +23,7 @@ pub fn run() -> Result<(), String> {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let database = tauri::async_runtime::block_on(db::init(app.handle()))?;
-            tauri::async_runtime::block_on(services::settings_service::ensure_defaults(&database))?;
-            tauri::async_runtime::block_on(
-                services::collections_service::ensure_starter_collection(&database),
-            )?;
+            tauri::async_runtime::block_on(db::ensure_application_defaults(&database))?;
             let secret_store = services::secret_store_service::default_secret_store();
             let response_bodies = services::response_body_service::ResponseBodyStore::new(
                 storage::paths::response_bodies_dir(app.handle())?,
@@ -45,6 +43,7 @@ pub fn run() -> Result<(), String> {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::activity::list_agent_activity,
             commands::requests::send_request,
             commands::requests::preview_request,
             commands::requests::cancel_active_request,
@@ -61,6 +60,7 @@ pub fn run() -> Result<(), String> {
             commands::responses::format_response_body,
             commands::responses::cancel_response_body_job,
             commands::settings::get_settings,
+            commands::settings::get_mcp_setup_info,
             commands::settings::update_settings,
             commands::settings::get_request_workspace_state,
             commands::settings::save_request_workspace_state,

@@ -424,6 +424,10 @@ main > section[id] {
   scroll-margin-top: 4.75rem;
 }
 
+.workflow[id] {
+  scroll-margin-top: 4.75rem;
+}
+
 .section-heading {
   margin-bottom: 1rem;
 }
@@ -1136,7 +1140,7 @@ code,
 
 .trust-strip {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 0;
   margin: 1rem 0 3rem;
   overflow: hidden;
@@ -1193,6 +1197,15 @@ code,
 }
 
 .workflow__copy > p:not(.workflow__number) { color: var(--panel-ink-soft); }
+
+.workflow__boundary {
+  max-width: 34rem;
+  margin: 1rem 0 0;
+  padding: 0.8rem 0.9rem;
+  border-left: 3px solid var(--accent);
+  background: color-mix(in srgb, var(--accent-soft) 46%, transparent);
+  font-size: 0.9rem;
+}
 
 .check-list,
 .comparison-card ul {
@@ -1441,7 +1454,7 @@ code,
   .hero__proof li:first-child { padding-left: 0; }
   .hero__proof li:last-child { border-right: 0; }
   .comparison-grid, .project-links { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .data-flow { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .data-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .data-flow li { grid-template-columns: 1fr; }
   .release-summary { grid-template-columns: 1fr 1fr auto; align-items: center; }
   .download-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -1451,6 +1464,7 @@ code,
   .workflow { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: clamp(2rem, 5vw, 4.5rem); }
   .workflow--image-right .workflow__copy { order: 1; }
   .workflow--image-right .product-shot { order: 2; }
+  .data-flow { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .download-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
@@ -1468,7 +1482,7 @@ code,
   .hero__tagline { font-size: 1.05rem; }
   .trust-strip { display: grid; grid-template-columns: 1fr 1fr; }
   .trust-strip span { border-right: 0; border-bottom: 1px solid var(--border-soft); }
-  .trust-strip span:last-child { grid-column: 1 / -1; border-bottom: 0; }
+  .trust-strip span:nth-last-child(-n + 2) { border-bottom: 0; }
   .comparison-section, .privacy-section, .download-section { margin-inline: -0.25rem; padding: 1.35rem; border-radius: var(--radius-lg); }
   .screenshot-trigger__label { opacity: 1; transform: none; }
   .doc-mobile-toc { display: grid; }

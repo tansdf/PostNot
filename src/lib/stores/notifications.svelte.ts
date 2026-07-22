@@ -11,7 +11,8 @@ export type NotificationDetails = {
 
 export type NotificationAction = {
   label: string;
-  kind: "details";
+  kind: "details" | "navigate";
+  href?: string;
 };
 
 export type NotificationInput = {
@@ -20,6 +21,7 @@ export type NotificationInput = {
   tone?: NotificationTone;
   durationMs?: number;
   details?: NotificationDetails;
+  action?: NotificationAction;
 };
 
 export type NotificationItem = {
@@ -58,7 +60,10 @@ class NotificationsStore {
       message,
       tone: input.tone ?? "info",
       durationMs: normalizeDuration(input.durationMs ?? this.defaultDurationMs),
-      actions: input.details ? [{ label: "View details", kind: "details" }] : [],
+      actions: [
+        ...(input.details ? [{ label: "View details", kind: "details" as const }] : []),
+        ...(input.action ? [input.action] : [])
+      ],
       details: input.details ?? null
     };
 
@@ -70,19 +75,19 @@ class NotificationsStore {
     this.items = this.items.filter((item) => item.id !== id);
   }
 
-  info(message: string, title = "", options: Pick<NotificationInput, "details" | "durationMs"> = {}) {
+  info(message: string, title = "", options: Pick<NotificationInput, "details" | "durationMs" | "action"> = {}) {
     return this.show({ tone: "info", title, message, ...options });
   }
 
-  success(message: string, title = "", options: Pick<NotificationInput, "details" | "durationMs"> = {}) {
+  success(message: string, title = "", options: Pick<NotificationInput, "details" | "durationMs" | "action"> = {}) {
     return this.show({ tone: "success", title, message, ...options });
   }
 
-  warning(message: string, title = "", options: Pick<NotificationInput, "details" | "durationMs"> = {}) {
+  warning(message: string, title = "", options: Pick<NotificationInput, "details" | "durationMs" | "action"> = {}) {
     return this.show({ tone: "warning", title, message, ...options });
   }
 
-  error(message: string, title = "", options: Pick<NotificationInput, "details" | "durationMs"> = {}) {
+  error(message: string, title = "", options: Pick<NotificationInput, "details" | "durationMs" | "action"> = {}) {
     return this.show({ tone: "error", title, message, ...options });
   }
 

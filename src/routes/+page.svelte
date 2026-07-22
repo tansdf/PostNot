@@ -637,6 +637,13 @@ paths:
 
     let isDisposed = false;
     let unlistenProgress: (() => void) | null = null;
+    const handleAgentActivity = (event: Event) => {
+      const entries = (event as CustomEvent<Array<{ targetKind: string; targetId: string | null; operation: string }>>).detail ?? [];
+      requestWorkspace.markExternallyChanged(entries
+        .filter((entry) => entry.targetKind === "request" && entry.targetId && entry.operation === "update_request")
+        .map((entry) => entry.targetId!));
+    };
+    window.addEventListener("postnot-agent-activity", handleAgentActivity);
     if (hasTauriRuntime()) {
       void listen<RequestResponseProgress>("request-response-progress", (event) => {
         if (!isDisposed) {
@@ -654,6 +661,7 @@ paths:
     return () => {
       isDisposed = true;
       unlistenProgress?.();
+      window.removeEventListener("postnot-agent-activity", handleAgentActivity);
       stopSendTimer();
     };
   });
@@ -1437,7 +1445,9 @@ paths:
       collections.collections.some((collection) => collection.id === tab.collectionId);
 
     if (hasSavedRequest) {
-      const savedRequest = await collections.updateExistingSavedRequest(tab.savedRequestId!, tab.collectionId!, requestToSave);
+      const savedRequest = await collections.updateExistingSavedRequest(
+        tab.savedRequestId!, tab.collectionId!, requestToSave, tab.sourceUpdatedAt
+      );
 
       if (!savedRequest) {
         requestWorkspace.setTabError(tab.id, collections.errorText);
@@ -1459,6 +1469,19 @@ paths:
     saveTargetCollectionId = collections.selectedCollectionId || tab.collectionId || collections.collections[0].id;
     saveTargetParentId = tab.parentId ?? null;
     isSaveDialogOpen = true;
+  }
+
+  async function reloadExternallyChangedRequest() {
+    const tab = activeTab;
+    if (!tab?.savedRequestId) return;
+    try {
+      const savedRequest = await getSavedRequest(tab.savedRequestId);
+      requestWorkspace.replaceSavedTab(tab.id, savedRequest);
+      request = cloneRequestDraft(savedRequest.request);
+      notifications.success(savedRequest.name, "External change loaded");
+    } catch (error) {
+      requestWorkspace.setTabError(tab.id, error instanceof Error ? error.message : String(error));
+    }
   }
 
   async function handleSaveAsNewRequest() {
@@ -1835,6 +1858,12 @@ paths:
 
   {#if activeTabErrorText}
     <div class="feedback feedback-error">{activeTabErrorText}</div>
+  {/if}
+  {#if activeTab?.externallyChanged}
+    <div class="feedback feedback-warning">
+      This saved request changed through MCP. Your current draft was kept.
+      <button class="button-secondary button-compact" type="button" onclick={reloadExternallyChangedRequest}>Reload saved version</button>
+    </div>
   {/if}
 
   <ResponseViewer

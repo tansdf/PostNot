@@ -728,6 +728,9 @@ Screenshot workflow note:
 - resolved request preview masks credential-looking values and secret-derived environment substitutions before showing outgoing request data
 - decoded response bodies are persisted as full text history body files
 - if an environment update or delete fails after partially changing the credential store, rollback of secrets is attempted; failure to roll back is logged with `log::warn` for diagnostics (the primary error still returns to the UI)
+- the installed executable can run as a windowless stdio MCP server with `--mcp`; it resolves the same `data_dir/com.postnot.app` database, runs migrations, and uses the existing native collection and preview services
+- MCP environment context includes non-secret values but omits secret values; saved credential literals are returned as `***` with explicit preservation paths for revision-checked updates
+- `agent_activity` retains the latest 1,000 MCP operation records with actor, target, outcome, and changed field names, never request values
 
 Environment-backed secrets are protected in storage and history, while single-request export uses local pattern-based redaction for credential-looking values before users copy cURL or PostNot JSON.
 
@@ -762,3 +765,11 @@ Retention controls, migration behavior, and body-size policy should be revisited
 Using GitHub Releases' stable `latest` updater manifest keeps update discovery predictable for normal users. The trade-off is that prerelease discovery is not part of the default update path.
 
 Any prerelease channel should remain opt-in and should preserve the signed-update and target-selection guarantees already used by the stable path.
+
+### Local MCP Authoring
+
+PostNot uses the official Rust MCP SDK over stdio and starts the server before Tauri initialization when the executable receives `--mcp`. Reusing the application binary keeps signing, AppImage behavior, and updater delivery aligned without a second sidecar artifact.
+
+The MCP surface is deliberately authoring-only. Collection reads and masked previews reuse native services, while creates and revision-checked request replacements write the same SQLite database. Request sending and script execution remain outside MCP because the script runtime is worker-backed frontend JavaScript and cannot yet provide identical headless behavior.
+
+The desktop polls the monotonic Agent Activity cursor while focused. New successful rows refresh affected collection trees and mark open saved-request drafts as externally changed rather than overwriting them.

@@ -6,7 +6,7 @@
     <title>PostNot — private, local-first desktop API client</title>
     <meta
       name="description"
-      content="PostNot is a free and open-source desktop API client. Send, organize, automate, import, and export API requests without an account or cloud workspace."
+      content="PostNot is a free and open-source desktop API client. Send, organize, automate, and let local AI agents safely author requests without a cloud workspace."
     />
     <meta name="theme-color" content="#111917" />
     <meta name="color-scheme" content="light dark" />
@@ -14,7 +14,7 @@
     <meta property="og:title" content="PostNot — Post APIs. Not your data." />
     <meta
       property="og:description"
-      content="A private, local-first desktop API client with no account and no cloud workspace. Free and open source under Apache-2.0."
+      content="A private, local-first desktop API client with safe MCP authoring for AI agents. No account or cloud workspace."
     />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://post-not.com/" />
@@ -43,7 +43,7 @@
         "operatingSystem": "Windows, macOS, Linux",
         "url": "https://post-not.com/",
         "downloadUrl": "https://github.com/tansdf/PostNot/releases/latest",
-        "softwareVersion": "0.21.0",
+        "softwareVersion": "0.22.0",
         "license": "https://www.apache.org/licenses/LICENSE-2.0",
         "isAccessibleForFree": true,
         "description": "A private, local-first desktop API client with no account or cloud workspace.",
@@ -71,9 +71,9 @@
         </button>
         <nav id="site-nav" class="site-nav" data-site-nav aria-label="Primary">
           <ul class="nav-links">
-            <li><a href="#product">Product</a></li>
+            <li><a href="#product">Features</a></li>
             <li><a href="scripting.html">Scripting</a></li>
-            <li><a href="#privacy">Privacy</a></li>
+            <li><a href="#privacy">Data &amp; privacy</a></li>
             <li><a class="nav-links__download" href="#download">Download</a></li>
             <li><a href="https://github.com/tansdf/PostNot" rel="noopener noreferrer">GitHub</a></li>
           </ul>
@@ -87,8 +87,8 @@
           <p class="eyebrow">Private desktop API workbench</p>
           <h1 id="hero-heading">Post APIs.<br />Not your data.</h1>
           <p class="hero__tagline">
-            A local-first desktop API client for sending, organizing, and automating requests—without
-            an account or cloud workspace.
+            A local-first desktop API client for sending, organizing, automating, and safely authoring
+            requests with AI agents—without an account or cloud workspace.
           </p>
           <div class="cta-row">
             <a class="btn btn--primary" href="#download">Download PostNot</a>
@@ -110,7 +110,7 @@
 
         <div class="hero__preview">
           <div class="preview-shell">
-            <div class="preview-shell__bar"><span>Request workspace</span><span>Dark theme</span></div>
+            <div class="preview-shell__bar"><span>Request workspace</span></div>
             <button
               class="screenshot-trigger screenshot-trigger--hero"
               type="button"
@@ -135,11 +135,12 @@
       </section>
 
       <aside class="trust-strip" aria-label="Product trust highlights">
-        <span><strong>SQLite</strong><small>Local persistence</small></span>
-        <span><strong>OS credential store</strong><small>Secret storage</small></span>
-        <span><strong>Redacted</strong><small>Request exports</small></span>
-        <span><strong>Signed</strong><small>Updater artifacts</small></span>
-        <span><strong>Postman · OpenAPI · cURL</strong><small>Import support</small></span>
+        <span><strong>Local persistence</strong><small>SQLite</small></span>
+        <span><strong>Secret storage</strong><small>OS credential store</small></span>
+        <span><strong>Safer exports</strong><small>Redacted by default</small></span>
+        <span><strong>Agent authoring</strong><small>Local MCP</small></span>
+        <span><strong>Trusted updates</strong><small>Signed artifacts</small></span>
+        <span><strong>Portable imports</strong><small>Postman · OpenAPI · cURL</small></span>
       </aside>
 
       <section id="product" aria-labelledby="product-heading">
@@ -154,7 +155,7 @@
         <div class="workflow-list">
           <article class="workflow workflow--image-right">
             <div class="workflow__copy">
-              <p class="workflow__number">01</p>
+              <p class="workflow__number">Workflow 01</p>
               <h3>Send and inspect requests</h3>
               <p>
                 Compose requests in restored tabs, preview the fully resolved outgoing request with
@@ -191,7 +192,7 @@
 
           <article class="workflow">
             <div class="workflow__copy">
-              <p class="workflow__number">02</p>
+              <p class="workflow__number">Workflow 02</p>
               <h3>Organize and automate</h3>
               <p>
                 Build nested collections, find saved requests quickly, and run repeatable Playbooks
@@ -227,9 +228,47 @@
             </figure>
           </article>
 
-          <article class="workflow workflow--image-right">
+          <article id="agents" class="workflow workflow--image-right">
             <div class="workflow__copy">
-              <p class="workflow__number">03</p>
+              <p class="workflow__number">Workflow 03</p>
+              <h3>Author requests with local AI agents</h3>
+              <p>
+                Connect a compatible MCP client to inspect your workspace and prepare reusable
+                collections, folders, and saved requests while PostNot keeps execution in your hands.
+              </p>
+              <ul class="check-list">
+                <li>Read masked request details and resolved previews</li>
+                <li>Create hierarchies and atomically create or update requests</li>
+                <li>Review every mutation in persistent Agent Activity</li>
+              </ul>
+              <p class="workflow__boundary"><strong>First-release boundary:</strong> agents cannot send or delete requests.</p>
+            </div>
+            <figure class="product-shot">
+              <button
+                class="screenshot-trigger"
+                type="button"
+                data-screenshot-src="images/agent-activity-page.webp"
+                data-screenshot-title="MCP Integration and Agent Activity"
+                data-screenshot-alt="PostNot MCP Integration workspace showing local authoring safeguards and recorded agent changes"
+              >
+                <img
+                  src="images/agent-activity-page-960.webp"
+                  srcset="images/agent-activity-page-960.webp 960w, images/agent-activity-page.webp 1995w"
+                  sizes="(min-width: 860px) 52vw, 100vw"
+                  width="1995"
+                  height="1179"
+                  alt="PostNot MCP Integration workspace showing local authoring safeguards and recorded agent changes"
+                  loading="lazy"
+                />
+                <span class="screenshot-trigger__label">Open full screenshot</span>
+              </button>
+              <figcaption>Connect over local stdio, keep send and delete unavailable, and review recorded changes.</figcaption>
+            </figure>
+          </article>
+
+          <article class="workflow">
+            <div class="workflow__copy">
+              <p class="workflow__number">Workflow 04</p>
               <h3>Import, export, and migrate</h3>
               <p>
                 Bring existing work from Postman, OpenAPI 3, or cURL. Export collections and
@@ -264,9 +303,9 @@
             </figure>
           </article>
 
-          <article class="workflow">
+          <article class="workflow workflow--image-right">
             <div class="workflow__copy">
-              <p class="workflow__number">04</p>
+              <p class="workflow__number">Workflow 05</p>
               <h3>Protect local data and secrets</h3>
               <p>
                 Use environment variables without storing secret values in plain SQLite. PostNot masks
@@ -334,8 +373,9 @@
 
       <section id="privacy" class="privacy-section" aria-labelledby="privacy-heading">
         <div class="section-heading">
-          <p class="eyebrow">Where your data lives</p>
+          <p class="eyebrow">Data &amp; privacy</p>
           <h2 id="privacy-heading">Local by default, explicit when data moves</h2>
+          <p>Where PostNot stores workspace data, how it protects secrets, and what agents can see.</p>
         </div>
         <ol class="data-flow">
           <li>
@@ -348,6 +388,10 @@
           </li>
           <li>
             <span class="data-flow__number">3</span>
+            <div><h3>Agents</h3><p>MCP discovery omits secret values, masks credential-looking literals, and records changed field names without retaining request values in activity logs.</p></div>
+          </li>
+          <li>
+            <span class="data-flow__number">4</span>
             <div><h3>Network and exports</h3><p>Data leaves when you send or export. Previews mask private values and single-request exports redact credentials by default.</p></div>
           </li>
         </ol>
@@ -499,7 +543,7 @@
       <div class="site-footer__inner">
         <div><a class="brand brand--footer" href="index.html"><img src="icon.svg" width="32" height="32" alt="" /><span>PostNot</span></a><p>Post APIs. Not your data.</p></div>
         <div class="footer-links">
-          <a href="#product">Product</a><a href="#download">Download</a><a href="scripting.html">Scripting</a><a href="#privacy">Privacy</a><a href="https://github.com/tansdf/PostNot">GitHub</a>
+          <a href="#product">Features</a><a href="#download">Download</a><a href="scripting.html">Scripting</a><a href="#privacy">Data &amp; privacy</a><a href="https://github.com/tansdf/PostNot">GitHub</a>
         </div>
         <p class="site-footer__license">Permanently free and open source under <a href="https://github.com/tansdf/PostNot/blob/master/LICENSE">Apache-2.0</a>.</p>
       </div>
