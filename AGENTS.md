@@ -101,6 +101,21 @@ source "$HOME/.cargo/env"
 cargo check --manifest-path src-tauri/Cargo.toml
 ```
 
+Backend quality gate (required before publishing a release):
+
+```bash
+source "$HOME/.cargo/env"
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- \
+  -D warnings \
+  -A clippy::manual_map \
+  -A clippy::new_without_default \
+  -A clippy::manual_is_multiple_of \
+  -A clippy::items_after_test_module \
+  -W clippy::await_holding_lock \
+  -W clippy::large_futures \
+  -W clippy::needless_collect
+```
+
 Rustup automatically uses the repository's pinned toolchain from `rust-toolchain.toml`.
 
 Run the desktop app locally with:

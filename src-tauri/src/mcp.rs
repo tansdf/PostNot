@@ -106,6 +106,12 @@ struct SafeSavedRequest {
     warnings: Vec<String>,
 }
 
+struct MutationDetails<'a> {
+    collection_id: Option<&'a str>,
+    fields: &'a [&'a str],
+    warnings: Vec<String>,
+}
+
 #[derive(Clone)]
 struct PostNotMcp {
     pool: SqlitePool,
@@ -328,10 +334,12 @@ impl PostNotMcp {
             &batch,
             "create_request",
             "request",
-            Some(&collection_id),
             result,
-            request_fields(),
-            warnings,
+            MutationDetails {
+                collection_id: Some(&collection_id),
+                fields: request_fields(),
+                warnings,
+            },
         )
         .await
     }
@@ -448,10 +456,12 @@ impl PostNotMcp {
             &batch,
             "update_request",
             "request",
-            Some(&collection_id),
             result,
-            request_fields(),
-            warnings,
+            MutationDetails {
+                collection_id: Some(&collection_id),
+                fields: request_fields(),
+                warnings,
+            },
         )
         .await
     }
@@ -464,8 +474,18 @@ impl PostNotMcp {
         result: AppResult<T>,
         fields: &[&str],
     ) -> Result<String, McpError> {
-        self.finish_mutation_with_warnings(batch, operation, kind, None, result, fields, Vec::new())
-            .await
+        self.finish_mutation_with_warnings(
+            batch,
+            operation,
+            kind,
+            result,
+            MutationDetails {
+                collection_id: None,
+                fields,
+                warnings: Vec::new(),
+            },
+        )
+        .await
     }
 
     async fn finish_mutation_with_collection<T: Serialize + TargetMetadata>(
@@ -481,10 +501,12 @@ impl PostNotMcp {
             batch,
             operation,
             kind,
-            collection_id,
             result,
-            fields,
-            Vec::new(),
+            MutationDetails {
+                collection_id,
+                fields,
+                warnings: Vec::new(),
+            },
         )
         .await
     }
@@ -494,10 +516,8 @@ impl PostNotMcp {
         batch: &str,
         operation: &str,
         kind: &str,
-        collection_id: Option<&str>,
         result: AppResult<T>,
-        fields: &[&str],
-        warnings: Vec<String>,
+        details: MutationDetails<'_>,
     ) -> Result<String, McpError> {
         match result {
             Ok(value) => {
@@ -507,20 +527,20 @@ impl PostNotMcp {
                     kind,
                     Some(value.target_id()),
                     value.target_name(),
-                    collection_id.or(value.collection_id()),
+                    details.collection_id.or(value.collection_id()),
                     "succeeded",
-                    fields,
+                    details.fields,
                     None,
                     None,
                 )
                 .await;
                 Ok(
-                    json!({ "item": value, "warnings": warnings, "activityBatchId": batch })
+                    json!({ "item": value, "warnings": details.warnings, "activityBatchId": batch })
                         .to_string(),
                 )
             }
             Err(error) => {
-                self.record_failure(batch, operation, kind, collection_id, &error)
+                self.record_failure(batch, operation, kind, details.collection_id, &error)
                     .await;
                 Err(to_mcp_error(error))
             }
@@ -612,20 +632,21 @@ impl ServerHandler for PostNotMcp {
     }
 
     fn get_info(&self) -> rmcp::model::ServerInfo {
-        let mut info = rmcp::model::ServerInfo::default();
-        info.capabilities = rmcp::model::ServerCapabilities::builder()
-            .enable_tools()
-            .build();
-        info.instructions = Some("Author and inspect local PostNot collections safely. V1 never executes requests, scripts, imports, deletes, or moves.".to_string());
-        info.server_info = rmcp::model::Implementation {
-            name: "postnot".to_string(),
-            title: Some("PostNot".to_string()),
-            version: env!("CARGO_PKG_VERSION").to_string(),
-            description: Some("Local-first API request authoring".to_string()),
-            icons: None,
-            website_url: Some("https://post-not.com".to_string()),
-        };
-        info
+        rmcp::model::ServerInfo {
+            capabilities: rmcp::model::ServerCapabilities::builder()
+                .enable_tools()
+                .build(),
+            instructions: Some("Author and inspect local PostNot collections safely. V1 never executes requests, scripts, imports, deletes, or moves.".to_string()),
+            server_info: rmcp::model::Implementation {
+                name: "postnot".to_string(),
+                title: Some("PostNot".to_string()),
+                version: env!("CARGO_PKG_VERSION").to_string(),
+                description: Some("Local-first API request authoring".to_string()),
+                icons: None,
+                website_url: Some("https://post-not.com".to_string()),
+            },
+            ..Default::default()
+        }
     }
 }
 
