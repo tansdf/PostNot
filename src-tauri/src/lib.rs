@@ -32,10 +32,17 @@ pub fn run() -> Result<(), String> {
                 services::history_service::stored_response_body_paths(&database),
             )?;
             tauri::async_runtime::block_on(response_bodies.reconcile(&referenced_bodies))?;
+            let realtime_payloads = services::realtime_payload_service::RealtimePayloadStore::new(
+                storage::paths::realtime_payloads_dir(app.handle())?,
+            );
+            tauri::async_runtime::block_on(realtime_payloads.reset())?;
+            let realtime_connections =
+                services::realtime_service::RealtimeConnectionManager::new(realtime_payloads);
             app.manage(app_state::AppState::new(
                 database,
                 secret_store,
                 response_bodies,
+                realtime_connections,
             ));
             if let Some(window) = app.get_webview_window("main") {
                 services::window_state_service::restore_and_track_main_window(&window);
@@ -48,6 +55,19 @@ pub fn run() -> Result<(), String> {
             commands::requests::preview_request,
             commands::requests::cancel_active_request,
             commands::requests::pick_multipart_files,
+            commands::realtime::connect_realtime_connection,
+            commands::realtime::get_realtime_workspace_state,
+            commands::realtime::save_realtime_workspace_state,
+            commands::realtime::disconnect_realtime_connection,
+            commands::realtime::release_realtime_connection,
+            commands::realtime::send_realtime_message,
+            commands::realtime::ping_realtime_connection,
+            commands::realtime::close_realtime_connection,
+            commands::realtime::get_realtime_session_snapshot,
+            commands::realtime::clear_realtime_transcript,
+            commands::realtime::read_realtime_payload,
+            commands::realtime::save_realtime_payload,
+            commands::realtime::export_realtime_transcript,
             commands::responses::read_response_body_window,
             commands::responses::search_response_body,
             commands::responses::cancel_response_search,

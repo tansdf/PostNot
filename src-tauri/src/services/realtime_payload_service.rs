@@ -13,6 +13,7 @@ use crate::error::{AppError, AppResult};
 
 pub const REALTIME_INLINE_PAYLOAD_LIMIT: usize = 256 * 1024;
 pub const REALTIME_PAYLOAD_PREVIEW_LIMIT: usize = 4 * 1024;
+pub const REALTIME_PAYLOAD_READ_LIMIT: u64 = 8 * 1024 * 1024;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "mode", rename_all = "lowercase")]
@@ -72,6 +73,7 @@ struct RealtimePayloadStoreInner {
 struct StoredPayload {
     path: PathBuf,
     encoding: RealtimePayloadEncoding,
+    retain_count: usize,
 }
 
 impl RealtimePayloadStore {
@@ -156,6 +158,7 @@ impl RealtimePayloadStore {
                 StoredPayload {
                     path,
                     encoding,
+                    retain_count: 1,
                 },
             );
         Ok(RealtimePayload::File {
@@ -169,13 +172,29 @@ impl RealtimePayloadStore {
 
     pub async fn read(&self, handle_id: &str) -> AppResult<String> {
         let stored = self.lookup(handle_id)?;
+        let size = fs::metadata(&stored.path).await?.len();
+        if size > REALTIME_PAYLOAD_READ_LIMIT {
+            return Err(AppError::Message(format!(
+                "Realtime payload is {size} bytes and is too large to read into the UI. Use Save As to retain the complete payload."
+            )));
+        }
         let bytes = fs::read(stored.path).await?;
         Ok(match stored.encoding {
             RealtimePayloadEncoding::Utf8 => String::from_utf8(bytes).map_err(|_| {
-                AppError::Message("The stored realtime text payload is not valid UTF-8.".to_string())
+                AppError::Message(
+                    "The stored realtime text payload is not valid UTF-8.".to_string(),
+                )
             })?,
             RealtimePayloadEncoding::Base64 => BASE64.encode(bytes),
         })
+    }
+
+    pub(crate) fn export_source(
+        &self,
+        handle_id: &str,
+    ) -> AppResult<(PathBuf, RealtimePayloadEncoding)> {
+        let stored = self.lookup(handle_id)?;
+        Ok((stored.path, stored.encoding))
     }
 
     pub async fn copy_to(&self, handle_id: &str, destination: &Path) -> AppResult<()> {
@@ -185,12 +204,21 @@ impl RealtimePayloadStore {
     }
 
     pub async fn release(&self, handle_id: &str) -> AppResult<()> {
-        let stored = self
-            .inner
-            .handles
-            .lock()
-            .map_err(|_| payload_state_error())?
-            .remove(handle_id);
+        let stored = {
+            let mut handles = self
+                .inner
+                .handles
+                .lock()
+                .map_err(|_| payload_state_error())?;
+            match handles.get_mut(handle_id) {
+                Some(stored) if stored.retain_count > 1 => {
+                    stored.retain_count -= 1;
+                    None
+                }
+                Some(_) => handles.remove(handle_id),
+                None => None,
+            }
+        };
         if let Some(stored) = stored {
             match fs::remove_file(stored.path).await {
                 Ok(()) => {}
@@ -198,6 +226,19 @@ impl RealtimePayloadStore {
                 Err(error) => return Err(error.into()),
             }
         }
+        Ok(())
+    }
+
+    pub(crate) fn retain(&self, handle_id: &str) -> AppResult<()> {
+        let mut handles = self
+            .inner
+            .handles
+            .lock()
+            .map_err(|_| payload_state_error())?;
+        let stored = handles
+            .get_mut(handle_id)
+            .ok_or_else(|| AppError::Message("Realtime payload not found.".to_string()))?;
+        stored.retain_count = stored.retain_count.saturating_add(1);
         Ok(())
     }
 
@@ -242,13 +283,19 @@ mod tests {
         assert!(store.read(&handle).await.is_err());
 
         let small_binary = vec![0, 1, 2, 255];
-        let payload = store.store_binary(&small_binary).await.expect("store binary");
+        let payload = store
+            .store_binary(&small_binary)
+            .await
+            .expect("store binary");
         assert!(matches!(payload, RealtimePayload::Inline { .. }));
 
         let binary = vec![0; REALTIME_INLINE_PAYLOAD_LIMIT + 1];
         let payload = store.store_binary(&binary).await.expect("store binary");
         let handle = payload.handle_id().expect("file handle");
-        assert_eq!(store.read(handle).await.expect("read"), BASE64.encode(binary));
+        assert_eq!(
+            store.read(handle).await.expect("read"),
+            BASE64.encode(binary)
+        );
 
         let _ = fs::remove_dir_all(root).await;
     }

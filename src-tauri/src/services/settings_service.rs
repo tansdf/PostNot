@@ -26,6 +26,7 @@ const REALTIME_TRANSCRIPT_MAX_BYTES_KEY: &str = "realtime_transcript_max_bytes";
 const LAST_UPDATE_CHECKED_AT_KEY: &str = "last_update_checked_at";
 const COLLECTION_SIDEBAR_STATE_KEY: &str = "collection_sidebar_state";
 const REQUEST_WORKSPACE_STATE_KEY: &str = "request_workspace_state";
+const REALTIME_WORKSPACE_STATE_KEY: &str = "realtime_workspace_state";
 const DEFAULT_UI_SCALE: f64 = 1.0;
 const MIN_UI_SCALE: f64 = 0.6;
 const MAX_UI_SCALE: f64 = 1.5;
@@ -196,6 +197,69 @@ pub async fn save_request_workspace_state(
         &now_iso(),
     )
     .await
+}
+
+pub async fn get_realtime_workspace_state(
+    pool: &SqlitePool,
+) -> AppResult<Option<serde_json::Value>> {
+    get_setting(pool, REALTIME_WORKSPACE_STATE_KEY).await
+}
+
+pub async fn save_realtime_workspace_state(
+    pool: &SqlitePool,
+    state: &serde_json::Value,
+) -> AppResult<()> {
+    let normalized = normalize_realtime_workspace_state(state.clone())?;
+    upsert_setting(
+        pool,
+        REALTIME_WORKSPACE_STATE_KEY,
+        &serde_json::to_string(&normalized)?,
+        &now_iso(),
+    )
+    .await
+}
+
+fn normalize_realtime_workspace_state(
+    mut state: serde_json::Value,
+) -> AppResult<serde_json::Value> {
+    let object = state.as_object_mut().ok_or_else(|| {
+        AppError::Message("Realtime workspace state must be an object.".to_string())
+    })?;
+    let tabs = object
+        .get_mut("tabs")
+        .and_then(serde_json::Value::as_array_mut)
+        .ok_or_else(|| {
+            AppError::Message("Realtime workspace state must contain a tabs array.".to_string())
+        })?;
+    for tab in tabs {
+        let tab = tab.as_object_mut().ok_or_else(|| {
+            AppError::Message("Realtime workspace tabs must be objects.".to_string())
+        })?;
+        tab.insert(
+            "status".to_string(),
+            serde_json::Value::String("disconnected".to_string()),
+        );
+        tab.insert("generation".to_string(), serde_json::json!(0));
+        tab.insert("lastSequence".to_string(), serde_json::json!(0));
+        tab.insert(
+            "statusMessage".to_string(),
+            serde_json::Value::String("Disconnected".to_string()),
+        );
+        tab.insert(
+            "reconnectRequired".to_string(),
+            serde_json::Value::Bool(false),
+        );
+        tab.insert(
+            "transcript".to_string(),
+            serde_json::Value::Array(Vec::new()),
+        );
+        tab.insert("transcriptSizeBytes".to_string(), serde_json::json!(0));
+        tab.insert(
+            "errorText".to_string(),
+            serde_json::Value::String(String::new()),
+        );
+    }
+    Ok(state)
 }
 
 pub async fn history_limit(pool: &SqlitePool) -> AppResult<u32> {
@@ -369,8 +433,8 @@ mod tests {
         default_settings, ensure_defaults, get_settings, history_limit,
         normalize_realtime_connect_timeout_ms, normalize_realtime_max_concurrent_sessions,
         normalize_realtime_max_message_bytes, normalize_realtime_transcript_max_bytes,
-        normalize_realtime_transcript_max_entries, normalize_ui_scale, save_settings,
-        HISTORY_LIMIT_KEY, THEME_KEY,
+        normalize_realtime_transcript_max_entries, normalize_realtime_workspace_state,
+        normalize_ui_scale, save_settings, HISTORY_LIMIT_KEY, THEME_KEY,
     };
 
     async fn setup_test_db() -> SqlitePool {
@@ -415,15 +479,40 @@ mod tests {
             256 * 1024 * 1024
         );
         assert_eq!(normalize_realtime_transcript_max_entries(0), 1);
-        assert_eq!(
-            normalize_realtime_transcript_max_entries(u32::MAX),
-            10_000
-        );
+        assert_eq!(normalize_realtime_transcript_max_entries(u32::MAX), 10_000);
         assert_eq!(normalize_realtime_transcript_max_bytes(1), 64 * 1024);
         assert_eq!(
             normalize_realtime_transcript_max_bytes(u64::MAX),
             512 * 1024 * 1024
         );
+    }
+
+    #[test]
+    fn realtime_workspace_restore_is_always_disconnected_and_empty() {
+        let normalized = normalize_realtime_workspace_state(serde_json::json!({
+            "activeTabId": "tab-1",
+            "tabs": [{
+                "id": "tab-1",
+                "draft": {"requestType": "websocket"},
+                "status": "connected",
+                "generation": 9,
+                "lastSequence": 31,
+                "statusMessage": "Connected",
+                "reconnectRequired": true,
+                "transcript": [{"id": "entry"}],
+                "transcriptSizeBytes": 100,
+                "errorText": "old error"
+            }]
+        }))
+        .expect("normalize");
+        let tab = &normalized["tabs"][0];
+        assert_eq!(tab["status"], "disconnected");
+        assert_eq!(tab["generation"], 0);
+        assert_eq!(tab["lastSequence"], 0);
+        assert_eq!(tab["transcript"], serde_json::json!([]));
+        assert_eq!(tab["transcriptSizeBytes"], 0);
+        assert_eq!(tab["errorText"], "");
+        assert_eq!(tab["draft"]["requestType"], "websocket");
     }
 
     #[tokio::test]

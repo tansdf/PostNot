@@ -95,7 +95,9 @@ pub fn sanitize_error(message: &str, secret_values: &[String]) -> String {
 
     values
         .into_iter()
-        .fold(message.to_string(), |safe, secret| safe.replace(secret, "***"))
+        .fold(message.to_string(), |safe, secret| {
+            safe.replace(secret, "***")
+        })
 }
 
 fn resolve_common(
@@ -120,10 +122,7 @@ fn resolve_common(
     }
 }
 
-fn resolve_row(
-    row: &KeyValueRow,
-    active_environment: Option<&EnvironmentDetail>,
-) -> KeyValueRow {
+fn resolve_row(row: &KeyValueRow, active_environment: Option<&EnvironmentDetail>) -> KeyValueRow {
     KeyValueRow {
         id: row.id.clone(),
         key: resolve(&row.key, active_environment),
@@ -132,10 +131,7 @@ fn resolve_row(
     }
 }
 
-fn resolve_auth(
-    auth: &RequestAuth,
-    active_environment: Option<&EnvironmentDetail>,
-) -> RequestAuth {
+fn resolve_auth(auth: &RequestAuth, active_environment: Option<&EnvironmentDetail>) -> RequestAuth {
     RequestAuth {
         auth_type: auth.auth_type.clone(),
         basic_username: resolve(&auth.basic_username, active_environment),
