@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use crate::domain::requests::SendRequestPayload;
+use crate::domain::{
+    realtime::{RealtimeRequestDraft, RequestType},
+    requests::SendRequestPayload,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -62,6 +65,7 @@ pub struct CollectionItemSummary {
     pub parent_id: Option<String>,
     pub kind: String,
     pub name: String,
+    pub request_type: Option<String>,
     pub method: Option<String>,
     pub url: Option<String>,
     pub pre_request_script: String,
@@ -85,6 +89,7 @@ pub struct CollectionSearchResult {
     pub collection_id: String,
     pub parent_id: Option<String>,
     pub name: String,
+    pub request_type: Option<String>,
     pub method: Option<String>,
     pub url: Option<String>,
     pub updated_at: String,
@@ -115,4 +120,28 @@ pub struct SavedRequestDetail {
     pub name: String,
     pub updated_at: String,
     pub request: SendRequestPayload,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedRealtimeRequestSummary {
+    pub id: String,
+    pub collection_id: String,
+    pub parent_id: Option<String>,
+    pub name: String,
+    pub request_type: RequestType,
+    pub url: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedRealtimeRequestDetail {
+    pub id: String,
+    pub collection_id: String,
+    pub parent_id: Option<String>,
+    pub name: String,
+    pub request_type: RequestType,
+    pub updated_at: String,
+    pub request: RealtimeRequestDraft,
 }
