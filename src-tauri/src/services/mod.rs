@@ -9,6 +9,8 @@ pub mod playbooks_service;
 pub mod request_plan_service;
 pub mod request_preview_service;
 pub mod request_url_service;
+pub mod realtime_payload_service;
+pub mod realtime_resolution_service;
 pub mod response_body_service;
 pub mod secret_store_service;
 pub mod settings_service;
