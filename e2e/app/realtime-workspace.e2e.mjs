@@ -84,6 +84,7 @@ test("WebSocket workspace supports tabs, protocol editing, mock sessions, transc
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page.getByRole("log").getByText("Sent", { exact: true })).toBeVisible();
   await expect(page.getByRole("log").getByText("Received", { exact: true })).toBeVisible();
+  await expect(page.getByRole("log").getByRole("button", { name: "Copy" })).toHaveCount(2);
 
   await page.getByRole("tab", { name: "All", exact: true }).focus();
   await page.keyboard.press("ArrowRight");
@@ -105,6 +106,8 @@ test("WebSocket workspace supports tabs, protocol editing, mock sessions, transc
   });
   await expect(page.getByRole("button", { name: "Follow latest" })).toBeVisible();
   await page.getByRole("button", { name: "Follow latest" }).click();
+  await page.getByRole("log").scrollIntoViewIfNeeded();
+  await capture(page, testInfo, "realtime-workspace-transcript");
   await page.getByRole("button", { name: "Clear" }).click();
   await expect(page.getByText("No session messages yet")).toBeVisible();
 
@@ -126,6 +129,7 @@ test("settings expose bounded realtime controls and persist the selected present
   await expect(page.getByLabel("Transcript retained data per session (MiB)")).toHaveValue("64");
   await expect(page.getByText("Transcripts remain in memory only and are never restored after restart.")).toBeVisible();
   await expectNoSeriousAccessibilityViolations(page);
+  await page.getByRole("heading", { name: "WebSockets" }).scrollIntoViewIfNeeded();
   await capture(page, testInfo, "realtime-settings-light");
 });
 
@@ -136,6 +140,7 @@ test("collections explain lossless PostNot portability and Postman realtime omis
   await expect(exportDialog.getByText("Lossless export for HTTP, WebSocket, Socket.IO, folders, and scripts.")).toBeVisible();
   await exportDialog.getByRole("radio", { name: /Postman Collection v2.1/ }).check();
   await expect(exportDialog.getByText("WebSocket and Socket.IO definitions cannot be represented by the Postman export format.")).toBeVisible();
+  await capture(page, testInfo, "collection-export-portability");
   await exportDialog.getByRole("button", { name: "Cancel" }).click();
 
   await page.getByRole("button", { name: "Import", exact: true }).first().click();
@@ -152,7 +157,7 @@ test("collections explain lossless PostNot portability and Postman realtime omis
   await sidebar.getByRole("button", { name: /Live order events/ }).click();
   await expect(page).toHaveURL(/\/websockets\?savedRequestId=mock-realtime-websocket-1/);
   await expect(page.getByLabel("Connection URL")).toHaveValue("wss://events.example.test/orders");
-  await capture(page, testInfo, "collection-portability");
+  await capture(page, testInfo, "collection-realtime-routing");
 });
 
 for (const scenario of [

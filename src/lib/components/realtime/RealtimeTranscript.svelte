@@ -172,7 +172,9 @@
           </header>
           {#if entry.payload}
             <div class="realtime-payload-actions">
-              <button class="button-ghost button-compact" type="button" onclick={() => copy(entry)}>Copy</button>
+              {#if !isJson(entry, text)}
+                <button class="button-ghost button-compact" type="button" onclick={() => copy(entry)}>Copy</button>
+              {/if}
               {#if entry.payload.mode === "file" && expandedPayloads[entry.id] === undefined}
                 <button class="button-ghost button-compact" type="button" onclick={() => expand(entry)}>Read full payload</button>
               {/if}
