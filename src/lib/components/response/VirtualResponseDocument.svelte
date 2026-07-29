@@ -59,7 +59,7 @@
   let activeSearchId = "";
   let formatJobId = $state("");
   let progressiveMatches = $state(0);
-  let searchTimer: ReturnType<typeof setTimeout> | null = null;
+  let searchTimer: number | null = null;
 
   let topSpacer = $derived(startRow * averageRowHeight);
   let bottomSpacer = $derived(Math.max(0, totalRows - startRow - rows.length) * averageRowHeight);

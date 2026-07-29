@@ -162,7 +162,7 @@ class RequestWorkspaceStore {
   activeTabId = $state(INITIAL_WORKSPACE_STATE.activeTabId);
   inFlightTabId = $state("");
   isCanceling = $state(false);
-  persistTimer: ReturnType<typeof setTimeout> | null = null;
+  persistTimer: number | null = null;
 
   get activeTab(): RequestWorkspaceTab | null {
     return this.tabs.find((tab) => tab.id === this.activeTabId) ?? null;
