@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "generatedAt": "2026-07-22T18:47:53.834Z",
+  "generatedAt": "2026-07-29T22:30:29.123Z",
   "viewport": {
     "width": 1995,
     "height": 1179
@@ -43,7 +43,7 @@
       "waitFor": ".settings-page"
     }
   ],
-  "inputHash": "74b39a3a2e53d6342fcd2b12d5cc96b313ef164cdd0f24b581985da116102218",
+  "inputHash": "ee211e4ecb4fd74265437c6f12d08bd0eb053e3b4e2e7ba6092c6e4acfbbe347",
   "inputs": [
     {
       "path": "scripts/capture-docs-screenshots.mjs",
@@ -55,7 +55,7 @@
     },
     {
       "path": "src/lib/components/collections/CollectionsPanel.svelte",
-      "sha256": "f68cc60b95b65c1f4e154e40acf9ee00a1c79f2f9641497c58e338d69221671c"
+      "sha256": "aa09251284f91f0a4a33a2c4c97ab0d26208507f43f03dc001f80b3918f1f29a"
     },
     {
       "path": "src/lib/components/collections/FolderScriptForm.svelte",
@@ -79,7 +79,7 @@
     },
     {
       "path": "src/lib/components/layout/AppShell.svelte",
-      "sha256": "f80f5dccf1f88070efce18bcdd183530ae21276c3f3b20c6aacd6aebb96d22f5"
+      "sha256": "624fe92322967854df404d78a223cf542da161b40f4757f0a816a15c08a0fce9"
     },
     {
       "path": "src/lib/components/layout/CollectionDragController.svelte",
@@ -95,7 +95,23 @@
     },
     {
       "path": "src/lib/components/layout/SidebarCollections.svelte",
-      "sha256": "74437a50fa737465bf347d671876bb68d24f65b29d609c2d387a7c79944d041a"
+      "sha256": "8b2147ceafcca503d0af6810106fb15453423784c1f06bc04dbd54c3ec298131"
+    },
+    {
+      "path": "src/lib/components/realtime/RealtimeEditor.svelte",
+      "sha256": "d42823c5a3950d0c64a101abf2aeb1ee386dc0d285a549bfe7ef9ba8f21f9456"
+    },
+    {
+      "path": "src/lib/components/realtime/RealtimeKeyValueEditor.svelte",
+      "sha256": "75ebe3434158f18a280eda02095b56c22ca8e90afbd6e2fa11101b179ee0d7ad"
+    },
+    {
+      "path": "src/lib/components/realtime/RealtimeTabs.svelte",
+      "sha256": "7a36590f7844ea36080d74c706fb31aced378448827e4a2bda016bbc595814f3"
+    },
+    {
+      "path": "src/lib/components/realtime/RealtimeTranscript.svelte",
+      "sha256": "2100649505c51f1dc249cecbba9dedcefe82c59d3470c5fd2f644d9863fb8581"
     },
     {
       "path": "src/lib/components/request/RequestEditor.svelte",
@@ -123,11 +139,11 @@
     },
     {
       "path": "src/lib/components/response/VirtualResponseDocument.svelte",
-      "sha256": "ce07cac5c3b3460e38f749d802f2781ab39d3aff00a9af6358a3a1d496d3579c"
+      "sha256": "22181d0f681231963f2862d3d384c8503dfcd810f9d77a6e9a4079c1c2234127"
     },
     {
       "path": "src/lib/styles/app.css",
-      "sha256": "208cfaf543eed35365e102d6091d566379b3b637c4cecbbd496429f06856f36f"
+      "sha256": "17e49f47f98f30869435bf060051a55a2968dc52c7025bd7f88fbb5d53fef49d"
     },
     {
       "path": "src/lib/styles/tokens.css",
@@ -147,7 +163,7 @@
     },
     {
       "path": "src/routes/collections/+page.svelte",
-      "sha256": "658f9af1f6eb0134a1a4c82b6d9be23b0fe67d06c9adc495b9e578e30d933a69"
+      "sha256": "bfdb7e4b6ed0e11accde502b49986ff2ab96f2f99f5b4b56436eaada0db40729"
     },
     {
       "path": "src/routes/environments/+page.svelte",
@@ -159,7 +175,11 @@
     },
     {
       "path": "src/routes/settings/+page.svelte",
-      "sha256": "cb62258c020a7dfdd20a6667f2009effe3789512ffd038ea223b493f9b113288"
+      "sha256": "4dd7da1bdd674c38f789399a16463cc9dab6d407df238f47c2fb318de5d5fb2f"
+    },
+    {
+      "path": "src/routes/websockets/+page.svelte",
+      "sha256": "c3f7856c3e3303c597f18c038ca0b3f922178713bb3614691fece2158b075139"
     }
   ]
 }
