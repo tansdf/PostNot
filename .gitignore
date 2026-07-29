@@ -4,6 +4,8 @@ node_modules/
 .pnpm-store/
 .svelte-kit/
 .vite/
+playwright-report/
+test-results/
 
 # Build output
 build/*

@@ -9,6 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "test:app-e2e": "playwright test --config playwright.app.config.ts",
     "docs:capture-screenshots": "node scripts/capture-docs-screenshots.mjs",
     "docs:update-screenshot-manifest": "node scripts/capture-docs-screenshots.mjs --update-manifest-only",
     "docs:check-screenshots": "node scripts/capture-docs-screenshots.mjs --check",
