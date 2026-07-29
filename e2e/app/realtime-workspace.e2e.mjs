@@ -1,7 +1,11 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type Page, type TestInfo } from "playwright/test";
+import { expect, test } from "playwright/test";
 
-async function expectNoSeriousAccessibilityViolations(page: Page) {
+// Enterprise UX gates: task clarity, state visibility and recovery,
+// accessibility, data safety, cross-feature consistency, responsive density,
+// and actionable error handling.
+
+async function expectNoSeriousAccessibilityViolations(page) {
   const results = await new AxeBuilder({ page }).analyze();
   const blocking = results.violations.filter((violation) =>
     violation.impact === "critical" || violation.impact === "serious"
@@ -9,7 +13,7 @@ async function expectNoSeriousAccessibilityViolations(page: Page) {
   expect(blocking, JSON.stringify(blocking, null, 2)).toEqual([]);
 }
 
-async function capture(page: Page, testInfo: TestInfo, name: string) {
+async function capture(page, testInfo, name) {
   const path = testInfo.outputPath(`${name}.png`);
   await page.screenshot({ path, fullPage: true });
   await testInfo.attach(name, { path, contentType: "image/png" });
@@ -44,14 +48,15 @@ test("WebSocket workspace supports tabs, protocol editing, mock sessions, transc
   await page.getByLabel("Name").fill("Billing events");
   await page.getByLabel("Connection URL").fill("wss://events.example.test/billing");
   await page.getByRole("button", { name: "Open a new WebSocket tab" }).click();
-  await expect(page.getByRole("tab", { name: /WebSocket/ })).toHaveCount(2);
   const connectionTabs = page.getByRole("tablist", { name: "Open realtime connections" }).getByRole("tab");
+  await expect(connectionTabs).toHaveCount(2);
   await connectionTabs.first().focus();
   await page.keyboard.press("ArrowRight");
   await expect(connectionTabs.nth(1)).toHaveAttribute("aria-selected", "true");
   await expectNoSeriousAccessibilityViolations(page);
 
-  await page.getByRole("button", { name: "Close Untitled WebSocket request" }).click();
+  await page.getByLabel("Name").fill("Uncommitted realtime draft");
+  await page.getByRole("button", { name: "Close Uncommitted realtime draft" }).click();
   await expect(page.getByRole("dialog", { name: "Close connection tab?" })).toBeVisible();
   await expect(page.getByText("Unsaved changes in this draft will be discarded.")).toBeVisible();
   await page.getByRole("button", { name: "Cancel" }).click();
@@ -73,15 +78,33 @@ test("WebSocket workspace supports tabs, protocol editing, mock sessions, transc
   await page.getByLabel("Payload type").selectOption("json");
 
   await page.getByRole("button", { name: "Connect" }).click();
-  await expect(page.getByText("Connected", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Socket.IO connection" }).getByText("Connected", { exact: true })).toBeVisible();
   await expect(page.getByRole("log").getByText("Connected", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Send" })).toBeEnabled();
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByRole("log").getByText("Sent", { exact: true })).toBeVisible();
+  await expect(page.getByRole("log").getByText("Received", { exact: true })).toBeVisible();
 
-  await page.getByRole("tab", { name: "Events" }).click();
+  await page.getByRole("tab", { name: "All", exact: true }).focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByRole("tab", { name: "Sent", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("log").getByText("Sent", { exact: true })).toBeVisible();
+  await expect(page.getByRole("log").getByText("Received", { exact: true })).toBeHidden();
+
+  await page.getByRole("tab", { name: "Events", exact: true }).click();
   await expect(page.getByRole("log").getByText("Connected", { exact: true })).toBeVisible();
   await page.getByPlaceholder("Search messages and events").fill("does-not-match");
   await expect(page.getByText("No matching messages")).toBeVisible();
   await page.getByPlaceholder("Search messages and events").fill("");
+  for (let index = 0; index < 14; index += 1) {
+    await page.getByRole("button", { name: "Send" }).click();
+  }
+  await page.getByRole("log").evaluate((node) => {
+    node.scrollTop = 0;
+    node.dispatchEvent(new Event("scroll"));
+  });
+  await expect(page.getByRole("button", { name: "Follow latest" })).toBeVisible();
+  await page.getByRole("button", { name: "Follow latest" }).click();
   await page.getByRole("button", { name: "Clear" }).click();
   await expect(page.getByText("No session messages yet")).toBeVisible();
 
@@ -120,6 +143,15 @@ test("collections explain lossless PostNot portability and Postman realtime omis
   await importDialog.getByRole("tab", { name: "PostNot" }).click();
   await expect(importDialog.getByText("Import a lossless PostNot collection, including WebSocket and Socket.IO definitions.")).toBeVisible();
   await expectNoSeriousAccessibilityViolations(page);
+  await importDialog.getByRole("button", { name: "Cancel" }).click();
+
+  const sidebar = page.locator("aside.sidebar");
+  await sidebar.getByRole("button", { name: "Expand collection" }).first().click();
+  await expect(sidebar.getByText("WS", { exact: true })).toBeVisible();
+  await expect(sidebar.getByText("S.IO", { exact: true })).toBeVisible();
+  await sidebar.getByRole("button", { name: /Live order events/ }).click();
+  await expect(page).toHaveURL(/\/websockets\?savedRequestId=mock-realtime-websocket-1/);
+  await expect(page.getByLabel("Connection URL")).toHaveValue("wss://events.example.test/orders");
   await capture(page, testInfo, "collection-portability");
 });
 
@@ -128,7 +160,7 @@ for (const scenario of [
   { name: "compact-980", width: 980, height: 1100, theme: "light", scale: 1 },
   { name: "compact-720", width: 720, height: 1200, theme: "dark", scale: 1 },
   { name: "desktop-125-scale", width: 1440, height: 1000, theme: "light", scale: 1.25 }
-] as const) {
+]) {
   test(`workspace remains usable at ${scenario.name}`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: scenario.width, height: scenario.height });
     await page.addInitScript(({ theme, scale }) => {
@@ -141,6 +173,7 @@ for (const scenario of [
     await expect(page.getByLabel("Connection URL")).toBeVisible();
     await expect(page.getByRole("button", { name: "Connect" })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+    await expectNoSeriousAccessibilityViolations(page);
     await capture(page, testInfo, `realtime-${scenario.name}`);
   });
 }

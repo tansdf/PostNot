@@ -10,6 +10,7 @@ import type {
   SavedRealtimeRequestDetail,
   SavedRealtimeRequestSummary
 } from "$lib/api/types";
+import { createRealtimeRequestDraft } from "$lib/api/types";
 
 export type RealtimeConnectInput = {
   connectionId: string;
@@ -32,6 +33,13 @@ export type RealtimeEventSubscription = {
 
 const mockSavedRequests = new Map<string, SavedRealtimeRequestDetail>();
 let mockWorkspaceState: RealtimeWorkspaceState | null = null;
+const mockSessions = new Map<
+  string,
+  {
+    snapshot: RealtimeSessionSnapshot;
+    onEvent: (event: RealtimeRuntimeEvent) => void;
+  }
+>();
 
 function now() {
   return new Date().toISOString();
@@ -59,6 +67,122 @@ function createMockSnapshot(connectionId: string): RealtimeSessionSnapshot {
       }
     ],
     transcriptSizeBytes: 0
+  };
+}
+
+function seededMockRealtimeRequest(itemId: string): SavedRealtimeRequestDetail | null {
+  const updatedAt = "2026-07-30T12:00:00.000Z";
+  if (itemId === "mock-realtime-websocket-1") {
+    const request = {
+      ...createRealtimeRequestDraft("websocket"),
+      name: "Live order events",
+      url: "wss://events.example.test/orders",
+      subprotocols: ["json"]
+    };
+    return {
+      id: itemId,
+      collectionId: "mock-collection-1",
+      parentId: null,
+      name: request.name,
+      requestType: "websocket",
+      url: request.url,
+      updatedAt,
+      request
+    };
+  }
+  if (itemId === "mock-realtime-socketio-1") {
+    const request = {
+      ...createRealtimeRequestDraft("socketio"),
+      name: "Support presence",
+      url: "https://presence.example.test",
+      namespace: "/support"
+    };
+    return {
+      id: itemId,
+      collectionId: "mock-collection-1",
+      parentId: null,
+      name: request.name,
+      requestType: "socketio",
+      url: request.url,
+      updatedAt,
+      request
+    };
+  }
+  return null;
+}
+
+function cloneSnapshot(snapshot: RealtimeSessionSnapshot) {
+  return structuredClone(snapshot);
+}
+
+function inlinePayload(text: string, encoding: "utf8" | "base64" = "utf8") {
+  return {
+    mode: "inline" as const,
+    text,
+    sizeBytes: new TextEncoder().encode(text).byteLength,
+    encoding,
+    truncated: false
+  };
+}
+
+function emitMockTranscript(
+  connectionId: string,
+  entry: Omit<RealtimeSessionSnapshot["transcript"][number], "id" | "connectionId" | "generation" | "sequence" | "occurredAt">
+) {
+  const session = mockSessions.get(connectionId);
+  if (!session) throw new Error("Connect the realtime request before sending a message.");
+  const sequence = session.snapshot.lastSequence + 1;
+  const complete = {
+    ...entry,
+    id: `${connectionId}-${sequence}`,
+    connectionId,
+    generation: session.snapshot.generation,
+    sequence,
+    occurredAt: now()
+  };
+  session.snapshot.lastSequence = sequence;
+  session.snapshot.transcript.push(complete);
+  session.snapshot.transcriptSizeBytes += complete.payload?.sizeBytes ?? 0;
+  session.onEvent({
+    type: "transcript",
+    connectionId,
+    generation: session.snapshot.generation,
+    sequence,
+    entry: structuredClone(complete)
+  });
+}
+
+function mockMessagePresentation(message: RealtimeSendMessage) {
+  if (message.requestType === "websocket") {
+    const composer = message.composer;
+    if (composer.mode === "binary") {
+      const binary = composer.binary;
+      const text = binary?.source === "file" ? binary.path : binary?.value ?? "";
+      return {
+        kind: "binary" as const,
+        label: "Binary message",
+        eventName: null,
+        payload: inlinePayload(text, "base64")
+      };
+    }
+    return {
+      kind: composer.mode,
+      label: composer.mode === "json" ? "JSON message" : "Text message",
+      eventName: null,
+      payload: inlinePayload(composer.content)
+    };
+  }
+  const composer = message.composer;
+  const text = composer.binary
+    ? composer.binary.source === "file"
+      ? composer.binary.path
+      : composer.binary.value
+    : JSON.stringify(composer.arguments);
+  return {
+    kind: composer.binary ? "binary" as const : "event" as const,
+    label: composer.waitForAck ? "Event · awaiting ACK" : "Event",
+    eventName: composer.event,
+    payload: inlinePayload(text, composer.binary ? "base64" : "utf8")
   };
 }
 
@@ -130,7 +254,7 @@ export async function updateSavedRealtimeRequest(
 
 export async function getSavedRealtimeRequest(itemId: string): Promise<SavedRealtimeRequestDetail> {
   if (!hasTauriRuntime()) {
-    const saved = mockSavedRequests.get(itemId);
+    const saved = mockSavedRequests.get(itemId) ?? seededMockRealtimeRequest(itemId);
     if (saved) return structuredClone(saved);
     throw new Error("Saved realtime request not found.");
   }
@@ -139,7 +263,10 @@ export async function getSavedRealtimeRequest(itemId: string): Promise<SavedReal
 
 export async function listSavedRealtimeRequests(collectionId: string): Promise<SavedRealtimeRequestSummary[]> {
   if (!hasTauriRuntime()) {
-    return [...mockSavedRequests.values()]
+    const seeded = ["mock-realtime-websocket-1", "mock-realtime-socketio-1"]
+      .map(seededMockRealtimeRequest)
+      .filter((item): item is SavedRealtimeRequestDetail => Boolean(item));
+    return [...seeded, ...mockSavedRequests.values()]
       .filter((item) => item.collectionId === collectionId)
       .map(({ request: _, ...summary }) => structuredClone(summary));
   }
@@ -160,7 +287,16 @@ export async function connectRealtimeConnection(
 ): Promise<{ result: RealtimeSessionSnapshot; subscription: RealtimeEventSubscription }> {
   if (!hasTauriRuntime()) {
     const snapshot = createMockSnapshot(input.connectionId);
-    return { result: snapshot, subscription: { close: () => {} } };
+    mockSessions.set(input.connectionId, { snapshot, onEvent });
+    return {
+      result: cloneSnapshot(snapshot),
+      subscription: {
+        close: () => {
+          const session = mockSessions.get(input.connectionId);
+          if (session) session.onEvent = () => {};
+        }
+      }
+    };
   }
 
   const channel = new Channel<RealtimeRuntimeEvent>();
@@ -180,22 +316,66 @@ export async function connectRealtimeConnection(
 }
 
 export async function disconnectRealtimeConnection(connectionId: string): Promise<void> {
-  if (!hasTauriRuntime()) return;
+  if (!hasTauriRuntime()) {
+    const session = mockSessions.get(connectionId);
+    if (session) {
+      session.snapshot.status = "disconnected";
+      session.snapshot.statusMessage = "Disconnected";
+    }
+    return;
+  }
   await invoke("disconnect_realtime_connection", { connectionId });
 }
 
 export async function releaseRealtimeConnection(connectionId: string): Promise<void> {
-  if (!hasTauriRuntime()) return;
+  if (!hasTauriRuntime()) {
+    mockSessions.delete(connectionId);
+    return;
+  }
   await invoke("release_realtime_connection", { connectionId });
 }
 
 export async function sendRealtimeMessage(connectionId: string, message: RealtimeSendMessage): Promise<void> {
-  if (!hasTauriRuntime()) return;
+  if (!hasTauriRuntime()) {
+    const presentation = mockMessagePresentation(message);
+    emitMockTranscript(connectionId, { ...presentation, direction: "sent" });
+    emitMockTranscript(connectionId, {
+      ...presentation,
+      direction: "received",
+      label: message.requestType === "socketio" ? "Mock server event" : "Mock echo"
+    });
+    if (message.requestType === "socketio" && message.composer.waitForAck) {
+      emitMockTranscript(connectionId, {
+        direction: "received",
+        kind: "ack",
+        label: "Acknowledgement",
+        eventName: message.composer.event,
+        payload: inlinePayload('[{"accepted":true}]')
+      });
+    }
+    return;
+  }
   await invoke("send_realtime_message", { connectionId, message });
 }
 
 export async function pingRealtimeConnection(connectionId: string, payload?: string): Promise<void> {
-  if (!hasTauriRuntime()) return;
+  if (!hasTauriRuntime()) {
+    emitMockTranscript(connectionId, {
+      direction: "sent",
+      kind: "ping",
+      label: "Ping",
+      eventName: null,
+      payload: payload ? inlinePayload(payload) : null
+    });
+    emitMockTranscript(connectionId, {
+      direction: "received",
+      kind: "pong",
+      label: "Pong",
+      eventName: null,
+      payload: payload ? inlinePayload(payload) : null
+    });
+    return;
+  }
   await invoke("ping_realtime_connection", { connectionId, payload: payload ?? null });
 }
 
@@ -204,17 +384,41 @@ export async function closeRealtimeConnection(
   code = 1000,
   reason = ""
 ): Promise<void> {
-  if (!hasTauriRuntime()) return;
+  if (!hasTauriRuntime()) {
+    emitMockTranscript(connectionId, {
+      direction: "system",
+      kind: "lifecycle",
+      label: `Closed · ${code}${reason ? ` · ${reason}` : ""}`,
+      eventName: null,
+      payload: null
+    });
+    const session = mockSessions.get(connectionId);
+    if (session) {
+      session.snapshot.status = "disconnected";
+      session.snapshot.statusMessage = "Disconnected";
+    }
+    return;
+  }
   await invoke("close_realtime_connection", { connectionId, code, reason });
 }
 
 export async function getRealtimeSessionSnapshot(connectionId: string): Promise<RealtimeSessionSnapshot> {
-  if (!hasTauriRuntime()) return createMockSnapshot(connectionId);
+  if (!hasTauriRuntime()) {
+    const existing = mockSessions.get(connectionId);
+    return cloneSnapshot(existing?.snapshot ?? createMockSnapshot(connectionId));
+  }
   return invoke<RealtimeSessionSnapshot>("get_realtime_session_snapshot", { connectionId });
 }
 
 export async function clearRealtimeTranscript(connectionId: string): Promise<void> {
-  if (!hasTauriRuntime()) return;
+  if (!hasTauriRuntime()) {
+    const session = mockSessions.get(connectionId);
+    if (session) {
+      session.snapshot.transcript = [];
+      session.snapshot.transcriptSizeBytes = 0;
+    }
+    return;
+  }
   await invoke("clear_realtime_transcript", { connectionId });
 }
 
