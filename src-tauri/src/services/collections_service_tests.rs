@@ -34,9 +34,6 @@ async fn setup_test_db() -> SqlitePool {
           description TEXT NOT NULL DEFAULT '',
           prerequest_script TEXT NOT NULL DEFAULT '',
           test_script TEXT NOT NULL DEFAULT '',
-          request_type TEXT NOT NULL DEFAULT 'http'
-            CHECK (request_type IN ('http', 'websocket', 'socketio')),
-          realtime_request_json TEXT NULL,
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL
         )
@@ -57,6 +54,9 @@ async fn setup_test_db() -> SqlitePool {
           auth_json TEXT NOT NULL DEFAULT '{}',
           prerequest_script TEXT NOT NULL DEFAULT '',
           test_script TEXT NOT NULL DEFAULT '',
+          request_type TEXT NOT NULL DEFAULT 'http'
+            CHECK (request_type IN ('http', 'websocket', 'socketio')),
+          realtime_request_json TEXT NULL,
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL,
           FOREIGN KEY (collection_id) REFERENCES collections(id) ON DELETE CASCADE,
