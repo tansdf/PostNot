@@ -27,6 +27,12 @@
       <nav class="sidebar-nav" aria-label="Primary">
         <a class={["sidebar-link", page.url.pathname === "/" && "sidebar-link-active"]} href={resolve("/")}>Requests</a>
         <a
+          class={["sidebar-link", page.url.pathname.startsWith("/websockets") && "sidebar-link-active"]}
+          href={resolve("/websockets")}
+        >
+          WebSockets
+        </a>
+        <a
           class={["sidebar-link", page.url.pathname.startsWith("/collections") && "sidebar-link-active"]}
           href={resolve("/collections")}
         >

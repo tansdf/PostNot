@@ -67,7 +67,7 @@
       preRequestScript: string,
       testScript: string
     ) => Promise<boolean> | boolean;
-    onOpenSavedRequest?: (itemId: string) => Promise<void> | void;
+    onOpenSavedRequest?: (item: CollectionItemSummary) => Promise<void> | void;
     onMoveCollectionItem?: (item: CollectionItemSummary) => Promise<void> | void;
     onDeleteCollectionItem?: (item: CollectionItemSummary) => Promise<void> | void;
   } = $props();
@@ -112,12 +112,12 @@
     });
   }
 
-  function handleOpenSavedRequestClick(itemId: string) {
+  function handleOpenSavedRequestClick(item: CollectionItemSummary) {
     if (collectionDnd.shouldSuppressClick()) {
       return;
     }
 
-    return onOpenSavedRequest(itemId);
+    return onOpenSavedRequest(item);
   }
 
 </script>
@@ -258,14 +258,22 @@
                     {#if item.name}
                       {item.name}
                     {:else}
-                      <span class={`method-badge method-${item.method?.toLowerCase() ?? "get"}`}>{item.method ?? "GET"}</span>
+                      {#if item.requestType === "websocket" || item.requestType === "socketio"}
+                        <span class="protocol-badge">{item.requestType === "socketio" ? "S.IO" : "WS"}</span>
+                      {:else}
+                        <span class={`method-badge method-${item.method?.toLowerCase() ?? "get"}`}>{item.method ?? "GET"}</span>
+                      {/if}
                       <span class="collection-request-url-inline">{item.url ?? ""}</span>
                     {/if}
                   </strong>
 
                   {#if item.name}
                     <div class="collection-request-subline">
-                      <span class={`method-badge method-${item.method?.toLowerCase() ?? "get"}`}>{item.method ?? "GET"}</span>
+                      {#if item.requestType === "websocket" || item.requestType === "socketio"}
+                        <span class="protocol-badge">{item.requestType === "socketio" ? "S.IO" : "WS"}</span>
+                      {:else}
+                        <span class={`method-badge method-${item.method?.toLowerCase() ?? "get"}`}>{item.method ?? "GET"}</span>
+                      {/if}
                       <span class="collection-request-url-line">{item.url ?? ""}</span>
                     </div>
                   {/if}
@@ -280,8 +288,8 @@
                     Add subfolder
                   </button>
                 {:else}
-                  <button class="tab-button button-compact" type="button" onclick={() => handleOpenSavedRequestClick(item.id)}>
-                    Open in Requests
+                  <button class="tab-button button-compact" type="button" onclick={() => handleOpenSavedRequestClick(item)}>
+                    Open in {item.requestType === "websocket" || item.requestType === "socketio" ? "WebSockets" : "Requests"}
                   </button>
                 {/if}
 

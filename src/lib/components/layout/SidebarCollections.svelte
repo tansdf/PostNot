@@ -323,13 +323,20 @@
     await persistSidebarState();
   }
 
-  async function openSavedRequest(collectionId: string, itemId: string) {
+  async function openSavedRequest(
+    collectionId: string,
+    itemId: string,
+    requestType: CollectionItemSummary["requestType"] = "http"
+  ) {
     if (collectionDnd.shouldSuppressClick()) {
       return;
     }
 
     await collections.selectCollection(collectionId);
-    await goto(resolve(`/?savedRequestId=${encodeURIComponent(itemId)}`));
+    const target = requestType === "websocket" || requestType === "socketio"
+      ? resolve(`/websockets?savedRequestId=${encodeURIComponent(itemId)}`)
+      : resolve(`/?savedRequestId=${encodeURIComponent(itemId)}`);
+    await goto(target);
   }
 
   function revealSearchResultPath(result: {
@@ -395,7 +402,7 @@
     });
 
     if (result.kind === "request") {
-      await openSavedRequest(result.collectionId, result.id);
+      await openSavedRequest(result.collectionId, result.id, result.requestType);
       await clearSearchAndScrollSidebarToResult(result);
       return;
     }
@@ -697,9 +704,11 @@
                 <div class="sidebar-search-copy">
                   <strong class="sidebar-search-title">
                     {#if result.kind === "request" && !result.name}
-                      <span class={`method-badge method-${result.method?.toLowerCase() ?? "get"}`}>
-                        {result.method ?? "GET"}
-                      </span>
+                      {#if result.requestType === "websocket" || result.requestType === "socketio"}
+                        <span class="protocol-badge">{result.requestType === "socketio" ? "S.IO" : "WS"}</span>
+                      {:else}
+                        <span class={`method-badge method-${result.method?.toLowerCase() ?? "get"}`}>{result.method ?? "GET"}</span>
+                      {/if}
                       <span class="sidebar-search-title-text">
                         {#each buildHighlightSegments(result.url ?? "", collectionSearch.query) as segment}
                           {#if segment.matched}
@@ -722,9 +731,11 @@
 
                   {#if result.kind === "request" && result.name}
                     <span class="sidebar-search-request-meta">
-                      <span class={`method-badge method-${result.method?.toLowerCase() ?? "get"}`}>
-                        {result.method ?? "GET"}
-                      </span>
+                      {#if result.requestType === "websocket" || result.requestType === "socketio"}
+                        <span class="protocol-badge">{result.requestType === "socketio" ? "S.IO" : "WS"}</span>
+                      {:else}
+                        <span class={`method-badge method-${result.method?.toLowerCase() ?? "get"}`}>{result.method ?? "GET"}</span>
+                      {/if}
                       <span class="sidebar-search-url-text">
                         {#each buildHighlightSegments(result.url ?? "", collectionSearch.query) as segment}
                           {#if segment.matched}
@@ -879,7 +890,7 @@
                               collectionDnd.matchesDropIndicator(collection.id, item.id, "after") && "sidebar-drop-target-after"
                             ]}
                             type="button"
-                            onclick={() => openSavedRequest(collection.id, item.id)}
+                            onclick={() => openSavedRequest(collection.id, item.id, item.requestType)}
                             onkeydown={handleTreeKeydown}
                             aria-current={page.url.searchParams.get("savedRequestId") === item.id ? "page" : undefined}
                             data-sidebar-tree-row="true"
@@ -895,11 +906,19 @@
                               {#if item.name}
                                 {item.name}
                               {:else}
-                                <span class={`method-badge method-${item.method?.toLowerCase() ?? "get"}`}>{item.method ?? "GET"}</span> {item.url ?? ""}
+                                {#if item.requestType === "websocket" || item.requestType === "socketio"}
+                                  <span class="protocol-badge">{item.requestType === "socketio" ? "S.IO" : "WS"}</span> {item.url ?? ""}
+                                {:else}
+                                  <span class={`method-badge method-${item.method?.toLowerCase() ?? "get"}`}>{item.method ?? "GET"}</span> {item.url ?? ""}
+                                {/if}
                               {/if}
                             </strong>
                             <span class="sidebar-request-url">
-                              <span class={`method-badge method-${item.method?.toLowerCase() ?? "get"}`}>{item.method ?? "GET"}</span>
+                              {#if item.requestType === "websocket" || item.requestType === "socketio"}
+                                <span class="protocol-badge">{item.requestType === "socketio" ? "S.IO" : "WS"}</span>
+                              {:else}
+                                <span class={`method-badge method-${item.method?.toLowerCase() ?? "get"}`}>{item.method ?? "GET"}</span>
+                              {/if}
                               {item.url ?? ""}
                             </span>
                           </button>

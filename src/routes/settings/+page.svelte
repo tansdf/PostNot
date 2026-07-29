@@ -308,6 +308,63 @@
                 <span>Validate TLS certificates</span>
               </label>
             </section>
+
+            <section class="settings-section-card">
+              <div class="settings-section-heading">
+                <div>
+                  <h2>WebSockets</h2>
+                  <p class="settings-section-lede">Connection limits and in-memory transcript bounds for WebSocket and Socket.IO sessions.</p>
+                </div>
+              </div>
+
+              <div class="settings-field-grid">
+                <label>
+                  <span class="field-label">Connect timeout (seconds)</span>
+                  <input
+                    class="text-input"
+                    type="number"
+                    min="1"
+                    max="120"
+                    step="1"
+                    value={settings.realtimeConnectTimeoutMs / 1000}
+                    oninput={(event) => (settings = { ...settings, realtimeConnectTimeoutMs: Math.max(1, event.currentTarget.valueAsNumber || 30) * 1000 })}
+                  />
+                </label>
+                <label>
+                  <span class="field-label">Maximum live sessions</span>
+                  <input class="text-input" type="number" min="1" max="100" step="1" bind:value={settings.realtimeMaxConcurrentSessions} />
+                </label>
+                <label>
+                  <span class="field-label">Maximum message (MiB)</span>
+                  <input
+                    class="text-input"
+                    type="number"
+                    min="0.0625"
+                    max="256"
+                    step="1"
+                    value={settings.realtimeMaxMessageBytes / (1024 * 1024)}
+                    oninput={(event) => (settings = { ...settings, realtimeMaxMessageBytes: Math.round(Math.max(0.0625, event.currentTarget.valueAsNumber || 64) * 1024 * 1024) })}
+                  />
+                </label>
+                <label>
+                  <span class="field-label">Transcript entries per session</span>
+                  <input class="text-input" type="number" min="1" max="10000" step="1" bind:value={settings.realtimeTranscriptMaxEntries} />
+                </label>
+                <label>
+                  <span class="field-label">Transcript retained data per session (MiB)</span>
+                  <input
+                    class="text-input"
+                    type="number"
+                    min="0.0625"
+                    max="512"
+                    step="1"
+                    value={settings.realtimeTranscriptMaxBytes / (1024 * 1024)}
+                    oninput={(event) => (settings = { ...settings, realtimeTranscriptMaxBytes: Math.round(Math.max(0.0625, event.currentTarget.valueAsNumber || 64) * 1024 * 1024) })}
+                  />
+                </label>
+              </div>
+              <p class="field-help">Transcripts remain in memory only and are never restored after restart.</p>
+            </section>
           </div>
 
           <div class="settings-column">

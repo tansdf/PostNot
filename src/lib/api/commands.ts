@@ -1192,14 +1192,20 @@ export async function deleteCollectionItem(itemId: string): Promise<void> {
   await invoke("delete_collection_item", { itemId });
 }
 
-export async function exportCollection(collectionId: string): Promise<ExportResult | null> {
+export async function exportCollection(
+  collectionId: string,
+  format: "postman" | "postnot" = "postman"
+): Promise<ExportResult | null> {
   if (!hasTauriRuntime()) {
     return {
-      filePath: `/tmp/${collectionId}.postman_collection.json`
+      filePath: `/tmp/${collectionId}.${format === "postnot" ? "postnot_collection" : "postman_collection"}.json`,
+      format,
+      warnings: [],
+      omittedRealtimeRequestCount: 0
     };
   }
 
-  return invoke<ExportResult | null>("export_collection", { collectionId });
+  return invoke<ExportResult | null>("export_collection", { collectionId, format });
 }
 
 export async function listPlaybooks(): Promise<PlaybookSummary[]> {
