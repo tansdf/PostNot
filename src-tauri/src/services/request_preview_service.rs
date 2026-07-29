@@ -728,6 +728,11 @@ mod tests {
             is_history_collapsed: false,
             environment_autosave: true,
             notification_timeout_ms: 4_000,
+            realtime_connect_timeout_ms: 30_000,
+            realtime_max_concurrent_sessions: 20,
+            realtime_max_message_bytes: 64 * 1024 * 1024,
+            realtime_transcript_max_entries: 2_000,
+            realtime_transcript_max_bytes: 64 * 1024 * 1024,
             last_update_checked_at: None,
         }
     }
