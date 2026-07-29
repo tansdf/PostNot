@@ -3,7 +3,6 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import { hasTauriRuntime } from "$lib/api/commands";
 import type {
   ExportResult,
-  RealtimeConnectResult,
   RealtimeRequestDraft,
   RealtimeRuntimeEvent,
   RealtimeSessionSnapshot,
@@ -138,10 +137,27 @@ export async function getSavedRealtimeRequest(itemId: string): Promise<SavedReal
   return invoke<SavedRealtimeRequestDetail>("get_saved_realtime_request", { itemId });
 }
 
+export async function listSavedRealtimeRequests(collectionId: string): Promise<SavedRealtimeRequestSummary[]> {
+  if (!hasTauriRuntime()) {
+    return [...mockSavedRequests.values()]
+      .filter((item) => item.collectionId === collectionId)
+      .map(({ request: _, ...summary }) => structuredClone(summary));
+  }
+  return invoke<SavedRealtimeRequestSummary[]>("list_saved_realtime_requests", { collectionId });
+}
+
+export async function deleteSavedRealtimeRequest(itemId: string): Promise<void> {
+  if (!hasTauriRuntime()) {
+    mockSavedRequests.delete(itemId);
+    return;
+  }
+  await invoke("delete_saved_realtime_request", { itemId });
+}
+
 export async function connectRealtimeConnection(
   input: RealtimeConnectInput,
   onEvent: (event: RealtimeRuntimeEvent) => void
-): Promise<{ result: RealtimeConnectResult | RealtimeSessionSnapshot; subscription: RealtimeEventSubscription }> {
+): Promise<{ result: RealtimeSessionSnapshot; subscription: RealtimeEventSubscription }> {
   if (!hasTauriRuntime()) {
     const snapshot = createMockSnapshot(input.connectionId);
     return { result: snapshot, subscription: { close: () => {} } };

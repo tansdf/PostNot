@@ -133,6 +133,11 @@ export type AppSettings = {
   isHistoryCollapsed: boolean;
   environmentAutosave: boolean;
   notificationTimeoutMs: number;
+  realtimeConnectTimeoutMs: number;
+  realtimeMaxConcurrentSessions: number;
+  realtimeMaxMessageBytes: number;
+  realtimeTranscriptMaxEntries: number;
+  realtimeTranscriptMaxBytes: number;
   lastUpdateCheckedAt: string | null;
 };
 
@@ -252,7 +257,7 @@ export type CollectionSearchResult = {
   requestCount?: number | null;
 };
 
-export type ImportFormat = "postman" | "curl" | "openapi";
+export type ImportFormat = "postman" | "curl" | "openapi" | "postnot";
 
 export type ImportRequestInput = {
   format: ImportFormat;
@@ -668,6 +673,9 @@ export type ImportEnvironmentResult = {
 
 export type ExportResult = {
   filePath: string;
+  format?: "postman" | "postnot";
+  warnings?: string[];
+  omittedRealtimeRequestCount?: number;
 };
 
 export type ScriptTestResult = {
@@ -861,6 +869,11 @@ export function createDefaultSettings(): AppSettings {
     isHistoryCollapsed: false,
     environmentAutosave: true,
     notificationTimeoutMs: 5_000,
+    realtimeConnectTimeoutMs: 30_000,
+    realtimeMaxConcurrentSessions: 20,
+    realtimeMaxMessageBytes: 64 * 1024 * 1024,
+    realtimeTranscriptMaxEntries: 2_000,
+    realtimeTranscriptMaxBytes: 64 * 1024 * 1024,
     lastUpdateCheckedAt: null
   };
 }

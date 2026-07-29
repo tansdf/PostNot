@@ -33,6 +33,7 @@ import {
   trimRealtimeTranscript
 } from "$lib/realtime-workspace";
 import { readCachedJson, UI_CACHE_KEYS, writeCachedJson } from "$lib/ui-cache";
+import { notifications } from "$lib/stores/notifications.svelte";
 
 const PERSIST_DEBOUNCE_MS = 300;
 
@@ -51,6 +52,7 @@ class RealtimeWorkspaceStore {
   activeTabId = $state(INITIAL_STATE.activeTabId);
   persistTimer: ReturnType<typeof setTimeout> | null = null;
   private subscriptions = new Map<string, RealtimeEventSubscription>();
+  private notifiedFailures = new Set<string>();
 
   get activeTab() {
     return this.tabs.find((tab) => tab.id === this.activeTabId) ?? null;
@@ -164,6 +166,40 @@ class RealtimeWorkspaceStore {
     void this.persistNow();
   }
 
+  markLiveTabsReconnectRequired() {
+    this.tabs = this.tabs.map((tab) =>
+      tab.status === "connected" || tab.status === "reconnecting"
+        ? { ...tab, reconnectRequired: true }
+        : tab
+    );
+  }
+
+  unlinkSavedRequests(savedRequestIds: string[]) {
+    const ids = new Set(savedRequestIds);
+    if (!ids.size) return;
+    this.tabs = this.tabs.map((tab) =>
+      tab.savedRequestId && ids.has(tab.savedRequestId)
+        ? {
+            ...tab,
+            source: "blank",
+            savedRequestId: null,
+            collectionId: null,
+            parentId: null,
+            sourceUpdatedAt: null,
+            externallyChanged: false,
+            baselineDraft: null
+          }
+        : tab
+    );
+    void this.persistNow();
+  }
+
+  unlinkSavedRequestsForCollection(collectionId: string) {
+    this.unlinkSavedRequests(
+      this.tabs.filter((tab) => tab.collectionId === collectionId && tab.savedRequestId).map((tab) => tab.savedRequestId!)
+    );
+  }
+
   setError(tabId: string, errorText: string) {
     this.updateTab(tabId, (tab) => {
       tab.errorText = errorText;
@@ -274,20 +310,45 @@ class RealtimeWorkspaceStore {
         item.statusMessage = event.message || statusLabel(event.status);
         if (event.status === "connected") item.reconnectRequired = false;
       } else if (event.type === "transcript-reset") {
-        const trimmed = trimRealtimeTranscript(event.entries);
+        const trimmed = trimRealtimeTranscript(event.entries, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER);
         item.transcript = trimmed.entries;
         item.transcriptSizeBytes = trimmed.sizeBytes;
       } else {
-        const trimmed = trimRealtimeTranscript([...item.transcript, event.entry]);
+        const trimmed = trimRealtimeTranscript(
+          [...item.transcript, event.entry],
+          Number.MAX_SAFE_INTEGER,
+          Number.MAX_SAFE_INTEGER
+        );
         item.transcript = trimmed.entries;
         item.transcriptSizeBytes = trimmed.sizeBytes;
       }
     });
+    if (event.type === "status" && event.status === "failed") {
+      const failureKey = `${event.connectionId}:${event.generation}`;
+      const isBackground =
+        this.activeTabId !== event.connectionId ||
+        (typeof window !== "undefined" && !window.location.pathname.startsWith("/websockets"));
+      if (isBackground && !this.notifiedFailures.has(failureKey)) {
+        this.notifiedFailures.add(failureKey);
+        const name = this.tabs.find((item) => item.id === event.connectionId)?.draft.name || "Realtime connection";
+        notifications.error(event.message || "The connection failed.", name, {
+          action: {
+            label: "Open connection",
+            kind: "navigate",
+            href: `/websockets?tabId=${encodeURIComponent(event.connectionId)}`
+          }
+        });
+      }
+    }
   }
 
   private applySnapshot(tabId: string, snapshot: RealtimeSessionSnapshot) {
     this.updateTab(tabId, (tab) => {
-      const trimmed = trimRealtimeTranscript(snapshot.transcript);
+      const trimmed = trimRealtimeTranscript(
+        snapshot.transcript,
+        Number.MAX_SAFE_INTEGER,
+        Number.MAX_SAFE_INTEGER
+      );
       tab.generation = snapshot.generation;
       tab.lastSequence = snapshot.lastSequence;
       tab.status = snapshot.status;

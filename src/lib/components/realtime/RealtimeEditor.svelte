@@ -67,7 +67,8 @@
     { id: "reconnect", label: "Reconnect" }
   ] as const;
 
-  let isConnected = $derived(status === "connected" || status === "reconnecting");
+  let isConnected = $derived(status === "connected");
+  let hasLiveSession = $derived(status === "connected" || status === "reconnecting");
   let isBusy = $derived(status === "connecting" || status === "disconnecting");
   let structuredJsonValid = $derived(!authPayloadError && !argumentsError);
   type WebSocketDraft = Extract<RealtimeRequestDraft, { requestType: "websocket" }>;
@@ -213,6 +214,8 @@
       }
     } else if (!draft.composer.event.trim()) {
       composerError = "Enter a Socket.IO event name.";
+    } else if (draft.composer.binary && !binaryValue(draft.composer.binary).trim()) {
+      composerError = "Choose a file or enter binary data before sending.";
     }
     return !composerError && !protocolJsonError;
   }
@@ -272,7 +275,7 @@
       />
     </label>
     <div class="realtime-connect-actions">
-      {#if isConnected}
+      {#if hasLiveSession}
         <button class="button-danger button-large" type="button" onclick={onDisconnect} disabled={isBusy}>Disconnect</button>
       {:else}
         <button class="button-primary button-large" type="button" onclick={onConnect} disabled={isBusy || !draft.url.trim() || !structuredJsonValid}>

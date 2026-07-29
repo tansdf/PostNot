@@ -34,6 +34,7 @@
           onclick={() => onActivate(tab.id)}
         >
           <span class={["realtime-status-dot", `realtime-status-${tab.status}`]} aria-hidden="true"></span>
+          <span class="sr-only">{tab.statusMessage}.</span>
           <span class="request-tab-chip-label">{label(tab)}</span>
           <span class="protocol-badge">{tab.draft.requestType === "socketio" ? "S.IO" : "WS"}</span>
           {#if onIsDirty(tab)}
