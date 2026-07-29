@@ -133,7 +133,7 @@ test("settings expose bounded realtime controls and persist the selected present
   await expect(page.getByLabel("Maximum message (MiB)")).toHaveValue("64");
   await expect(page.getByLabel("Transcript entries per session")).toHaveValue("2000");
   await expect(page.getByLabel("Transcript retained data per session (MiB)")).toHaveValue("64");
-  await expect(page.getByText("Transcripts remain in memory only and are never restored after restart.")).toBeVisible();
+  await expect(page.getByText("Transcripts are session-only and never restored; large payloads use temporary files cleared on release or startup.")).toBeVisible();
   await expectNoSeriousAccessibilityViolations(page);
   await page.getByRole("heading", { name: "WebSockets" }).scrollIntoViewIfNeeded();
   await capture(page, testInfo, "realtime-settings-light");

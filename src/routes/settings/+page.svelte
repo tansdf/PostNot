@@ -363,7 +363,7 @@
                   />
                 </label>
               </div>
-              <p class="field-help">Transcripts remain in memory only and are never restored after restart.</p>
+              <p class="field-help">Transcripts are session-only and never restored; large payloads use temporary files cleared on release or startup.</p>
             </section>
           </div>
 
