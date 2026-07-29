@@ -1,7 +1,8 @@
 use sqlx::{Row, SqlitePool};
 
 use super::{
-    create_collection, create_collection_folder, delete_collection, ensure_starter_collection,
+    create_collection, create_collection_folder, delete_collection,
+    delete_saved_realtime_request_with_revision, ensure_starter_collection,
     get_saved_realtime_request, get_saved_request, list_collections, list_saved_realtime_requests,
     list_saved_requests, move_collection_item, save_realtime_request, save_request,
     search_collection_entities, update_saved_realtime_request_with_revision,
@@ -254,6 +255,37 @@ async fn protocol_specific_lists_and_getters_do_not_cross_protocols() {
         .await
         .expect("search realtime request");
     assert_eq!(search[0].request_type.as_deref(), Some("websocket"));
+}
+
+#[tokio::test]
+async fn realtime_delete_requires_the_current_revision() {
+    let pool = setup_test_db().await;
+    let collection = create_collection(&pool, &collection_input("Realtime"))
+        .await
+        .expect("create collection");
+    let created = save_realtime_request(
+        &pool,
+        &collection.id,
+        None,
+        &websocket_request("Events", "wss://example.test/events"),
+    )
+    .await
+    .expect("save realtime request");
+
+    let stale = delete_saved_realtime_request_with_revision(&pool, &created.id, "stale-revision")
+        .await
+        .expect_err("stale delete must conflict");
+    assert!(matches!(stale, crate::error::AppError::Conflict { .. }));
+    get_saved_realtime_request(&pool, &created.id)
+        .await
+        .expect("stale delete preserves request");
+
+    delete_saved_realtime_request_with_revision(&pool, &created.id, &created.updated_at)
+        .await
+        .expect("delete current revision");
+    assert!(get_saved_realtime_request(&pool, &created.id)
+        .await
+        .is_err());
 }
 
 fn collection_input(name: &str) -> CreateCollectionInput {

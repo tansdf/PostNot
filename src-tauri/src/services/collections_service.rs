@@ -1184,6 +1184,51 @@ pub async fn delete_saved_realtime_request(pool: &SqlitePool, item_id: &str) -> 
     delete_collection_item(pool, item_id).await
 }
 
+pub async fn delete_saved_realtime_request_with_revision(
+    pool: &SqlitePool,
+    item_id: &str,
+    expected_updated_at: &str,
+) -> AppResult<()> {
+    let mut transaction = pool.begin_with("BEGIN IMMEDIATE").await?;
+    let row = sqlx::query(
+        r#"
+        SELECT collection_id, updated_at
+        FROM collection_items
+        WHERE id = ?1
+          AND kind = 'request'
+          AND request_type IN ('websocket', 'socketio')
+        "#,
+    )
+    .bind(item_id)
+    .fetch_optional(&mut *transaction)
+    .await?
+    .ok_or_else(|| AppError::Message("Saved realtime request not found.".to_string()))?;
+
+    let collection_id: String = row.get("collection_id");
+    let current_updated_at: String = row.get("updated_at");
+    if current_updated_at != expected_updated_at {
+        return Err(AppError::Conflict { current_updated_at });
+    }
+
+    sqlx::query(
+        r#"
+        DELETE FROM collection_items
+        WHERE id = ?1
+          AND kind = 'request'
+          AND request_type IN ('websocket', 'socketio')
+          AND updated_at = ?2
+        "#,
+    )
+    .bind(item_id)
+    .bind(expected_updated_at)
+    .execute(&mut *transaction)
+    .await?;
+    let now = now_iso();
+    touch_collection_in_transaction(&mut transaction, &collection_id, &now).await?;
+    transaction.commit().await?;
+    Ok(())
+}
+
 pub async fn get_collection(
     pool: &SqlitePool,
     collection_id: &str,

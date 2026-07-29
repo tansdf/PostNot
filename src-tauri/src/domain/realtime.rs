@@ -1,10 +1,11 @@
+use rmcp::schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::domain::requests::{KeyValueRow, RequestAuth};
 
 pub const REALTIME_REQUEST_SCHEMA_VERSION: u32 = 1;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum RequestType {
     Http,
@@ -22,7 +23,7 @@ impl RequestType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ReconnectPolicy {
     #[serde(default)]
@@ -46,7 +47,7 @@ impl Default for ReconnectPolicy {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RealtimeRequestCommon {
     pub name: String,
@@ -61,7 +62,7 @@ pub struct RealtimeRequestCommon {
     pub reconnect: ReconnectPolicy,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum RawMessageMode {
     Text,
@@ -69,7 +70,7 @@ pub enum RawMessageMode {
     Binary,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "source", rename_all = "lowercase")]
 pub enum BinaryPayloadSource {
     File { path: String },
@@ -77,7 +78,7 @@ pub enum BinaryPayloadSource {
     Base64 { value: String },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RawWebSocketComposer {
     #[serde(default = "default_raw_message_mode")]
@@ -97,14 +98,14 @@ impl Default for RawWebSocketComposer {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum SocketIoTransport {
     Auto,
     WebsocketOnly,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SocketIoComposer {
     #[serde(default)]
@@ -130,7 +131,7 @@ impl Default for SocketIoComposer {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "requestType", rename_all = "lowercase")]
 pub enum RealtimeRequestDraft {
     Websocket {
@@ -172,7 +173,7 @@ impl RealtimeRequestDraft {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct VersionedRealtimeRequest {
     pub version: u32,
@@ -250,13 +251,12 @@ mod tests {
             composer: RawWebSocketComposer::default(),
         };
 
-        let json =
-            serde_json::to_value(VersionedRealtimeRequest::new(request.clone())).expect("serialize");
+        let json = serde_json::to_value(VersionedRealtimeRequest::new(request.clone()))
+            .expect("serialize");
         assert_eq!(json["version"], REALTIME_REQUEST_SCHEMA_VERSION);
         assert_eq!(json["requestType"], "websocket");
 
-        let restored: VersionedRealtimeRequest =
-            serde_json::from_value(json).expect("deserialize");
+        let restored: VersionedRealtimeRequest = serde_json::from_value(json).expect("deserialize");
         assert_eq!(
             serde_json::to_value(restored.request).expect("serialize restored"),
             serde_json::to_value(request).expect("serialize original")
