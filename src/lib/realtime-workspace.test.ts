@@ -125,4 +125,12 @@ describe("realtime transcript bounds", () => {
     expect(result.sizeBytes).toBe(0);
     expect(result.trimmedCount).toBe(1);
   });
+
+  it("honors caller-provided limits above the defaults", () => {
+    const entries = Array.from({ length: 2_001 }, (_, index) => transcriptEntry(index + 1, 1));
+    const result = trimRealtimeTranscript(entries, 10_000, 512 * 1024 * 1024);
+
+    expect(result.entries).toHaveLength(2_001);
+    expect(result.trimmedCount).toBe(0);
+  });
 });

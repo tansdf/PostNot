@@ -221,7 +221,7 @@ class RealtimeWorkspaceStore {
         (event) => this.applyRuntimeEvent(event)
       );
       this.subscriptions.set(tabId, subscription);
-      this.applySnapshot(tabId, result as RealtimeSessionSnapshot);
+      this.applySnapshot(tabId, result);
     } catch (error) {
       this.updateTab(tabId, (item) => {
         item.status = "failed";
