@@ -98,9 +98,10 @@ impl Default for RawWebSocketComposer {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum SocketIoTransport {
+    #[default]
     Auto,
     WebsocketOnly,
 }
@@ -187,12 +188,6 @@ impl VersionedRealtimeRequest {
             version: REALTIME_REQUEST_SCHEMA_VERSION,
             request,
         }
-    }
-}
-
-impl Default for SocketIoTransport {
-    fn default() -> Self {
-        Self::Auto
     }
 }
 
