@@ -9,7 +9,7 @@ use crate::{
             MoveCollectionItemInput, SavedRealtimeRequestDetail, SavedRealtimeRequestSummary,
             SavedRequestDetail, SavedRequestSummary, UpdateCollectionFolderInput,
         },
-        exports::ExportResult,
+        exports::CollectionExportResult,
         realtime::RealtimeRequestDraft,
         requests::SendRequestPayload,
     },
@@ -217,6 +217,12 @@ pub async fn delete_saved_realtime_request(
 pub async fn export_collection(
     state: State<'_, AppState>,
     collection_id: String,
-) -> AppResult<Option<ExportResult>> {
-    exports_service::export_collection(state.db(), &collection_id).await
+    format: Option<String>,
+) -> AppResult<Option<CollectionExportResult>> {
+    exports_service::export_collection_with_format(
+        state.db(),
+        &collection_id,
+        format.as_deref().unwrap_or("postman"),
+    )
+    .await
 }

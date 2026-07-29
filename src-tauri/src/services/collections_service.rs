@@ -38,6 +38,13 @@ pub struct ImportCollectionRequest {
     pub request: SendRequestPayload,
 }
 
+#[derive(Debug, Clone)]
+pub struct ImportCollectionRealtimeRequest {
+    pub parent_id: Option<String>,
+    pub sort_order: i64,
+    pub request: RealtimeRequestDraft,
+}
+
 const STARTER_COLLECTION_SEEDED_KEY: &str = "starter_collection_seeded";
 const STARTER_COLLECTION_NAME: &str = "My Collection";
 const STARTER_COLLECTION_DESCRIPTION: &str = "Default workspace for saved requests.";
@@ -368,6 +375,133 @@ pub async fn import_collection_atomic(
         .bind(serde_json::to_string(&request.auth)?)
         .bind(&request.pre_request_script)
         .bind(&request.test_script)
+        .bind(&now)
+        .bind(&now)
+        .execute(&mut *transaction)
+        .await?;
+    }
+
+    transaction.commit().await?;
+    get_collection(pool, &collection_id).await
+}
+
+pub async fn import_mixed_collection_atomic(
+    pool: &SqlitePool,
+    input: &CreateCollectionInput,
+    folders: &[ImportCollectionFolder],
+    requests: &[ImportCollectionRequest],
+    realtime_requests: &[ImportCollectionRealtimeRequest],
+) -> AppResult<CollectionSummary> {
+    let name = input.name.trim();
+    if name.is_empty() {
+        return Err(AppError::Message(
+            "Collection name is required.".to_string(),
+        ));
+    }
+
+    let mut transaction = pool.begin().await?;
+    let collection_id = Uuid::new_v4().to_string();
+    let now = now_iso();
+    sqlx::query(
+        r#"
+        INSERT INTO collections (
+          id, name, description, prerequest_script, test_script, created_at, updated_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+        "#,
+    )
+    .bind(&collection_id)
+    .bind(name)
+    .bind(input.description.trim())
+    .bind(&input.pre_request_script)
+    .bind(&input.test_script)
+    .bind(&now)
+    .bind(&now)
+    .execute(&mut *transaction)
+    .await?;
+
+    for folder in folders {
+        sqlx::query(
+            r#"
+            INSERT INTO collection_items (
+              id, collection_id, parent_id, kind, name, sort_order, method, url,
+              query_params_json, headers_json, body_json, auth_json,
+              prerequest_script, test_script, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, 'folder', ?4, ?5, NULL, NULL, '[]', '[]', '{}', '{}', ?6, ?7, ?8, ?9)
+            "#,
+        )
+        .bind(&folder.id)
+        .bind(&collection_id)
+        .bind(folder.parent_id.as_deref())
+        .bind(folder.name.trim())
+        .bind(folder.sort_order)
+        .bind(&folder.pre_request_script)
+        .bind(&folder.test_script)
+        .bind(&now)
+        .bind(&now)
+        .execute(&mut *transaction)
+        .await?;
+    }
+
+    for imported_request in requests {
+        let request = &imported_request.request;
+        let item_id = Uuid::new_v4().to_string();
+        let item_name = saved_request_name(request);
+        sqlx::query(
+            r#"
+            INSERT INTO collection_items (
+              id, collection_id, parent_id, kind, name, sort_order, method, url,
+              query_params_json, headers_json, body_json, auth_json,
+              prerequest_script, test_script, request_type, realtime_request_json,
+              created_at, updated_at
+            ) VALUES (?1, ?2, ?3, 'request', ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, 'http', NULL, ?14, ?15)
+            "#,
+        )
+        .bind(&item_id)
+        .bind(&collection_id)
+        .bind(imported_request.parent_id.as_deref())
+        .bind(&item_name)
+        .bind(imported_request.sort_order)
+        .bind(&request.method)
+        .bind(&request.url)
+        .bind(serde_json::to_string(&request.query_params)?)
+        .bind(serde_json::to_string(&request.headers)?)
+        .bind(serde_json::to_string(&request.body)?)
+        .bind(serde_json::to_string(&request.auth)?)
+        .bind(&request.pre_request_script)
+        .bind(&request.test_script)
+        .bind(&now)
+        .bind(&now)
+        .execute(&mut *transaction)
+        .await?;
+    }
+
+    for imported_request in realtime_requests {
+        validate_realtime_request(&imported_request.request)?;
+        let request = &imported_request.request;
+        let item_id = Uuid::new_v4().to_string();
+        let item_name = saved_realtime_request_name(request);
+        let versioned_request = VersionedRealtimeRequest::new(request.clone());
+        sqlx::query(
+            r#"
+            INSERT INTO collection_items (
+              id, collection_id, parent_id, kind, name, sort_order, method, url,
+              query_params_json, headers_json, body_json, auth_json,
+              prerequest_script, test_script, request_type, realtime_request_json,
+              created_at, updated_at
+            ) VALUES (
+              ?1, ?2, ?3, 'request', ?4, ?5, NULL, ?6,
+              '[]', '[]', '{}', '{}', '', '', ?7, ?8, ?9, ?10
+            )
+            "#,
+        )
+        .bind(&item_id)
+        .bind(&collection_id)
+        .bind(imported_request.parent_id.as_deref())
+        .bind(&item_name)
+        .bind(imported_request.sort_order)
+        .bind(&request.common().url)
+        .bind(request.request_type().as_str())
+        .bind(serde_json::to_string(&versioned_request)?)
         .bind(&now)
         .bind(&now)
         .execute(&mut *transaction)

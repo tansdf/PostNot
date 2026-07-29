@@ -5,6 +5,7 @@ pub mod exports;
 pub mod history;
 pub mod imports;
 pub mod playbooks;
+pub mod portability;
 pub mod realtime;
 pub mod requests;
 pub mod settings;
