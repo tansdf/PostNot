@@ -56,6 +56,8 @@ export const UI_CACHE_KEYS = {
   environmentsActiveDetail: "postnot.environments.activeDetailMeta",
   workspaceTabs: "postnot.workspace.tabs",
   workspaceActiveTabId: "postnot.workspace.activeTabId",
+  realtimeWorkspaceTabs: "postnot.realtimeWorkspace.tabs",
+  realtimeWorkspaceActiveTabId: "postnot.realtimeWorkspace.activeTabId",
   collectionsList: "postnot.collections.list",
   collectionsSelectedId: "postnot.collections.selectedId",
   collectionsItemsByCollection: "postnot.collections.itemsByCollection",
