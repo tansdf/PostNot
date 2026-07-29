@@ -12,7 +12,7 @@ PostNot is a local-first desktop API client built with:
 - TypeScript
 - SQLite
 
-The app already supports request execution, resolved request preview before send, full response body reads, history, collections with nested folders and drag-and-drop request/folder moves, sidebar collection search, playbooks for sequential saved-request execution, environments, secret environment storage, import/export flows including OpenAPI 3 import, broader cURL flag coverage, redacted-by-default single-request cURL/JSON export with optional non-secret environment variable inclusion, OAuth2 bearer auth helpers with client-credentials token fetch, notifications, settings, signed in-app update checks with download progress, inherited collection/folder/saved-request pre-request and test scripts (worker-backed frontend JavaScript execution around the native send), async script helper requests through `pn.http.send(...)`, script-driven active-environment variable writes, and a local authoring-only MCP server with Agent Activity.
+The app already supports request execution, resolved request preview before send, full response body reads, history, collections with nested folders and drag-and-drop request/folder moves, sidebar collection search, raw WebSocket and Socket.IO connection workspaces with session-only transcripts, playbooks for sequential saved-request execution, environments, secret environment storage, mixed PostNot collection portability, import/export flows including OpenAPI 3 import, broader cURL flag coverage, redacted-by-default single-request cURL/JSON export with optional non-secret environment variable inclusion, OAuth2 bearer auth helpers with client-credentials token fetch, notifications, settings, signed in-app update checks with download progress, inherited collection/folder/saved-request pre-request and test scripts (worker-backed frontend JavaScript execution around the native send), async script helper requests through `pn.http.send(...)`, script-driven active-environment variable writes, and a local authoring-only MCP server with Agent Activity.
 
 ## Canonical Working Directory
 
@@ -33,9 +33,12 @@ When onboarding into a fresh task, read these first:
 - [docs/tech-design.md](docs/tech-design.md): architecture, runtime behavior, persistence, command boundaries, and design trade-offs
 - [docs/design-system.md](docs/design-system.md): application design language, reusable UI patterns, accessibility contract, and feature design checklist
 - [src/routes/+page.svelte](src/routes/+page.svelte): main request runner UI
+- [src/routes/websockets/+page.svelte](src/routes/websockets/+page.svelte): WebSocket and Socket.IO connection workspace
 - [src/routes/settings/+page.svelte](src/routes/settings/+page.svelte): persisted settings UI and updater surface
 - [src-tauri/src/lib.rs](src-tauri/src/lib.rs): Tauri startup and command registration
 - [src-tauri/src/services/http_client.rs](src-tauri/src/services/http_client.rs): native request execution
+- [src-tauri/src/services/realtime_service.rs](src-tauri/src/services/realtime_service.rs): app-wide raw WebSocket session manager
+- [src-tauri/src/services/realtime_socketio_service.rs](src-tauri/src/services/realtime_socketio_service.rs): Socket.IO transport adapter
 - [src-tauri/src/services/settings_service.rs](src-tauri/src/services/settings_service.rs): persisted settings
 - [src-tauri/src/services/history_service.rs](src-tauri/src/services/history_service.rs): request history
 - [src-tauri/src/services/environments_service.rs](src-tauri/src/services/environments_service.rs): environments, secret redaction, variable resolution
@@ -50,6 +53,10 @@ Implemented now:
 
 - Tauri desktop shell
 - native HTTP execution in Rust
+- native raw WebSocket and Socket.IO 3.x/4.x execution with application-wide session ownership
+- persistent disconnected WebSockets tab workspace, bounded session-only transcripts, file-backed large payloads, and opt-in reconnect
+- saved HTTP, WebSocket, and Socket.IO definitions in shared collection trees with protocol-aware routing
+- lossless mixed PostNot collection import/export and explicit realtime omissions from Postman export
 - persisted settings
 - persisted history with detail inspection
 - restoring stored requests from history into new request tabs
@@ -86,6 +93,12 @@ Frontend:
 npm run check
 ```
 
+Browser-mode application UX:
+
+```bash
+npm run test:app-e2e
+```
+
 Marketing site:
 
 ```bash
@@ -99,7 +112,10 @@ Rust:
 ```bash
 source "$HOME/.cargo/env"
 cargo check --manifest-path src-tauri/Cargo.toml
+cargo test --manifest-path src-tauri/Cargo.toml
 ```
+
+The Socket.IO integration test starts the pinned Node fixture in `src-tauri/tests/fixtures/socketio-server.mjs`, so install the repository's npm dependencies before running the full Rust suite.
 
 Backend quality gate (required before publishing a release):
 
@@ -142,6 +158,9 @@ This approach is mainly for native Windows verification such as drag-and-drop, w
 - Secret environment values are stored in the OS credential store, not SQLite.
 - History persists requests that use secret environment variables, but stores unresolved `{{variable}}` text instead of resolved secret values.
 - Single-request exports redact credential-looking values by default, including bearer tokens, OAuth2 access tokens, client secrets, API keys, cookies, and basic-auth passwords; the export dialog can include active non-secret environment variables while keeping secrets redacted.
+- Realtime connection definitions and open tabs are managed on `/websockets`; navigation preserves live native sessions, while app restart restores drafts disconnected and clears transcripts.
+- Realtime transcripts are bounded, process-scoped, and never written to SQLite history. Payloads over 256 KiB use temporary opaque handles that are cleared on release or startup.
+- Realtime v1 does not run collection/folder/request scripts or Playbook steps and does not support durable history, legacy Socket.IO 2.x, custom CA/mTLS/proxy settings, `permessage-deflate`, server-requested ACK replies, or mixed binary placeholder arrays.
 - Collections are managed on `/collections`.
 - Playbooks are managed on `/playbooks`.
 - Environments are managed on `/environments`.

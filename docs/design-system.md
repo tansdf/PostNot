@@ -62,10 +62,13 @@ Always consume semantic tokens. Do not choose a literal color based only on its 
 | Overlay | `--overlay-backdrop`, `--shadow-overlay` | Dialog backdrops and floating-layer elevation |
 | HTTP methods | `--method-*`, `--method-*-inverse` | Method labels on normal and dark/sidebar surfaces |
 | Syntax | `--syntax-*` | JSON, scripts, and variable highlighting |
+| Realtime status | `--success`, `--warning`, `--danger`, `--text-muted` | Connected, transitional, failed, and disconnected indicators paired with text |
 
 The light palette uses cream surfaces, deep teal text/navigation, and burnt orange action color. The dark palette preserves those relationships with higher-luminance text and accent values. The optional Forest theme uses the same semantic roles with a deeper green workbench palette and a cooler green accent. Never copy a resolved light-theme value into component CSS.
 
 HTTP method colors are a special categorical palette. Use the existing `.method-get`, `.method-post`, `.method-put`, `.method-patch`, `.method-delete`, `.method-head`, and `.method-options` classes. Do not use those colors for semantic success or failure.
+
+Realtime protocol labels are compact categorical identifiers, not health states. Use the shared `.protocol-badge` with the exact short labels `WS` and `S.IO`; use `.realtime-status-*` only for connection state. A status dot must always be paired with visible or screen-reader text.
 
 ### 3.2 Typography
 
@@ -126,7 +129,7 @@ The shared reduced-motion rule removes decorative transitions and pulse/slide an
 
 ### Application shell
 
-`AppShell.svelte` owns the two-column desktop frame: a `320px` sidebar and a flexible workspace. At widths below `980px`, it becomes a single flowing column. New top-level destinations belong in the primary `<nav>` and require an explicit active state.
+`AppShell.svelte` owns the two-column desktop frame: a `320px` sidebar and a flexible workspace. At widths below `980px`, it becomes a single flowing column. Requests, WebSockets, Playbooks, Collections, Environments, and Settings are peer top-level destinations in the primary `<nav>` and require an explicit active state.
 
 ### Pages
 
@@ -213,6 +216,10 @@ Use tabs only when views are peers and switching does not submit or navigate thr
 
 Selection must remain visible without hover and should not rely on text color alone.
 
+The WebSockets workspace reuses the request-tab chip geometry through `RealtimeTabs.svelte`. Each tab must expose the definition name, protocol badge, connection status text, unsaved marker, and a named close-active-tab action. Restored tabs begin disconnected; do not visually imply that a saved/open tab is a live connection.
+
+Realtime workspace tabs, connection-setting tabs, and transcript-filter tabs use roving focus. Left/Right moves to the previous/next peer, Home/End moves to the first/last peer, and focus follows selection. Delete closes the focused workspace tab through the normal dirty/live confirmation flow. Keep the selected tab at `tabindex="0"`, peers at `-1`, and connect each tab to its panel with `aria-controls`/`aria-labelledby`.
+
 ### 5.5 Dialogs
 
 Use `DialogShell.svelte` with the standard `save-dialog` size or a purpose-specific size class. Its public properties are `ariaLabelledby`, `onDismiss`, optional `sizeClass`, optional `dismissible`, and the content snippet. It owns the backdrop, dialog role, focus trap/restore, Escape handling, and backdrop dismissal. Every dialog's content must include:
@@ -266,6 +273,24 @@ Use monospace type and `--bg-code`. Long values must wrap or scroll within their
 - Keep secrets masked by default.
 - Syntax color is categorical decoration and may not be the only way to identify invalid content.
 
+### 5.10 Realtime Workspaces and Transcripts
+
+`RealtimeEditor.svelte` and `RealtimeTranscript.svelte` establish the shared realtime workbench pattern:
+
+- one large Connect or Disconnect action in the connection header;
+- a visible status row with text plus `.realtime-status-dot`;
+- peer connection settings in semantic local tabs;
+- an advanced reconnect section disabled until opt-in;
+- a composer grouped separately from handshake settings;
+- a bounded transcript using `role="log"` with live announcements disabled so high-volume traffic does not interrupt assistive technology;
+- transcript direction written as “Sent”, “Received”, or “Event” and reinforced by a border accent;
+- explicit empty, filtered-empty, trim, error, disconnected, reconnect-required, and large-payload states;
+- bounded file-backed payload inspection through deliberate Read or Copy actions, plus complete Save, instead of inserting large data into the DOM automatically.
+
+Keep connection definition and session state distinct in copy and hierarchy. “Save” persists a reusable definition; “Connect” starts an ephemeral native session; “Clear” removes only the current session transcript; closing a dirty or live tab explains both consequences.
+
+Realtime failures in a background route use the notification action to return to the affected tab. Do not announce every incoming message globally. When follow mode is paused because the user scrolls away from the bottom, provide an explicit “Follow new messages” action rather than moving their reading position.
+
 ## 6. Accessibility Contract
 
 New UI must meet these minimum requirements:
@@ -277,6 +302,8 @@ New UI must meet these minimum requirements:
 - Dynamic status uses an appropriate live region without repeatedly interrupting the user.
 - Dialog focus is trapped and restored.
 - Tabs, listboxes, trees, disclosures, and progress controls expose their state semantically.
+- Realtime tab status and protocol are exposed as text; status dots, direction borders, and badges are supplementary.
+- High-volume transcripts use a named `role="log"` with `aria-live="off"`; connection-state changes use a concise polite live region.
 - Information is not communicated by color alone.
 - Text and interactive elements retain sufficient contrast in light and dark themes.
 - Click targets should normally be at least `32px`; use `36–40px` for common actions.
@@ -286,8 +313,9 @@ For a complex custom interaction, document keyboard behavior alongside its imple
 
 ## 7. Content and UX Conventions
 
-- Name objects consistently: request, saved request, collection, folder, environment, variable, playbook, step, run, and history entry.
-- Use “request” for the editable/sendable HTTP object; use “saved request” when persistence matters.
+- Name objects consistently: request, saved request, realtime definition, connection, session transcript, collection, folder, environment, variable, playbook, step, run, and history entry.
+- Use “request” for the editable/sendable HTTP object. Use “realtime definition” when distinguishing a saved WebSocket/Socket.IO configuration from its live connection; concise local labels may use “realtime request” where the shared collection model is already clear.
+- Use “connection” for a live or connectable WebSocket/Socket.IO tab and “session transcript” for its ephemeral message log. Do not call it durable history.
 - Confirm successful persistence with the object name when helpful.
 - Error messages should say what failed and what the user can do next. Preserve raw backend details in an expandable technical section when needed.
 - State when a value is saved locally, stored in the OS credential store, redacted, unresolved, or exported in full.
