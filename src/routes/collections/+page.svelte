@@ -703,6 +703,7 @@
             bind:this={importFileInput}
             class="sr-only"
             type="file"
+            aria-label="Open collection import file"
             accept={importFormat === "postman" || importFormat === "postnot"
               ? ".json,application/json"
               : ".json,.yaml,.yml,application/json,application/yaml,text/yaml,text/x-yaml"}

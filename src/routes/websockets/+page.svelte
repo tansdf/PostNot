@@ -2,7 +2,7 @@
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { page } from "$app/state";
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
 
   import {
     exportRealtimeTranscript,
@@ -92,11 +92,16 @@
   });
 
   $effect(() => {
-    const tab = activeTab;
-    if (!tab || tab.id !== draftOwnerTabId) return;
-    if (JSON.stringify(tab.draft) !== JSON.stringify(draft)) {
-      realtimeWorkspace.updateDraft(tab.id, draft);
-    }
+    const tabId = draftOwnerTabId;
+    const nextDraft = cloneRealtimeRequestDraft(draft);
+    const nextFingerprint = JSON.stringify(nextDraft);
+    if (!tabId) return;
+    untrack(() => {
+      const tab = realtimeWorkspace.tabs.find((item) => item.id === tabId);
+      if (tab && JSON.stringify(tab.draft) !== nextFingerprint) {
+        realtimeWorkspace.updateDraft(tab.id, nextDraft);
+      }
+    });
   });
 
   $effect(() => {
@@ -113,6 +118,9 @@
       if (requestedSavedRequestId) {
         lastHandledRouteId = requestedSavedRequestId;
         await openSavedRequest(requestedSavedRequestId);
+      } else if (requestedTabId && realtimeWorkspace.tabs.some((tab) => tab.id === requestedTabId)) {
+        realtimeWorkspace.activateTab(requestedTabId);
+        await syncRoute();
       } else {
         await syncRoute();
       }
@@ -346,37 +354,45 @@
   />
 
   {#if activeTab}
-    <RealtimeEditor
-      bind:draft
-      variables={activeEnvironment?.variables ?? []}
-      status={activeTab.status}
-      statusMessage={activeTab.statusMessage}
-      reconnectRequired={activeTab.reconnectRequired}
-      isSaving={collections.isSavingRequest}
-      onConnect={connect}
-      onDisconnect={disconnect}
-      onPing={() => realtimeWorkspace.ping(activeTab.id)}
-      onClose={(code, reason) => realtimeWorkspace.closeGracefully(activeTab.id, code, reason)}
-      onSend={send}
-      onSave={() => saveRequest()}
-      onSaveAs={() => saveRequest(true)}
-      onValidityChange={(valid) => (editorValid = valid)}
-    />
-    {#if activeTab.errorText}<div class="feedback feedback-error" role="alert">{activeTab.errorText}</div>{/if}
-    {#if activeTab.externallyChanged}
-      <div class="feedback feedback-warning">
-        This saved connection changed through MCP. Your current draft was kept.
-        <button class="button-secondary button-compact" type="button" onclick={reloadExternal}>Reload saved version</button>
-      </div>
-    {/if}
-    <RealtimeTranscript
-      entries={activeTab.transcript}
-      sizeBytes={activeTab.transcriptSizeBytes}
-      onClear={() => realtimeWorkspace.clearTranscript(activeTab.id)}
-      onExport={exportTranscript}
-      onReadPayload={readRealtimePayload}
-      onSavePayload={savePayload}
-    />
+    <div
+      id="realtime-connection-panel"
+      class="realtime-active-panel"
+      role="tabpanel"
+      aria-labelledby={`realtime-tab-${activeTab.id}`}
+      tabindex="0"
+    >
+      <RealtimeEditor
+        bind:draft
+        variables={activeEnvironment?.variables ?? []}
+        status={activeTab.status}
+        statusMessage={activeTab.statusMessage}
+        reconnectRequired={activeTab.reconnectRequired}
+        isSaving={collections.isSavingRequest}
+        onConnect={connect}
+        onDisconnect={disconnect}
+        onPing={() => realtimeWorkspace.ping(activeTab.id)}
+        onClose={(code, reason) => realtimeWorkspace.closeGracefully(activeTab.id, code, reason)}
+        onSend={send}
+        onSave={() => saveRequest()}
+        onSaveAs={() => saveRequest(true)}
+        onValidityChange={(valid) => (editorValid = valid)}
+      />
+      {#if activeTab.errorText}<div class="feedback feedback-error" role="alert">{activeTab.errorText}</div>{/if}
+      {#if activeTab.externallyChanged}
+        <div class="feedback feedback-warning">
+          This saved connection changed through MCP. Your current draft was kept.
+          <button class="button-secondary button-compact" type="button" onclick={reloadExternal}>Reload saved version</button>
+        </div>
+      {/if}
+      <RealtimeTranscript
+        entries={activeTab.transcript}
+        sizeBytes={activeTab.transcriptSizeBytes}
+        onClear={() => realtimeWorkspace.clearTranscript(activeTab.id)}
+        onExport={exportTranscript}
+        onReadPayload={readRealtimePayload}
+        onSavePayload={savePayload}
+      />
+    </div>
   {/if}
 </div>
 

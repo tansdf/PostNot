@@ -4163,6 +4163,32 @@ body.collection-dnd-active {
   min-width: 0;
 }
 
+.realtime-active-panel {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.realtime-tabs-strip {
+  overflow: visible;
+}
+
+.realtime-tablist {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: var(--space-2);
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 2px;
+}
+
+.realtime-tab-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: var(--space-1);
+}
+
 .realtime-connection-header {
   display: grid;
   grid-template-columns: minmax(15rem, 0.7fr) 10rem minmax(22rem, 1.5fr) auto;

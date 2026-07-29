@@ -47,7 +47,6 @@
 
   let activePanel: "query" | "headers" | "auth" | "protocol" | "reconnect" = $state("query");
   let composerError = $state("");
-  let protocolJsonError = $state("");
   let closeCode = $state(1000);
   let closeReason = $state("");
   let showCloseOptions = $state(false);
@@ -73,6 +72,22 @@
   let structuredJsonValid = $derived(!authPayloadError && !argumentsError);
   type WebSocketDraft = Extract<RealtimeRequestDraft, { requestType: "websocket" }>;
   type SocketIoDraft = Extract<RealtimeRequestDraft, { requestType: "socketio" }>;
+
+  function panelDomId(panelId: (typeof panels)[number]["id"]) {
+    return `realtime-settings-tab-${panelId}`;
+  }
+
+  function handlePanelKeydown(event: KeyboardEvent, panelIndex: number) {
+    let nextIndex = panelIndex;
+    if (event.key === "ArrowRight") nextIndex = (panelIndex + 1) % panels.length;
+    else if (event.key === "ArrowLeft") nextIndex = (panelIndex - 1 + panels.length) % panels.length;
+    else if (event.key === "Home") nextIndex = 0;
+    else if (event.key === "End") nextIndex = panels.length - 1;
+    else return;
+    event.preventDefault();
+    activePanel = panels[nextIndex].id;
+    document.getElementById(panelDomId(activePanel))?.focus();
+  }
 
   $effect(() => {
     if (draft.requestType !== "socketio") return;
@@ -111,7 +126,6 @@
       reconnect: draft.reconnect
     } as RealtimeRequestDraft;
     composerError = "";
-    protocolJsonError = "";
   }
 
   function patchAuth(patch: Partial<RequestAuth>) {
@@ -173,12 +187,10 @@
         draft = { ...draft, composer: { ...draft.composer, arguments: parsed } };
         argumentsError = "";
       }
-      protocolJsonError = "";
     } catch (error) {
       const message = error instanceof Error ? error.message : "Invalid JSON.";
       if (field === "authPayload") authPayloadError = message;
       else argumentsError = message;
-      protocolJsonError = message;
     }
   }
 
@@ -217,7 +229,7 @@
     } else if (draft.composer.binary && !binaryValue(draft.composer.binary).trim()) {
       composerError = "Choose a file or enter binary data before sending.";
     }
-    return !composerError && !protocolJsonError;
+    return !composerError && structuredJsonValid;
   }
 
   async function send() {
@@ -292,14 +304,31 @@
   </div>
 
   <div class="panel-tabs" role="tablist" aria-label="Connection settings">
-    {#each panels as panel (panel.id)}
-      <button class:active={activePanel === panel.id} class="tab-button" type="button" role="tab" aria-selected={activePanel === panel.id} onclick={() => (activePanel = panel.id)}>
+    {#each panels as panel, index (panel.id)}
+      <button
+        id={panelDomId(panel.id)}
+        class:active={activePanel === panel.id}
+        class="tab-button"
+        type="button"
+        role="tab"
+        aria-selected={activePanel === panel.id}
+        aria-controls="realtime-settings-panel"
+        tabindex={activePanel === panel.id ? 0 : -1}
+        onclick={() => (activePanel = panel.id)}
+        onkeydown={(event) => handlePanelKeydown(event, index)}
+      >
         {panel.label}
       </button>
     {/each}
   </div>
 
-  <div class="realtime-settings-panel" role="tabpanel">
+  <div
+    id="realtime-settings-panel"
+    class="realtime-settings-panel"
+    role="tabpanel"
+    aria-labelledby={panelDomId(activePanel)}
+    tabindex="0"
+  >
     {#if activePanel === "query"}
       <RealtimeKeyValueEditor bind:rows={draft.queryParams} {variables} keyLabel="Parameter" valueLabel="Value" addLabel="Add parameter" />
     {:else if activePanel === "headers"}
@@ -362,7 +391,6 @@
         <label><span class="field-label">Maximum delay (ms)</span><input class="text-input" type="number" min="100" value={draft.reconnect.maxDelayMs} disabled={!draft.reconnect.enabled} oninput={(event) => patchCommon({ reconnect: { ...draft.reconnect, maxDelayMs: event.currentTarget.valueAsNumber || 10000 } })} /></label>
       </div>
     {/if}
-    {#if protocolJsonError}<p class="feedback feedback-error" role="alert">{protocolJsonError}</p>{/if}
   </div>
 
   <section class="realtime-composer" aria-labelledby="realtime-composer-title">

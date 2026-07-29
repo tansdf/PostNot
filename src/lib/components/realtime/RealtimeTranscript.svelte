@@ -26,6 +26,7 @@
   let follow = $state(true);
   let expandedPayloads: Record<string, string> = $state({});
   let payloadErrors: Record<string, string> = $state({});
+  const filterOptions = ["all", "sent", "received", "events"] as const;
 
   let filteredEntries = $derived(entries.filter((entry) => {
     if (filter === "sent" && entry.direction !== "sent") return false;
@@ -90,6 +91,22 @@
     if (!text.trim() || !["{", "["].includes(text.trim()[0])) return false;
     try { JSON.parse(text); return true; } catch { return false; }
   }
+
+  function filterDomId(option: (typeof filterOptions)[number]) {
+    return `realtime-transcript-filter-${option}`;
+  }
+
+  function handleFilterKeydown(event: KeyboardEvent, filterIndex: number) {
+    let nextIndex = filterIndex;
+    if (event.key === "ArrowRight") nextIndex = (filterIndex + 1) % filterOptions.length;
+    else if (event.key === "ArrowLeft") nextIndex = (filterIndex - 1 + filterOptions.length) % filterOptions.length;
+    else if (event.key === "Home") nextIndex = 0;
+    else if (event.key === "End") nextIndex = filterOptions.length - 1;
+    else return;
+    event.preventDefault();
+    filter = filterOptions[nextIndex];
+    document.getElementById(filterDomId(filter))?.focus();
+  }
 </script>
 
 <section class="panel realtime-transcript-panel" aria-labelledby="realtime-transcript-title">
@@ -106,8 +123,19 @@
 
   <div class="realtime-transcript-tools">
     <div class="panel-tabs" role="tablist" aria-label="Transcript filters">
-      {#each ["all", "sent", "received", "events"] as option}
-        <button class:active={filter === option} class="tab-button button-compact" type="button" role="tab" aria-selected={filter === option} onclick={() => (filter = option as typeof filter)}>
+      {#each filterOptions as option, index}
+        <button
+          id={filterDomId(option)}
+          class:active={filter === option}
+          class="tab-button button-compact"
+          type="button"
+          role="tab"
+          aria-selected={filter === option}
+          aria-controls="realtime-transcript-log"
+          tabindex={filter === option ? 0 : -1}
+          onclick={() => (filter = option)}
+          onkeydown={(event) => handleFilterKeydown(event, index)}
+        >
           {option.charAt(0).toUpperCase() + option.slice(1)}
         </button>
       {/each}
@@ -119,6 +147,7 @@
   </div>
 
   <div
+    id="realtime-transcript-log"
     class="realtime-transcript"
     bind:this={transcriptNode}
     onscroll={syncFollow}
