@@ -25,6 +25,7 @@ memchr = "2"
 native-tls = "0.2"
 reqwest = { version = "0.12", default-features = false, features = ["brotli", "charset", "deflate", "gzip", "http2", "json", "multipart", "rustls-tls", "stream", "zstd"] }
 rmcp = { version = "=0.16.0", features = ["server", "transport-io"] }
+rust_socketio = { path = "vendor/rust_socketio-0.6.0", version = "=0.6.0", features = ["async"] }
 schemars = "1.2"
 rfd = "0.15"
 serde = { version = "1", features = ["derive"] }

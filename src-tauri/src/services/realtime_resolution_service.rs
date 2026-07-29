@@ -60,30 +60,56 @@ pub fn resolve_raw_composer(
     composer: &RawWebSocketComposer,
     active_environment: Option<&EnvironmentDetail>,
 ) -> RawWebSocketComposer {
-    RawWebSocketComposer {
-        mode: composer.mode.clone(),
-        content: resolve(&composer.content, active_environment),
-        binary: composer
-            .binary
-            .as_ref()
-            .map(|source| resolve_binary_source(source, active_environment)),
-    }
+    resolve_raw_composer_with_usage(composer, active_environment).0
+}
+
+pub fn resolve_raw_composer_with_usage(
+    composer: &RawWebSocketComposer,
+    active_environment: Option<&EnvironmentDetail>,
+) -> (RawWebSocketComposer, bool) {
+    let (content, content_used_secret) =
+        environments_service::resolve_realtime_template(&composer.content, active_environment);
+    let (binary, binary_used_secret) = composer.binary.as_ref().map_or((None, false), |source| {
+        let (source, used_secret) = resolve_binary_source_with_usage(source, active_environment);
+        (Some(source), used_secret)
+    });
+    (
+        RawWebSocketComposer {
+            mode: composer.mode.clone(),
+            content,
+            binary,
+        },
+        content_used_secret || binary_used_secret,
+    )
 }
 
 pub fn resolve_socketio_composer(
     composer: &SocketIoComposer,
     active_environment: Option<&EnvironmentDetail>,
 ) -> SocketIoComposer {
-    SocketIoComposer {
-        event: resolve(&composer.event, active_environment),
-        arguments: resolve_json(&composer.arguments, active_environment),
-        binary: composer
-            .binary
-            .as_ref()
-            .map(|source| resolve_binary_source(source, active_environment)),
-        wait_for_ack: composer.wait_for_ack,
-        ack_timeout_ms: composer.ack_timeout_ms,
-    }
+    resolve_socketio_composer_with_usage(composer, active_environment).0
+}
+
+pub fn resolve_socketio_composer_with_usage(
+    composer: &SocketIoComposer,
+    active_environment: Option<&EnvironmentDetail>,
+) -> (SocketIoComposer, bool) {
+    let (event, event_used_secret) =
+        environments_service::resolve_realtime_template(&composer.event, active_environment);
+    let (binary, binary_used_secret) = composer.binary.as_ref().map_or((None, false), |source| {
+        let (source, used_secret) = resolve_binary_source_with_usage(source, active_environment);
+        (Some(source), used_secret)
+    });
+    (
+        SocketIoComposer {
+            event,
+            arguments: resolve_json(&composer.arguments, active_environment),
+            binary,
+            wait_for_ack: composer.wait_for_ack,
+            ack_timeout_ms: composer.ack_timeout_ms,
+        },
+        event_used_secret || binary_used_secret,
+    )
 }
 
 pub fn sanitize_error(message: &str, secret_values: &[String]) -> String {
@@ -148,20 +174,26 @@ fn resolve_auth(auth: &RequestAuth, active_environment: Option<&EnvironmentDetai
     }
 }
 
-fn resolve_binary_source(
+fn resolve_binary_source_with_usage(
     source: &BinaryPayloadSource,
     active_environment: Option<&EnvironmentDetail>,
-) -> BinaryPayloadSource {
+) -> (BinaryPayloadSource, bool) {
     match source {
-        BinaryPayloadSource::File { path } => BinaryPayloadSource::File {
-            path: resolve(path, active_environment),
-        },
-        BinaryPayloadSource::Hex { value } => BinaryPayloadSource::Hex {
-            value: resolve(value, active_environment),
-        },
-        BinaryPayloadSource::Base64 { value } => BinaryPayloadSource::Base64 {
-            value: resolve(value, active_environment),
-        },
+        BinaryPayloadSource::File { path } => {
+            let (path, used_secret) =
+                environments_service::resolve_realtime_template(path, active_environment);
+            (BinaryPayloadSource::File { path }, used_secret)
+        }
+        BinaryPayloadSource::Hex { value } => {
+            let (value, used_secret) =
+                environments_service::resolve_realtime_template(value, active_environment);
+            (BinaryPayloadSource::Hex { value }, used_secret)
+        }
+        BinaryPayloadSource::Base64 { value } => {
+            let (value, used_secret) =
+                environments_service::resolve_realtime_template(value, active_environment);
+            (BinaryPayloadSource::Base64 { value }, used_secret)
+        }
     }
 }
 
@@ -228,5 +260,20 @@ mod tests {
             sanitize_error("failed for secret-value", &["secret-value".to_string()]),
             "failed for ***"
         );
+
+        let composer = RawWebSocketComposer {
+            mode: crate::domain::realtime::RawMessageMode::Binary,
+            content: String::new(),
+            binary: Some(BinaryPayloadSource::Base64 {
+                value: "{{token}}".to_string(),
+            }),
+        };
+        let (resolved, used_secret) =
+            resolve_raw_composer_with_usage(&composer, Some(&environment));
+        assert!(used_secret);
+        assert!(matches!(
+            resolved.binary,
+            Some(BinaryPayloadSource::Base64 { ref value }) if value == "secret-value"
+        ));
     }
 }

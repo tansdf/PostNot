@@ -9,6 +9,7 @@ pub mod playbooks_service;
 pub mod realtime_payload_service;
 pub mod realtime_resolution_service;
 pub mod realtime_service;
+pub mod realtime_socketio_service;
 pub mod request_plan_service;
 pub mod request_preview_service;
 pub mod request_url_service;

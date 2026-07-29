@@ -201,6 +201,7 @@ pub(crate) enum SessionCommand {
     Send {
         message: RealtimeSendMessage,
         secret_values: Vec<String>,
+        used_secret: bool,
     },
     Ping(Option<String>),
     Close {
@@ -299,11 +300,12 @@ impl RealtimeConnectionManager {
                     run_raw_websocket(session_for_task, request, command_rx).await
                 }
                 RealtimeRequestDraft::Socketio { .. } => {
-                    session_for_task.emit_status(
-                        RealtimeConnectionStatus::Failed,
-                        "Socket.IO runtime initialization is unavailable.",
-                    );
-                    drop(command_rx);
+                    crate::services::realtime_socketio_service::run_socketio(
+                        session_for_task,
+                        request,
+                        command_rx,
+                    )
+                    .await
                 }
             }
         });
@@ -324,6 +326,7 @@ impl RealtimeConnectionManager {
         connection_id: &str,
         message: RealtimeSendMessage,
         secret_values: Vec<String>,
+        used_secret: bool,
     ) -> AppResult<()> {
         let session = self.session(connection_id)?;
         if session.status() != RealtimeConnectionStatus::Connected {
@@ -336,6 +339,7 @@ impl RealtimeConnectionManager {
             .send(SessionCommand::Send {
                 message,
                 secret_values,
+                used_secret,
             })
             .await
             .map_err(|_| AppError::Message("Realtime connection is no longer active.".to_string()))
@@ -405,6 +409,18 @@ impl RealtimeConnectionManager {
 }
 
 impl RuntimeSession {
+    pub(crate) fn limits(&self) -> RealtimeRuntimeLimits {
+        self.limits
+    }
+
+    pub(crate) fn payloads(&self) -> &RealtimePayloadStore {
+        &self.payloads
+    }
+
+    pub(crate) fn secret_values(&self) -> &[String] {
+        &self.secret_values
+    }
+
     fn status(&self) -> RealtimeConnectionStatus {
         self.state
             .lock()
@@ -442,7 +458,7 @@ impl RuntimeSession {
         let _ = self.event_channel.send(event);
     }
 
-    async fn record(
+    pub(crate) async fn record(
         &self,
         direction: RealtimeTranscriptDirection,
         kind: RealtimeTranscriptKind,
@@ -451,7 +467,26 @@ impl RuntimeSession {
         payload: Option<RealtimePayload>,
     ) {
         let label = sanitize_error(&label.into(), &self.secret_values);
+        let event_name = event_name.map(|name| sanitize_error(&name, &self.secret_values));
         let mut released_handles = Vec::new();
+        let payload = match payload {
+            Some(payload) if payload.size_bytes() > self.limits.transcript_max_bytes => {
+                if let Some(handle) = payload.handle_id() {
+                    released_handles.push(handle.to_string());
+                }
+                Some(RealtimePayload::Inline {
+                    text: format!(
+                        "Payload omitted because it exceeded the {} byte transcript limit.",
+                        self.limits.transcript_max_bytes
+                    ),
+                    size_bytes: 0,
+                    encoding:
+                        crate::services::realtime_payload_service::RealtimePayloadEncoding::Utf8,
+                    truncated: true,
+                })
+            }
+            payload => payload,
+        };
         let event = {
             let Ok(mut state) = self.state.lock() else {
                 return;
@@ -715,7 +750,16 @@ async fn run_raw_websocket(
                     match handle_raw_command(&session, &mut socket, command).await {
                         Ok(CommandOutcome::Continue) => {}
                         Ok(CommandOutcome::Disconnected) => return,
-                        Err(error) => {
+                        Err(RawCommandError::Validation(error)) => {
+                            session.record(
+                                RealtimeTranscriptDirection::System,
+                                RealtimeTranscriptKind::Error,
+                                sanitize_error(&error.to_string(), &session.secret_values),
+                                None,
+                                None,
+                            ).await;
+                        }
+                        Err(RawCommandError::Transport(error)) => {
                             session.record(
                                 RealtimeTranscriptDirection::System,
                                 RealtimeTranscriptKind::Error,
@@ -901,11 +945,16 @@ enum CommandOutcome {
     Disconnected,
 }
 
+enum RawCommandError {
+    Validation(AppError),
+    Transport(AppError),
+}
+
 async fn handle_raw_command<S>(
     session: &Arc<RuntimeSession>,
     socket: &mut tokio_tungstenite::WebSocketStream<S>,
     command: SessionCommand,
-) -> AppResult<CommandOutcome>
+) -> Result<CommandOutcome, RawCommandError>
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
 {
@@ -913,14 +962,25 @@ where
         SessionCommand::Send {
             message: RealtimeSendMessage::Websocket { composer },
             secret_values,
+            used_secret,
         } => {
-            let (message, kind, payload) =
-                build_raw_message(&session.payloads, &composer, session.limits, &secret_values)
-                    .await?;
-            socket
-                .send(message)
-                .await
-                .map_err(|error| AppError::Message(error.to_string()))?;
+            let (message, kind, payload) = build_raw_message(
+                &session.payloads,
+                &composer,
+                session.limits,
+                &secret_values,
+                used_secret,
+            )
+            .await
+            .map_err(RawCommandError::Validation)?;
+            if let Err(error) = socket.send(message).await {
+                if let Some(handle_id) = payload.handle_id() {
+                    let _ = session.payloads.release(handle_id).await;
+                }
+                return Err(RawCommandError::Transport(AppError::Message(
+                    error.to_string(),
+                )));
+            }
             session
                 .record(
                     RealtimeTranscriptDirection::Sent,
@@ -935,24 +995,27 @@ where
         SessionCommand::Send {
             message: RealtimeSendMessage::Socketio { .. },
             ..
-        } => Err(AppError::Message(
+        } => Err(RawCommandError::Validation(AppError::Message(
             "A Socket.IO message cannot be sent through a raw WebSocket connection.".to_string(),
-        )),
+        ))),
         SessionCommand::Ping(payload) => {
             let bytes = payload.unwrap_or_default().into_bytes();
             if bytes.len() > 125 {
-                return Err(AppError::Message(
+                return Err(RawCommandError::Validation(AppError::Message(
                     "WebSocket ping payloads cannot exceed 125 bytes.".to_string(),
-                ));
+                )));
             }
             socket
                 .send(Message::Ping(bytes.clone().into()))
                 .await
-                .map_err(|error| AppError::Message(error.to_string()))?;
+                .map_err(|error| {
+                    RawCommandError::Transport(AppError::Message(error.to_string()))
+                })?;
             let payload = session
                 .payloads
                 .store_text(String::from_utf8_lossy(&bytes).into_owned())
-                .await?;
+                .await
+                .map_err(RawCommandError::Validation)?;
             session
                 .record(
                     RealtimeTranscriptDirection::Sent,
@@ -972,7 +1035,9 @@ where
                     reason: reason.clone().into(),
                 }))
                 .await
-                .map_err(|error| AppError::Message(error.to_string()))?;
+                .map_err(|error| {
+                    RawCommandError::Transport(AppError::Message(error.to_string()))
+                })?;
             session
                 .record(
                     RealtimeTranscriptDirection::Sent,
@@ -1071,29 +1136,57 @@ async fn handle_raw_incoming(session: &Arc<RuntimeSession>, message: Message) ->
             false
         }
         Message::Ping(bytes) => {
-            let payload = session.payloads.store_binary(&bytes).await.ok();
-            session
-                .record(
-                    RealtimeTranscriptDirection::Received,
-                    RealtimeTranscriptKind::Ping,
-                    "Ping",
-                    None,
-                    payload,
-                )
-                .await;
+            match session.payloads.store_binary(&bytes).await {
+                Ok(payload) => {
+                    session
+                        .record(
+                            RealtimeTranscriptDirection::Received,
+                            RealtimeTranscriptKind::Ping,
+                            "Ping",
+                            None,
+                            Some(payload),
+                        )
+                        .await;
+                }
+                Err(error) => {
+                    session
+                        .record(
+                            RealtimeTranscriptDirection::System,
+                            RealtimeTranscriptKind::Error,
+                            format!("Could not store WebSocket ping payload: {error}"),
+                            None,
+                            None,
+                        )
+                        .await;
+                }
+            }
             false
         }
         Message::Pong(bytes) => {
-            let payload = session.payloads.store_binary(&bytes).await.ok();
-            session
-                .record(
-                    RealtimeTranscriptDirection::Received,
-                    RealtimeTranscriptKind::Pong,
-                    "Pong",
-                    None,
-                    payload,
-                )
-                .await;
+            match session.payloads.store_binary(&bytes).await {
+                Ok(payload) => {
+                    session
+                        .record(
+                            RealtimeTranscriptDirection::Received,
+                            RealtimeTranscriptKind::Pong,
+                            "Pong",
+                            None,
+                            Some(payload),
+                        )
+                        .await;
+                }
+                Err(error) => {
+                    session
+                        .record(
+                            RealtimeTranscriptDirection::System,
+                            RealtimeTranscriptKind::Error,
+                            format!("Could not store WebSocket pong payload: {error}"),
+                            None,
+                            None,
+                        )
+                        .await;
+                }
+            }
             false
         }
         Message::Close(frame) => {
@@ -1121,6 +1214,7 @@ async fn build_raw_message(
     composer: &RawWebSocketComposer,
     limits: RealtimeRuntimeLimits,
     secret_values: &[String],
+    binary_used_secret: bool,
 ) -> AppResult<(Message, RealtimeTranscriptKind, RealtimePayload)> {
     match composer.mode {
         RawMessageMode::Text => {
@@ -1155,9 +1249,13 @@ async fn build_raw_message(
                 AppError::Message("A binary payload source is required.".to_string())
             })?;
             let bytes = read_binary_source(source, limits).await?;
-            let payload = payloads
-                .store_text(format!("Binary payload ({} bytes)", bytes.len()))
-                .await?;
+            let payload = if binary_used_secret {
+                payloads
+                    .store_text(format!("Binary payload redacted ({} bytes)", bytes.len()))
+                    .await?
+            } else {
+                payloads.store_binary(&bytes).await?
+            };
             Ok((
                 Message::Binary(bytes.into()),
                 RealtimeTranscriptKind::Binary,
@@ -1201,7 +1299,7 @@ fn decode_hex(value: &str) -> AppResult<Vec<u8>> {
         .collect()
 }
 
-fn ensure_message_size(size: usize, limits: RealtimeRuntimeLimits) -> AppResult<()> {
+pub(crate) fn ensure_message_size(size: usize, limits: RealtimeRuntimeLimits) -> AppResult<()> {
     if size > limits.max_message_bytes {
         return Err(AppError::Message(format!(
             "Realtime message is {size} bytes; the configured limit is {} bytes.",
@@ -1341,15 +1439,110 @@ mod tests {
             content: "token=wire-secret".to_string(),
             binary: None,
         };
-        let (message, _, payload) =
-            build_raw_message(&store, &composer, limits(), &["wire-secret".to_string()])
-                .await
-                .expect("build message");
+        let (message, _, payload) = build_raw_message(
+            &store,
+            &composer,
+            limits(),
+            &["wire-secret".to_string()],
+            false,
+        )
+        .await
+        .expect("build message");
         assert_eq!(message.into_text().expect("text"), "token=wire-secret");
         let RealtimePayload::Inline { text, .. } = payload else {
             panic!("small redacted transcript should be inline");
         };
         assert_eq!(text, "token=***");
+    }
+
+    #[tokio::test]
+    async fn outgoing_binary_is_preserved_unless_its_source_used_a_secret() {
+        let store = RealtimePayloadStore::new(
+            std::env::temp_dir().join(format!("postnot-binary-test-{}", Uuid::new_v4())),
+        );
+        store.reset().await.expect("reset");
+        let composer = RawWebSocketComposer {
+            mode: RawMessageMode::Binary,
+            content: String::new(),
+            binary: Some(BinaryPayloadSource::Base64 {
+                value: BASE64.encode([1_u8, 2, 3]),
+            }),
+        };
+        let (_, _, payload) = build_raw_message(&store, &composer, limits(), &[], false)
+            .await
+            .expect("normal binary");
+        let RealtimePayload::Inline { text, encoding, .. } = payload else {
+            panic!("small binary should be inline");
+        };
+        assert!(matches!(
+            encoding,
+            crate::services::realtime_payload_service::RealtimePayloadEncoding::Base64
+        ));
+        assert_eq!(BASE64.decode(text).expect("decode"), vec![1, 2, 3]);
+
+        let (_, _, payload) = build_raw_message(&store, &composer, limits(), &[], true)
+            .await
+            .expect("secret binary");
+        let RealtimePayload::Inline { text, encoding, .. } = payload else {
+            panic!("redaction metadata should be inline");
+        };
+        assert!(matches!(
+            encoding,
+            crate::services::realtime_payload_service::RealtimePayloadEncoding::Utf8
+        ));
+        assert!(text.contains("redacted"));
+        assert!(!text.contains(&BASE64.encode([1_u8, 2, 3])));
+    }
+
+    #[tokio::test]
+    async fn one_entry_larger_than_transcript_cap_keeps_only_bounded_metadata() {
+        let store = RealtimePayloadStore::new(
+            std::env::temp_dir().join(format!("postnot-cap-test-{}", Uuid::new_v4())),
+        );
+        store.reset().await.expect("reset");
+        let (command_tx, _command_rx) = mpsc::channel(1);
+        let session = RuntimeSession {
+            connection_id: "cap".to_string(),
+            generation: 1,
+            event_channel: Channel::new(|_| Ok(())),
+            state: Mutex::new(SessionState {
+                sequence: 0,
+                status: RealtimeConnectionStatus::Connected,
+                status_message: "Connected".to_string(),
+                transcript: VecDeque::new(),
+                transcript_size_bytes: 0,
+                has_trim_marker: false,
+            }),
+            command_tx,
+            payloads: store.clone(),
+            limits: RealtimeRuntimeLimits {
+                transcript_max_bytes: 1,
+                ..limits()
+            },
+            secret_values: Vec::new(),
+        };
+        let payload = store
+            .store_text("oversized".to_string())
+            .await
+            .expect("store");
+        session
+            .record(
+                RealtimeTranscriptDirection::Received,
+                RealtimeTranscriptKind::Text,
+                "Received",
+                None,
+                Some(payload),
+            )
+            .await;
+        let snapshot = session.snapshot().expect("snapshot");
+        assert!(snapshot.transcript_size_bytes <= 1);
+        assert!(matches!(
+            snapshot.transcript[0].payload,
+            Some(RealtimePayload::Inline {
+                truncated: true,
+                ..
+            })
+        ));
     }
 
     #[tokio::test]
@@ -1405,12 +1598,34 @@ mod tests {
                 "echo",
                 RealtimeSendMessage::Websocket {
                     composer: RawWebSocketComposer {
+                        mode: RawMessageMode::Json,
+                        content: "{".to_string(),
+                        binary: None,
+                    },
+                },
+                Vec::new(),
+                false,
+            )
+            .await
+            .expect("queue invalid local payload");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        assert_eq!(
+            manager.snapshot("echo").expect("snapshot").status,
+            RealtimeConnectionStatus::Connected,
+            "local validation errors must not close a healthy socket"
+        );
+        manager
+            .send(
+                "echo",
+                RealtimeSendMessage::Websocket {
+                    composer: RawWebSocketComposer {
                         mode: RawMessageMode::Text,
                         content: "hello".to_string(),
                         binary: None,
                     },
                 },
                 Vec::new(),
+                false,
             )
             .await
             .expect("send");

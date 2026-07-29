@@ -100,23 +100,27 @@ pub async fn send_realtime_message(
         environments_service::get_active_environment(state.db(), state.secret_store()).await?;
     let secret_values =
         environments_service::active_environment_secret_values(active_environment.as_ref());
-    let message = match message {
-        RealtimeSendMessage::Websocket { composer } => RealtimeSendMessage::Websocket {
-            composer: realtime_resolution_service::resolve_raw_composer(
-                &composer,
-                active_environment.as_ref(),
-            ),
-        },
-        RealtimeSendMessage::Socketio { composer } => RealtimeSendMessage::Socketio {
-            composer: realtime_resolution_service::resolve_socketio_composer(
-                &composer,
-                active_environment.as_ref(),
-            ),
-        },
+    let (message, used_secret) = match message {
+        RealtimeSendMessage::Websocket { composer } => {
+            let (composer, used_secret) =
+                realtime_resolution_service::resolve_raw_composer_with_usage(
+                    &composer,
+                    active_environment.as_ref(),
+                );
+            (RealtimeSendMessage::Websocket { composer }, used_secret)
+        }
+        RealtimeSendMessage::Socketio { composer } => {
+            let (composer, used_secret) =
+                realtime_resolution_service::resolve_socketio_composer_with_usage(
+                    &composer,
+                    active_environment.as_ref(),
+                );
+            (RealtimeSendMessage::Socketio { composer }, used_secret)
+        }
     };
     state
         .realtime_connections()
-        .send(&connection_id, message, secret_values)
+        .send(&connection_id, message, secret_values, used_secret)
         .await
 }
 
