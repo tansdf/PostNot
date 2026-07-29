@@ -57,12 +57,18 @@ test("WebSocket workspace supports tabs, protocol editing, mock sessions, transc
 
   await page.getByLabel("Name").fill("Uncommitted realtime draft");
   await page.getByRole("button", { name: "Close Uncommitted realtime draft" }).click();
-  await expect(page.getByRole("dialog", { name: "Close connection tab?" })).toBeVisible();
+  const closeDialog = page.getByRole("dialog", { name: "Close connection tab?" });
+  await expect(closeDialog).toBeVisible();
+  expect(await closeDialog.evaluate((node) => node.contains(document.activeElement))).toBe(true);
   await expect(page.getByText("Unsaved changes in this draft will be discarded.")).toBeVisible();
   await page.getByRole("button", { name: "Cancel" }).click();
 
   await page.getByLabel("Mode").selectOption("socketio");
   await expect(page.getByRole("heading", { name: "Socket.IO connection" })).toBeVisible();
+  const settingsTabs = page.getByRole("tablist", { name: "Connection settings" });
+  await settingsTabs.getByRole("tab", { name: "Query" }).focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(settingsTabs.getByRole("tab", { name: "Headers & cookies" })).toHaveAttribute("aria-selected", "true");
   await page.getByRole("tab", { name: "Protocol" }).click();
   await expect(page.getByLabel("Engine.IO path")).toHaveValue("/socket.io/");
   await page.getByLabel("Auth payload (JSON object)").fill("[");
