@@ -313,7 +313,7 @@
               <div class="settings-section-heading">
                 <div>
                   <h2>WebSockets</h2>
-                  <p class="settings-section-lede">Connection limits and in-memory transcript bounds for WebSocket and Socket.IO sessions.</p>
+                  <p class="settings-section-lede">Connection and session transcript retention limits for WebSocket and Socket.IO.</p>
                 </div>
               </div>
 
