@@ -78,6 +78,10 @@ for (const [relativePath, html] of [
 
 requirePattern(indexHtml, /id="product"/, "docs/index.html: product section is missing");
 requirePattern(indexHtml, /href="#product">Features</, "docs/index.html: feature navigation label is missing");
+requirePattern(indexHtml, /id="realtime"/, "docs/index.html: realtime workflow section is missing");
+requirePattern(indexHtml, /href="#realtime">WebSockets</, "docs/index.html: WebSocket navigation link is missing");
+requirePattern(indexHtml, /websockets-page\.webp/, "docs/index.html: WebSocket workspace screenshot is missing");
+requirePattern(indexHtml, /Transcript boundary:[^<]*<\/strong>\s*session-only/i, "docs/index.html: session-only transcript boundary is missing");
 requirePattern(indexHtml, /id="agents"/, "docs/index.html: agent MCP section is missing");
 requirePattern(indexHtml, /agents cannot send or delete requests/i, "docs/index.html: MCP authoring boundary is missing");
 requirePattern(indexHtml, /agent-activity-page\.webp/, "docs/index.html: Agent Activity screenshot is missing");
@@ -119,6 +123,11 @@ requirePattern(
   screenshotCapture,
   /responsiveScreenshotWidth\s*=\s*960/,
   "scripts/capture-docs-screenshots.mjs: capture flow must generate 960px responsive screenshots"
+);
+requirePattern(
+  screenshotCapture,
+  /path:\s*"\/websockets\?savedRequestId=mock-realtime-websocket-1"/,
+  "scripts/capture-docs-screenshots.mjs: WebSocket workflow capture is missing"
 );
 if (/getByText\("Collection root"\)\.waitFor/.test(screenshotCapture)) {
   fail("scripts/capture-docs-screenshots.mjs: Collections capture waits for dialog-only text");

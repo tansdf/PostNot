@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "generatedAt": "2026-07-30T11:44:34.836Z",
+  "generatedAt": "2026-07-30T13:32:03.351Z",
   "viewport": {
     "width": 1995,
     "height": 1179
@@ -23,6 +23,11 @@
       "waitFor": ".workspace-grid"
     },
     {
+      "path": "/websockets?savedRequestId=mock-realtime-websocket-1",
+      "file": "websockets-page.webp",
+      "waitFor": ".realtime-workspace"
+    },
+    {
       "path": "/collections?collectionId=mock-collection-1",
       "file": "collections-page.webp",
       "waitFor": ".collections-page-panel"
@@ -43,15 +48,19 @@
       "waitFor": ".settings-page"
     }
   ],
-  "inputHash": "adcd6a12e1adf5e40e6b71e96bda48bcaaff23623e1087668e1ae22cc70fdfd9",
+  "inputHash": "9ef22b7f60ab51c49165682a9363c70b9235c234e57c6f0c5b91c3dbfa5c2cb4",
   "inputs": [
     {
       "path": "scripts/capture-docs-screenshots.mjs",
-      "sha256": "f75d03e562c91b5f59a1f740934e0e21479aa758d5fba5121891f950524b08a4"
+      "sha256": "e1c3d09ba20576c997113c84a56884ec73c5592ef3f57afd6a35772f1a13b990"
     },
     {
       "path": "src/lib/components/collections/CollectionDetailForm.svelte",
       "sha256": "e047dbeaa0c146934a107236e5d2a1fac627e3665334042020573604c1296caa"
+    },
+    {
+      "path": "src/lib/components/collections/CollectionSaveDialog.svelte",
+      "sha256": "c278ad438a56645acfcc88f55b6876443154782e2845ef111edd383a35397968"
     },
     {
       "path": "src/lib/components/collections/CollectionsPanel.svelte",
@@ -99,15 +108,11 @@
     },
     {
       "path": "src/lib/components/realtime/RealtimeEditor.svelte",
-      "sha256": "1010fc342ca299809ee9ffa7313e65b36803c9d2f22497ac3e4934a360ef02fd"
-    },
-    {
-      "path": "src/lib/components/realtime/RealtimeKeyValueEditor.svelte",
-      "sha256": "b9274d1bdc10a7f7bc7c58fe092b1d85a1fca5ea8a64184810a2fcb3225a1b69"
+      "sha256": "108e114713f21e576cb33593f57d4d82e29eb556e2c3272be3236201b85a3018"
     },
     {
       "path": "src/lib/components/realtime/RealtimeTabs.svelte",
-      "sha256": "19bd7ce724a4357475f8774244eeefff1ba7dd73282a0dcf61613ed4a375c1dc"
+      "sha256": "727ab0db514c9126aec9d47591bef3f56cf1f4279b069399620a3be180ccc65b"
     },
     {
       "path": "src/lib/components/realtime/RealtimeTranscript.svelte",
@@ -122,12 +127,16 @@
       "sha256": "61da684f03e54fb6a2f40e4ec8293c56d7b21e8f22d63f0ecb955998677f2a7d"
     },
     {
+      "path": "src/lib/components/request/KeyValueEditor.svelte",
+      "sha256": "d9e0a3c08072622e2225f11cd48702db8f201623ed37b48b0efab6fdde588266"
+    },
+    {
       "path": "src/lib/components/request/RequestEditor.svelte",
-      "sha256": "0b1eb79a01767616100d465e27c042d6182301e293d29725434a5d54adeaf32e"
+      "sha256": "538f378aecae9d223a56ff1861221e9ac78bd0ae542af252cf7ee71ffe77df99"
     },
     {
       "path": "src/lib/components/request/RequestTabs.svelte",
-      "sha256": "954a2ff77bad6335fe026d2ac6234954eba008803826fd444bdb1611a888094e"
+      "sha256": "9fb7ef67cf19277aa114835cd1caa987013445b4c7117c070859cb08f09e4390"
     },
     {
       "path": "src/lib/components/request/ScriptEditor.svelte",
@@ -151,7 +160,7 @@
     },
     {
       "path": "src/lib/styles/app.css",
-      "sha256": "0075b8e562d4cc0a621774e5c9a31a5e844813f8c924906afb0b14c6153ec8be"
+      "sha256": "a780e6a4a90407a72b293313daa32327ca76b2c410d1ecce4f6e68293f52934b"
     },
     {
       "path": "src/lib/styles/tokens.css",
@@ -163,7 +172,7 @@
     },
     {
       "path": "src/routes/+page.svelte",
-      "sha256": "452abcc6d8bb3c2ee409ad3d04288f4f7a49d47b04d42cae32fc61c8adaef4a5"
+      "sha256": "edeb5a3be6f037930ae426986c4a9270efbf3a0e0b26f5bc44c6c379a771778f"
     },
     {
       "path": "src/routes/activity/+page.svelte",
@@ -187,7 +196,7 @@
     },
     {
       "path": "src/routes/websockets/+page.svelte",
-      "sha256": "c3f7856c3e3303c597f18c038ca0b3f922178713bb3614691fece2158b075139"
+      "sha256": "939a17638a15d3c1c349fa14c57962ae52840dc8d266cf58c985e68544887981"
     }
   ]
 }

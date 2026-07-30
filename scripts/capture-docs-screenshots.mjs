@@ -19,7 +19,7 @@ const manifestVersion = 2;
 const checkOnly = process.argv.includes("--check");
 const manifestOnly = process.argv.includes("--update-manifest-only");
 
-const now = new Date("2026-06-29T12:00:00.000Z").toISOString();
+const now = new Date("2026-07-30T12:00:00.000Z").toISOString();
 
 const settings = {
   theme: "dark",
@@ -31,7 +31,12 @@ const settings = {
   isHistoryCollapsed: false,
   environmentAutosave: true,
   notificationTimeoutMs: 5000,
-  lastUpdateCheckedAt: "2026-06-29T09:30:00.000Z"
+  realtimeConnectTimeoutMs: 30000,
+  realtimeMaxConcurrentSessions: 20,
+  realtimeMaxMessageBytes: 64 * 1024 * 1024,
+  realtimeTranscriptMaxEntries: 2000,
+  realtimeTranscriptMaxBytes: 64 * 1024 * 1024,
+  lastUpdateCheckedAt: "2026-07-30T09:30:00.000Z"
 };
 
 const requestDraft = {
@@ -300,6 +305,25 @@ const captures = [
     beforeCapture: async (page) => {
       await page.getByLabel("Preview resolved request").click();
       await page.getByRole("heading", { name: "Resolved Request Preview" }).waitFor();
+    }
+  },
+  {
+    path: "/websockets?savedRequestId=mock-realtime-websocket-1",
+    file: "websockets-page.webp",
+    waitFor: ".realtime-workspace",
+    beforeCapture: async (page) => {
+      await page.waitForFunction(() =>
+        Array.from(document.querySelectorAll("input")).some((input) => input.value === "Live order events")
+      );
+      const composer = page.locator(".realtime-composer");
+      await composer.getByLabel("Payload type").selectOption("json");
+      await composer.getByLabel("JSON message").fill(
+        JSON.stringify({ order_id: "ord_1042", status: "ready", warehouse: "{{workspace_id}}" }, null, 2)
+      );
+      await page.getByRole("button", { name: "Connect", exact: true }).click();
+      await page.getByText("Connected", { exact: true }).first().waitFor();
+      await composer.getByRole("button", { name: "Send", exact: true }).click();
+      await page.getByText("Mock echo", { exact: true }).waitFor();
     }
   },
   {
