@@ -277,6 +277,7 @@ Use monospace type and `--bg-code`. Long values must wrap or scroll within their
 
 `RealtimeEditor.svelte` and `RealtimeTranscript.svelte` establish the shared realtime workbench pattern:
 
+- editor and transcript panels use the standard `--space-5` inset, reduced to `--space-4` at the compact breakpoint;
 - one large Connect or Disconnect action in the connection header;
 - a visible status row with text plus `.realtime-status-dot`;
 - peer connection settings in semantic local tabs;

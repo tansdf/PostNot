@@ -10,7 +10,6 @@ use url::ParseError as UrlParseError;
 /// TODO: 0.4.X Do not expose non-trivial internal errors. Convert error to string.
 #[derive(Error, Debug)]
 #[non_exhaustive]
-#[cfg_attr(tarpaulin, ignore)]
 pub enum Error {
     // Conform to https://rust-lang.github.io/api-guidelines/naming.html#names-use-a-consistent-word-order-c-word-order
     // Negative verb-object

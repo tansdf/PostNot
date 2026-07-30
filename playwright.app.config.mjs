@@ -1,5 +1,8 @@
 import { defineConfig, devices } from "playwright/test";
 
+const appE2ePort = process.env.POSTNOT_APP_E2E_PORT ?? "1420";
+const appE2eBaseUrl = `http://127.0.0.1:${appE2ePort}`;
+
 export default defineConfig({
   testDir: "./e2e/app",
   testMatch: "**/*.e2e.mjs",
@@ -10,7 +13,7 @@ export default defineConfig({
   workers: 1,
   reporter: [["list"], ["html", { outputFolder: "playwright-report/app-e2e", open: "never" }]],
   use: {
-    baseURL: "http://127.0.0.1:1420",
+    baseURL: appE2eBaseUrl,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     video: "retain-on-failure"
@@ -22,8 +25,8 @@ export default defineConfig({
     }
   ],
   webServer: {
-    command: "npm run dev -- --host 127.0.0.1",
-    url: "http://127.0.0.1:1420/websockets",
+    command: `npm run dev -- --host 127.0.0.1 --port ${appE2ePort}`,
+    url: `${appE2eBaseUrl}/websockets`,
     reuseExistingServer: false,
     timeout: 120_000,
     stdout: "pipe",

@@ -43,6 +43,9 @@ test("WebSocket workspace supports tabs, protocol editing, mock sessions, transc
   await page.goto("/websockets");
 
   await expect(page.getByRole("heading", { name: "WebSocket connection" })).toBeVisible();
+  await expect(page.locator(".realtime-editor")).toHaveCSS("padding", "20px");
+  await expect(page.locator(".realtime-transcript-panel")).toHaveCSS("padding", "20px");
+  await expect(page.getByRole("heading", { name: "WebSocket connection" })).toHaveCSS("margin", "0px");
   await expect(page.getByText("Disconnected", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Connect" })).toBeEnabled();
   await page.getByLabel("Name").fill("Billing events");

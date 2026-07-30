@@ -1,7 +1,7 @@
 # PostNot patch
 
 This directory vendors the published `rust_socketio` 0.6.0 crate with two
-targeted corrections:
+targeted protocol corrections and local build-hygiene adjustments:
 
 `Packet::new_from_payload` previously encoded an outgoing binary event as a
 Socket.IO `BinaryAck` packet whenever an acknowledgement id was present.
@@ -22,3 +22,10 @@ behaviors left consumers unable to release dead sessions or leave a
 `Reconnecting`/`Connected` UI state. PostNot uses the callbacks to transition
 the session to a terminal status; its local fixture tests successful
 reconnection, terminal exhaustion, and non-reconnecting transport loss.
+
+The obsolete `cfg_attr(tarpaulin, ignore)` annotation is removed because this
+vendored production dependency does not run its upstream Tarpaulin coverage
+configuration. The raw client's iterator helper and implementation are
+test-only, matching the already test-only method that constructs them. These
+adjustments keep normal PostNot builds warning-free without weakening lint
+levels for the rest of the vendored crate.

@@ -395,10 +395,12 @@ impl RawClient {
     }
 }
 
+#[cfg(test)]
 pub struct Iter<'a> {
     socket: &'a RawClient,
 }
 
+#[cfg(test)]
 impl<'a> Iterator for Iter<'a> {
     type Item = Result<Packet>;
     fn next(&mut self) -> std::option::Option<<Self as std::iter::Iterator>::Item> {
