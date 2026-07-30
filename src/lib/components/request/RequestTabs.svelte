@@ -3,6 +3,7 @@
   import type { Attachment } from "svelte/attachments";
 
   import type { RequestWorkspaceTab } from "$lib/api/types";
+  import { horizontalWheelScroll } from "$lib/horizontal-scroll";
 
   let {
     tabs = [],
@@ -27,38 +28,12 @@
 
   let tabsStripEl: HTMLDivElement | null = $state(null);
 
-  /** Horizontal tab strip: map vertical wheel to scrollLeft (needs non-passive listener). */
   const attachTabsStrip: Attachment<HTMLDivElement> = (node) => {
     tabsStripEl = node;
-
-    const onWheel = (event: WheelEvent) => {
-      if (node.scrollWidth <= node.clientWidth + 1) {
-        return;
-      }
-
-      let delta = 0;
-      if (event.shiftKey) {
-        delta = event.deltaY;
-      } else if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
-        delta = event.deltaX;
-      } else {
-        delta = event.deltaY;
-      }
-
-      if (delta === 0) {
-        return;
-      }
-
-      node.scrollLeft += delta;
-      event.preventDefault();
-    };
-
-    node.addEventListener("wheel", onWheel, { passive: false });
     return () => {
       if (tabsStripEl === node) {
         tabsStripEl = null;
       }
-      node.removeEventListener("wheel", onWheel);
     };
   };
 
@@ -92,7 +67,7 @@
 </script>
 
 <section class="panel panel-inset-compact request-tabs-panel" aria-label="Request tabs">
-  <div class="request-tabs-strip scrollbar-invisible" role="tablist" aria-label="Open requests" {@attach attachTabsStrip}>
+  <div class="request-tabs-strip scrollbar-invisible" role="tablist" aria-label="Open requests" {@attach horizontalWheelScroll} {@attach attachTabsStrip}>
     {#each tabs as tab (tab.id)}
       <div
         class={["request-tab-chip", activeTabId === tab.id && "request-tab-chip-active"]}

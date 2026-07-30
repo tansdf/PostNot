@@ -197,7 +197,7 @@ Use `.text-input`, `.method-select`, `.body-mode-select`, and `.body-textarea` r
 - Do not erase user input after a failed action.
 - Secret fields must support masking and must not expose their resolved values in previews, history, notifications, or default exports.
 
-Key/value editing uses `.editor-block`, `.editor-header`, `.row-list`, `.kv-row`, `.row-toggle`, `VariableField.svelte`, and row action controls. Reuse that whole composition for new header-like or variable-like data: the title and `Add row` action stay in the header, rows stay in the list, and delete uses the standard icon action. Do not add a full-width creation row below the data.
+Key/value editing uses `KeyValueEditor.svelte`, which owns `.editor-block`, `.editor-header`, `.row-list`, `.kv-row`, `.row-toggle`, the variable-aware value field, and row action controls. Requests and realtime connections use this same component for query parameters and headers. Header consumers also use the shared `header-suggestions.ts` catalog so names and context-sensitive values remain consistent. The title and `Add row` action stay in the header, rows stay in the list, and delete uses the standard icon action. Do not create feature-local key/value editors or add a full-width creation row below the data.
 
 Authentication editors use `AuthEditor.svelte`, which owns the `.editor-block` composition: `Auth` and the `.body-mode-select` belong in `.editor-header`; the selected method's fields use `.auth-grid`; and `None` renders the standard empty state. HTTP requests provide the optional client-credentials token-fetch helper, while realtime connections use the same OAuth2 layout for a manually supplied access token. Protocol-specific workspaces must not introduce a second auth layout.
 
@@ -242,7 +242,7 @@ Use tabs only when views are peers and switching does not submit or navigate thr
 
 Selection must remain visible without hover and should not rely on text color alone.
 
-The WebSockets workspace reuses the request-tab chip geometry through `RealtimeTabs.svelte`. Each tab must expose the definition name, protocol badge, connection status text, unsaved marker, and a visible close affordance inside the chip; click that affordance or press Delete on the focused tab to close it. The new-tab action immediately follows the chips but remains outside the semantic `tablist`, because ARIA tablists may own only tabs. Do not move close/new actions into a detached far-edge toolbar. Restored tabs begin disconnected; do not visually imply that a saved/open tab is a live connection.
+The WebSockets workspace reuses the request-tab chip geometry through `RealtimeTabs.svelte` and the shared `horizontalWheelScroll` attachment for overflowing strips. Each tab must expose the definition name, protocol badge, connection status text, unsaved marker, and a visible close affordance inside the chip; click that affordance or press Delete on the focused tab to close it. The new-tab action immediately follows the chips but remains outside the semantic `tablist`, because ARIA tablists may own only tabs. Do not move close/new actions into a detached far-edge toolbar. Restored tabs begin disconnected; do not visually imply that a saved/open tab is a live connection.
 
 Realtime workspace tabs, connection-setting tabs, and transcript-filter tabs use roving focus. Left/Right moves to the previous/next peer, Home/End moves to the first/last peer, and focus follows selection. Delete closes the focused workspace tab through the normal dirty/live confirmation flow. Keep the selected tab at `tabindex="0"`, peers at `-1`, and connect each tab to its panel with `aria-controls`/`aria-labelledby`.
 
@@ -256,6 +256,8 @@ Use `DialogShell.svelte` with the standard `save-dialog` size or a purpose-speci
 - `.modal-scroll-body` when content can exceed the viewport.
 
 Primary confirmation belongs last in the action row. A destructive confirmation should name the affected object and explain whether recovery is possible.
+
+Saving HTTP and realtime definitions into collection trees uses `CollectionSaveDialog.svelte`. It owns the collection/folder picker geometry, request-count copy, selected state, and action order; callers provide only labels, current targets, and persistence callbacks. New saved-request types must extend this dialog rather than copying its markup into a route.
 
 ### 5.6 Notifications and Inline Feedback
 

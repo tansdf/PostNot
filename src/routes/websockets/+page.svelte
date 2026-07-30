@@ -26,6 +26,7 @@
     type RealtimeRequestDraft,
     type RealtimeWorkspaceTab
   } from "$lib/api/types";
+  import CollectionSaveDialog from "$lib/components/collections/CollectionSaveDialog.svelte";
   import DialogShell from "$lib/components/layout/DialogShell.svelte";
   import RealtimeEditor from "$lib/components/realtime/RealtimeEditor.svelte";
   import RealtimeTabs from "$lib/components/realtime/RealtimeTabs.svelte";
@@ -399,45 +400,24 @@
 <svelte:window onkeydown={handleWindowKeydown} />
 
 {#if isSaveDialogOpen}
-  <DialogShell ariaLabelledby="save-realtime-title" onDismiss={() => (isSaveDialogOpen = false)} sizeClass="save-dialog request-save-dialog">
-    <div class="editor-header"><h2 id="save-realtime-title">{saveDialogMode === "save-as" ? "Save connection as" : "Save connection"}</h2></div>
-    <div class="editor-block request-save-dialog-body">
-      <div class="request-save-target-section">
-        <span class="field-label">Choose a collection</span>
-        <div class="save-target-list save-collection-list" role="listbox" aria-label="Choose a collection">
-          {#each collections.collections as collection (collection.id)}
-            <button
-              class={["save-target-button", saveTargetCollectionId === collection.id && "save-target-active"]}
-              type="button"
-              role="option"
-              aria-selected={saveTargetCollectionId === collection.id}
-              onclick={async () => {
-                saveTargetCollectionId = collection.id;
-                saveTargetParentId = null;
-                await collections.loadCollectionItems(collection.id);
-              }}
-            ><strong>{collection.name}</strong><span>{collection.requestCount} requests</span></button>
-          {/each}
-        </div>
-      </div>
-      {#if saveTargetCollectionId}
-        <div class="request-save-target-section">
-          <span class="field-label">Choose a folder</span>
-          <div class="save-target-list save-folder-list" role="listbox" aria-label="Choose a folder">
-            {#each collections.folderTargets(saveTargetCollectionId) as folder (`${saveTargetCollectionId}-${folder.id ?? "root"}`)}
-              <button class={["save-target-button", saveTargetParentId === folder.id && "save-target-active"]} type="button" role="option" aria-selected={saveTargetParentId === folder.id} onclick={() => (saveTargetParentId = folder.id)} style={`--tree-depth:${folder.depth};`}>
-                <strong>{folder.name}</strong><span>{folder.id ? "Folder" : "Collection root"}</span>
-              </button>
-            {/each}
-          </div>
-        </div>
-      {/if}
-      <div class="collections-page-actions">
-        <button class="button-primary" type="button" onclick={confirmSave} disabled={collections.isSavingRequest}>{collections.isSavingRequest ? "Saving…" : "Save connection"}</button>
-        <button class="button-secondary" type="button" onclick={() => (isSaveDialogOpen = false)}>Cancel</button>
-      </div>
-    </div>
-  </DialogShell>
+  <CollectionSaveDialog
+    title={saveDialogMode === "save-as" ? "Save connection as" : "Save connection"}
+    titleId="save-realtime-title"
+    confirmLabel="Save connection"
+    collections={collections.collections}
+    folders={collections.folderTargets(saveTargetCollectionId)}
+    selectedCollectionId={saveTargetCollectionId}
+    selectedParentId={saveTargetParentId}
+    isSaving={collections.isSavingRequest}
+    onSelectCollection={async (collectionId) => {
+      saveTargetCollectionId = collectionId;
+      saveTargetParentId = null;
+      await collections.loadCollectionItems(collectionId);
+    }}
+    onSelectFolder={(parentId) => (saveTargetParentId = parentId)}
+    onConfirm={confirmSave}
+    onDismiss={() => (isSaveDialogOpen = false)}
+  />
 {/if}
 
 {#if pendingCloseTabId}

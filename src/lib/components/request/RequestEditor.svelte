@@ -11,8 +11,10 @@
   } from "$lib/api/types";
   import AuthEditor from "$lib/components/request/AuthEditor.svelte";
   import JsonEditor from "$lib/components/request/JsonEditor.svelte";
+  import KeyValueEditor from "$lib/components/request/KeyValueEditor.svelte";
   import ScriptEditor from "$lib/components/request/ScriptEditor.svelte";
   import VariableField from "$lib/components/request/VariableField.svelte";
+  import { getHeaderNameSuggestions, getHeaderValueSuggestions } from "$lib/header-suggestions";
   import { formatScript } from "$lib/script-formatting";
   import type { Attachment } from "svelte/attachments";
 
@@ -114,63 +116,6 @@
   pn.expect(pn.response.code).toBe(200);
 });`;
 
-  const GENERAL_HEADER_NAMES = [
-    "Accept",
-    "Accept-Encoding",
-    "Accept-Language",
-    "Authorization",
-    "Cache-Control",
-    "Connection",
-    "Content-Encoding",
-    "Content-Length",
-    "Content-Type",
-    "Cookie",
-    "Host",
-    "If-Match",
-    "If-Modified-Since",
-    "If-None-Match",
-    "If-Unmodified-Since",
-    "Origin",
-    "Pragma",
-    "Prefer",
-    "Range",
-    "Referer",
-    "User-Agent",
-    "X-API-Key",
-    "X-Request-ID",
-    "X-Trace-ID"
-  ];
-
-  const GENERAL_HEADER_VALUE_SUGGESTIONS: Record<string, string[]> = {
-    accept: ["application/json", "application/xml", "text/plain", "text/html", "*/*"],
-    "accept-encoding": ["gzip, deflate, br", "gzip", "identity"],
-    "accept-language": ["en-US,en;q=0.9", "en-US", "en"],
-    authorization: ["Bearer {{oauth_access_token}}", "Bearer ", "Basic "],
-    "cache-control": ["no-cache", "no-store", "max-age=0", "max-age=3600"],
-    connection: ["keep-alive", "close"],
-    "content-encoding": ["gzip", "br", "deflate", "identity"],
-    "content-type": [
-      "application/json",
-      "application/x-www-form-urlencoded",
-      "multipart/form-data",
-      "text/plain",
-      "application/xml",
-      "text/html"
-    ],
-    cookie: ["session=", "token="],
-    "if-match": ["*"],
-    "if-none-match": ["*"],
-    origin: ["http://localhost:3000", "http://localhost:5173"],
-    pragma: ["no-cache"],
-    prefer: ["return=representation", "return=minimal"],
-    range: ["bytes=0-"],
-    referer: ["http://localhost:3000", "http://localhost:5173"],
-    "user-agent": ["PostNot"],
-    "x-api-key": ["{{api_key}}"],
-    "x-request-id": ["{{$guid}}"],
-    "x-trace-id": ["{{$guid}}"]
-  };
-
   let headerNameSuggestions = $derived(getHeaderNameSuggestions(request.headers));
 
   function splitUrlAndQuery(value: string) {
@@ -246,81 +191,14 @@
     };
   }
 
-  function toggleRow(kind: "queryParams" | "headers", index: number, enabled: boolean) {
-    updateRows(kind, index, { enabled });
-  }
-
   function toggleFormEnabled(index: number, enabled: boolean) {
     updateFormRow(index, { enabled });
   }
 
   let displayUrl = $derived(buildDisplayUrl(request.url, request.queryParams));
 
-  function updateRows(kind: "queryParams" | "headers", index: number, patch: Partial<KeyValueRow>) {
-    const nextRows = request[kind].map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row));
-    request = { ...request, [kind]: nextRows };
-  }
-
-  function normalizeHeaderName(value: string) {
-    return value.trim().toLowerCase();
-  }
-
-  function uniqueStrings(values: string[]) {
-    const seen: Record<string, true> = {};
-    const result: string[] = [];
-
-    for (const value of values) {
-      const trimmedValue = value.trim();
-      const lookupKey = trimmedValue.toLowerCase();
-
-      if (!trimmedValue || seen[lookupKey]) {
-        continue;
-      }
-
-      seen[lookupKey] = true;
-      result.push(trimmedValue);
-    }
-
-    return result;
-  }
-
-  function getHeaderNameSuggestions(rows: KeyValueRow[]) {
-    return uniqueStrings([
-      ...GENERAL_HEADER_NAMES,
-      ...rows.map((row) => row.key)
-    ]).sort((a, b) => a.localeCompare(b));
-  }
-
-  function getHeaderValueSuggestions(headerName: string, rows: KeyValueRow[]) {
-    const normalizedHeaderName = normalizeHeaderName(headerName);
-
-    if (!normalizedHeaderName) {
-      return [];
-    }
-
-    return uniqueStrings([
-      ...rows
-        .filter((row) => normalizeHeaderName(row.key) === normalizedHeaderName)
-        .map((row) => row.value),
-      ...(GENERAL_HEADER_VALUE_SUGGESTIONS[normalizedHeaderName] ?? [])
-    ]);
-  }
-
-  function getHeaderNameListId(rowId: string) {
-    return `header-name-suggestions-${rowId}`;
-  }
-
-  function getHeaderValueListId(rowId: string) {
-    return `header-value-suggestions-${rowId}`;
-  }
-
-  function addRow(kind: "queryParams" | "headers") {
-    request = { ...request, [kind]: [...request[kind], createKeyValueRow()] };
-  }
-
-  function removeRow(kind: "queryParams" | "headers", id: string) {
-    const nextRows = request[kind].length === 1 ? [createKeyValueRow()] : request[kind].filter((row) => row.id !== id);
-    request = { ...request, [kind]: nextRows };
+  function updateKeyValueRows(kind: "queryParams" | "headers", rows: KeyValueRow[]) {
+    request = { ...request, [kind]: rows };
   }
 
   function updateBodyMode(mode: BodyMode) {
@@ -695,114 +573,26 @@
   </div>
 
   {#if activePanel === "query"}
-    <div class="editor-block">
-      <div class="editor-header">
-        <h2>Query Parameters</h2>
-        <button class="button-secondary" type="button" onclick={() => addRow("queryParams")}>Add row</button>
-      </div>
-
-      <div class="row-list">
-        {#each request.queryParams as row, index (row.id)}
-          <div class="kv-row">
-            <input
-              class="row-toggle"
-              type="checkbox"
-              checked={row.enabled}
-              aria-label="Enable query parameter row"
-              onchange={(event) => toggleRow("queryParams", index, event.currentTarget.checked)}
-            />
-            <input class="text-input" value={row.key} placeholder="Key" oninput={(event) => updateRows("queryParams", index, { key: event.currentTarget.value })} />
-            <VariableField
-              className="text-input"
-              value={row.value}
-              variables={environmentVariables}
-              placeholder="Value"
-              onValueInput={(nextValue) => updateRows("queryParams", index, { value: nextValue })}
-            />
-            <button
-              class="icon-button row-action-button row-action-danger"
-              type="button"
-              title={removeActionLabel("query parameter row")}
-              aria-label={removeActionLabel("query parameter row")}
-              onclick={() => removeRow("queryParams", row.id)}
-            >
-              <svg viewBox="0 0 20 20" aria-hidden="true">
-                <path d="M3 5h14" />
-                <path d="M8 5V3h4v2" />
-                <path d="M6 8v8" />
-                <path d="M10 8v8" />
-                <path d="M14 8v8" />
-                <path d="M5 5l1 12h8l1-12" />
-              </svg>
-            </button>
-          </div>
-        {/each}
-      </div>
-    </div>
+    <KeyValueEditor
+      rows={request.queryParams}
+      variables={environmentVariables}
+      title="Query Parameters"
+      keyLabel="Key"
+      rowLabel="query parameter"
+      onRowsChange={(rows) => updateKeyValueRows("queryParams", rows)}
+    />
   {/if}
 
   {#if activePanel === "headers"}
-    <div class="editor-block">
-      <div class="editor-header">
-        <h2>Headers</h2>
-        <button class="button-secondary" type="button" onclick={() => addRow("headers")}>Add row</button>
-      </div>
-
-      <div class="row-list">
-        {#each request.headers as row, index (row.id)}
-          <div class="kv-row">
-            <input
-              class="row-toggle"
-              type="checkbox"
-              checked={row.enabled}
-              aria-label="Enable header row"
-              onchange={(event) => toggleRow("headers", index, event.currentTarget.checked)}
-            />
-            <input
-              class="text-input"
-              value={row.key}
-              placeholder="Header"
-              list={getHeaderNameListId(row.id)}
-              oninput={(event) => updateRows("headers", index, { key: event.currentTarget.value })}
-            />
-            <datalist id={getHeaderNameListId(row.id)}>
-              {#each headerNameSuggestions as headerName (headerName)}
-                <option value={headerName}></option>
-              {/each}
-            </datalist>
-            <VariableField
-              className="text-input"
-              value={row.value}
-              variables={environmentVariables}
-              placeholder="Value"
-              list={getHeaderValueListId(row.id)}
-              onValueInput={(nextValue) => updateRows("headers", index, { value: nextValue })}
-            />
-            <datalist id={getHeaderValueListId(row.id)}>
-              {#each getHeaderValueSuggestions(row.key, request.headers) as headerValue (headerValue)}
-                <option value={headerValue}></option>
-              {/each}
-            </datalist>
-            <button
-              class="icon-button row-action-button row-action-danger"
-              type="button"
-              title={removeActionLabel("header row")}
-              aria-label={removeActionLabel("header row")}
-              onclick={() => removeRow("headers", row.id)}
-            >
-              <svg viewBox="0 0 20 20" aria-hidden="true">
-                <path d="M3 5h14" />
-                <path d="M8 5V3h4v2" />
-                <path d="M6 8v8" />
-                <path d="M10 8v8" />
-                <path d="M14 8v8" />
-                <path d="M5 5l1 12h8l1-12" />
-              </svg>
-            </button>
-          </div>
-        {/each}
-      </div>
-    </div>
+    <KeyValueEditor
+      rows={request.headers}
+      variables={environmentVariables}
+      title="Headers"
+      keyLabel="Header"
+      keySuggestions={headerNameSuggestions}
+      getValueSuggestions={(key) => getHeaderValueSuggestions(key, request.headers)}
+      onRowsChange={(rows) => updateKeyValueRows("headers", rows)}
+    />
   {/if}
 
   {#if activePanel === "body"}

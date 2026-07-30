@@ -9,10 +9,11 @@
     type RealtimeProtocol,
     type RealtimeRequestDraft
   } from "$lib/api/types";
-  import RealtimeKeyValueEditor from "$lib/components/realtime/RealtimeKeyValueEditor.svelte";
   import AuthEditor from "$lib/components/request/AuthEditor.svelte";
   import JsonEditor from "$lib/components/request/JsonEditor.svelte";
+  import KeyValueEditor from "$lib/components/request/KeyValueEditor.svelte";
   import VariableField from "$lib/components/request/VariableField.svelte";
+  import { getHeaderNameSuggestions, getHeaderValueSuggestions } from "$lib/header-suggestions";
 
   let {
     draft = $bindable(),
@@ -71,6 +72,7 @@
   let hasLiveSession = $derived(status === "connected" || status === "reconnecting");
   let isBusy = $derived(status === "connecting" || status === "disconnecting");
   let structuredJsonValid = $derived(!authPayloadError && !argumentsError);
+  let headerNameSuggestions = $derived(getHeaderNameSuggestions(draft.headers));
   type WebSocketDraft = Extract<RealtimeRequestDraft, { requestType: "websocket" }>;
   type SocketIoDraft = Extract<RealtimeRequestDraft, { requestType: "socketio" }>;
 
@@ -327,22 +329,26 @@
     tabindex="0"
   >
     {#if activePanel === "query"}
-      <RealtimeKeyValueEditor
-        bind:rows={draft.queryParams}
+      <KeyValueEditor
+        rows={draft.queryParams}
         {variables}
         title="Query Parameters"
         keyLabel="Parameter"
         valueLabel="Value"
+        onRowsChange={(queryParams) => patchCommon({ queryParams })}
       />
     {:else if activePanel === "headers"}
-      <RealtimeKeyValueEditor
-        bind:rows={draft.headers}
+      <KeyValueEditor
+        rows={draft.headers}
         {variables}
         title="Headers"
         description="Handshake headers are resolved when you connect. Add cookies using a standard Cookie header."
         keyLabel="Header"
         valueLabel="Value"
         auxiliaryActionLabel="Add Cookie header"
+        keySuggestions={headerNameSuggestions}
+        getValueSuggestions={(key) => getHeaderValueSuggestions(key, draft.headers)}
+        onRowsChange={(headers) => patchCommon({ headers })}
         onAuxiliaryAction={addCookieHeader}
       />
     {:else if activePanel === "auth"}

@@ -77,6 +77,60 @@ test("Requests and realtime share the tokenized JSON editor behavior", async ({ 
   await expect(requestAuthEditor.getByRole("button", { name: "Fetch token" })).toBeVisible();
 });
 
+test("Requests and realtime share query and header editing standards", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Headers", exact: true }).click();
+
+  const requestHeaders = page.locator(".request-panel .key-value-editor");
+  const requestHeaderName = requestHeaders.locator('input[placeholder="Header"]').first();
+  await expect(requestHeaders.getByRole("heading", { name: "Headers" })).toBeVisible();
+  await expect(requestHeaderName).toHaveAttribute("list", /key-value-name-suggestions-/);
+  const requestNameListId = await requestHeaderName.getAttribute("list");
+  const requestHeaderNames = await page.locator(`#${requestNameListId} option`).evaluateAll((options) =>
+    options.map((option) => option.value)
+  );
+  expect(requestHeaderNames).toContain("Content-Type");
+
+  await requestHeaderName.fill("Content-Type");
+  const requestHeaderValue = requestHeaders.locator('input[placeholder="Value"]').first();
+  const requestValueListId = await requestHeaderValue.getAttribute("list");
+  const requestHeaderValues = await page.locator(`#${requestValueListId} option`).evaluateAll((options) =>
+    options.map((option) => option.value)
+  );
+  expect(requestHeaderValues).toContain("application/json");
+  await capture(page, testInfo, "request-shared-header-editor");
+
+  await page.goto("/websockets");
+  const settingsTabs = page.getByRole("tablist", { name: "Connection settings" });
+  await settingsTabs.getByRole("tab", { name: "Headers & cookies" }).click();
+
+  const realtimeHeaders = page.locator("#realtime-settings-panel .key-value-editor");
+  const realtimeHeaderName = realtimeHeaders.locator('input[placeholder="Header"]').first();
+  await expect(realtimeHeaders.getByRole("heading", { name: "Headers" })).toBeVisible();
+  await expect(realtimeHeaderName).toHaveAttribute("list", /key-value-name-suggestions-/);
+  const realtimeNameListId = await realtimeHeaderName.getAttribute("list");
+  const realtimeHeaderNames = await page.locator(`#${realtimeNameListId} option`).evaluateAll((options) =>
+    options.map((option) => option.value)
+  );
+  expect(realtimeHeaderNames).toEqual(requestHeaderNames);
+
+  await realtimeHeaderName.fill("Content-Type");
+  const realtimeHeaderValue = realtimeHeaders.locator('input[placeholder="Value"]').first();
+  const realtimeValueListId = await realtimeHeaderValue.getAttribute("list");
+  const realtimeHeaderValues = await page.locator(`#${realtimeValueListId} option`).evaluateAll((options) =>
+    options.map((option) => option.value)
+  );
+  expect(realtimeHeaderValues).toEqual(requestHeaderValues);
+
+  await realtimeHeaders.getByRole("button", { name: "Add Cookie header" }).click();
+  await expect(realtimeHeaders.locator('input[placeholder="Header"]')).toHaveCount(2);
+  await expect(realtimeHeaders.locator('input[placeholder="Header"]').nth(1)).toHaveValue("Cookie");
+  await capture(page, testInfo, "realtime-shared-header-editor");
+
+  await settingsTabs.getByRole("tab", { name: "Query" }).click();
+  await expect(page.locator("#realtime-settings-panel .key-value-editor")).toBeVisible();
+});
+
 test("WebSocket workspace supports tabs, protocol editing, mock sessions, transcript tools, and safe close", async ({
   page
 }, testInfo) => {

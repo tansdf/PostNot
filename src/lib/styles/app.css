@@ -1100,6 +1100,21 @@ select option {
   align-items: center;
 }
 
+.key-value-row {
+  display: grid;
+  width: 100%;
+  grid-template-columns: auto minmax(9rem, 0.8fr) minmax(12rem, 1.2fr) auto;
+}
+
+.key-value-content {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.key-value-content > .field-help {
+  margin: 0;
+}
+
 .environment-kv-row {
   align-items: center;
 }
@@ -4228,7 +4243,7 @@ body.collection-dnd-active {
 
 .realtime-connection-header {
   display: grid;
-  grid-template-columns: minmax(15rem, 0.7fr) 10rem minmax(22rem, 1.5fr) auto;
+  grid-template-columns: minmax(12rem, 0.8fr) 9rem minmax(12rem, 1.4fr) auto;
   gap: var(--space-3);
   align-items: end;
   margin-top: var(--space-4);
@@ -4323,10 +4338,6 @@ body.collection-dnd-active {
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-md);
   background: var(--surface-subtle);
-}
-
-.realtime-kv-row {
-  grid-template-columns: auto minmax(9rem, 0.8fr) minmax(12rem, 1.2fr) auto;
 }
 
 .realtime-composer-toolbar,
@@ -4526,12 +4537,7 @@ body.collection-dnd-active {
 
 @media (max-width: 1500px) {
   .realtime-connection-header {
-    grid-template-columns: minmax(14rem, 0.8fr) 10rem minmax(18rem, 1fr);
-  }
-
-  .realtime-connect-actions {
-    grid-column: 3;
-    justify-content: flex-end;
+    grid-template-columns: minmax(10rem, 0.8fr) 8.5rem minmax(0, 1fr) auto;
   }
 }
 
@@ -4555,28 +4561,26 @@ body.collection-dnd-active {
 }
 
 @media (max-width: 720px) {
-  .realtime-kv-row {
-    display: grid;
-    width: 100%;
+  .key-value-row {
     grid-template-columns: auto 1fr auto;
   }
 
-  .realtime-kv-row > .row-toggle {
+  .key-value-row > .row-toggle {
     grid-column: 1;
     grid-row: 1;
   }
 
-  .realtime-kv-row > :nth-child(2) {
+  .key-value-row > .text-input {
     grid-column: 2;
     grid-row: 1;
   }
 
-  .realtime-kv-row > :nth-child(3) {
+  .key-value-row > .variable-field {
     grid-column: 2;
     grid-row: 2;
   }
 
-  .realtime-kv-row > .row-action-button {
+  .key-value-row > .row-action-button {
     grid-column: 3;
     grid-row: 1 / span 2;
   }

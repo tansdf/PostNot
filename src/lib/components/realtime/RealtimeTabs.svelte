@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import type { RealtimeWorkspaceTab } from "$lib/api/types";
+  import { horizontalWheelScroll } from "$lib/horizontal-scroll";
 
   let {
     tabs = [],
@@ -54,13 +56,25 @@
     event.preventDefault();
     void moveFocus(tabs[nextIndex].id);
   }
+
+  $effect(() => {
+    const tabId = activeTabId;
+    if (!tabId) return;
+    void tick().then(() => {
+      document.querySelector(`[data-realtime-tab-id="${tabId}"]`)?.scrollIntoView({
+        behavior: "smooth",
+        inline: "nearest",
+        block: "nearest"
+      });
+    });
+  });
 </script>
 
 <section class="panel panel-inset-compact request-tabs-panel" aria-label="Realtime connection tabs">
-  <div class="request-tabs-strip scrollbar-invisible">
+  <div class="request-tabs-strip scrollbar-invisible" {@attach horizontalWheelScroll}>
     <div class="realtime-tablist" role="tablist" aria-label="Open realtime connections">
       {#each tabs as tab, index (tab.id)}
-        <div class={["request-tab-chip", activeTabId === tab.id && "request-tab-chip-active"]}>
+        <div class={["request-tab-chip", activeTabId === tab.id && "request-tab-chip-active"]} data-realtime-tab-id={tab.id}>
           <button
             id={tabDomId(tab.id)}
             class="request-tab-chip-button"
