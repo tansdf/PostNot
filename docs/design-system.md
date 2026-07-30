@@ -199,6 +199,12 @@ Use `.text-input`, `.method-select`, `.body-mode-select`, and `.body-textarea` r
 
 Key/value editing uses `.editor-block`, `.editor-header`, `.row-list`, `.kv-row`, `.row-toggle`, `VariableField.svelte`, and row action controls. Reuse that whole composition for new header-like or variable-like data: the title and `Add row` action stay in the header, rows stay in the list, and delete uses the standard icon action. Do not add a full-width creation row below the data.
 
+Authentication editors use `AuthEditor.svelte`, which owns the `.editor-block` composition: `Auth` and the `.body-mode-select` belong in `.editor-header`; the selected method's fields use `.auth-grid`; and `None` renders the standard empty state. HTTP requests provide the optional client-credentials token-fetch helper, while realtime connections use the same OAuth2 layout for a manually supplied access token. Protocol-specific workspaces must not introduce a second auth layout.
+
+All interactive checkboxes use the styled `.row-toggle` control. Settings-like checkbox rows also add `.settings-checkbox` so the control aligns with its title and supporting copy. Never rely on the browser-default checkbox in an application workspace.
+
+Use `JsonEditor.svelte` for editable JSON in requests, realtime messages, Socket.IO auth payloads, and Socket.IO argument arrays. It owns syntax tokenization, environment-variable highlighting and suggestions, caret-safe overlay scrolling, and Enter/Tab indentation. Feature code owns schema-specific validation and formatting actions; it must pass error state through `ariaInvalid`.
+
 ### 5.3 Panels and Cards
 
 Use `.panel` for a major workspace region. `.panel` is intentionally only the visual shell: it provides the background, border, radius, and shadow, but no content padding. Every panel must declare one inset strategy so a new surface cannot silently render against its border.

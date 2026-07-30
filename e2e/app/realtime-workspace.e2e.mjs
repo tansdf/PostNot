@@ -19,6 +19,17 @@ async function capture(page, testInfo, name) {
   await testInfo.attach(name, { path, contentType: "image/png" });
 }
 
+async function resolveCssColor(locator, customProperty) {
+  return locator.evaluate((node, propertyName) => {
+    const probe = document.createElement("span");
+    probe.style.backgroundColor = `var(${propertyName})`;
+    node.append(probe);
+    const resolvedColor = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    return resolvedColor;
+  }, customProperty);
+}
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.clear();
@@ -35,6 +46,35 @@ test.beforeEach(async ({ page }) => {
       })
     );
   });
+});
+
+test("Requests and realtime share the tokenized JSON editor behavior", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "Body", exact: true }).click();
+  await page.getByLabel("Body type").selectOption("json");
+  const requestJsonEditor = page.getByLabel("JSON request body");
+
+  await requestJsonEditor.fill("{}");
+  await requestJsonEditor.evaluate((node) => {
+    node.setSelectionRange(1, 1);
+  });
+  await requestJsonEditor.press("Enter");
+  await expect(requestJsonEditor).toHaveValue("{\n  \n}");
+
+  await requestJsonEditor.fill('{"tenant":"{{tenant_id}}","enabled":true}');
+  await expect(requestJsonEditor).toHaveClass(/variable-input-highlighted/);
+  const requestPanel = page.locator(".request-panel");
+  await expect(requestPanel.locator(".json-editor-overlay .jt-key").first()).toContainText('"tenant"');
+  await expect(requestPanel.locator(".json-editor-overlay .jt-variable")).toContainText("{{tenant_id}}");
+  await requestPanel.getByRole("button", { name: "Format", exact: true }).click();
+  await expect(requestJsonEditor).toHaveValue('{\n  "tenant": "{{tenant_id}}",\n  "enabled": true\n}');
+
+  await page.getByRole("button", { name: "Auth", exact: true }).click();
+  const requestAuthEditor = requestPanel.locator(".auth-editor");
+  await requestAuthEditor.getByLabel("Auth type").selectOption("oauth2");
+  await expect(requestAuthEditor.getByLabel("Access token")).toBeVisible();
+  await expect(requestAuthEditor.getByRole("button", { name: "Fetch token" })).toBeVisible();
 });
 
 test("WebSocket workspace supports tabs, protocol editing, mock sessions, transcript tools, and safe close", async ({
@@ -59,6 +99,49 @@ test("WebSocket workspace supports tabs, protocol editing, mock sessions, transc
   await queryEditor.getByRole("button", { name: "Remove parameter row 2" }).click();
   await expect(queryEditor.locator(".kv-row")).toHaveCount(1);
 
+  const realtimeComposer = page.locator(".realtime-composer");
+  await realtimeComposer.getByLabel("Payload type").selectOption("json");
+  const jsonMessageEditor = realtimeComposer.getByLabel("JSON message");
+  await jsonMessageEditor.fill('{"message":"{{api_token}}","attempt":1}');
+  await expect(jsonMessageEditor).toHaveClass(/variable-input-highlighted/);
+  await expect(realtimeComposer.locator(".json-editor-overlay .jt-key").first()).toContainText('"message"');
+  await expect(realtimeComposer.locator(".json-editor-overlay .jt-variable")).toContainText("{{api_token}}");
+  await realtimeComposer.getByRole("button", { name: "Format", exact: true }).click();
+  await expect(jsonMessageEditor).toHaveValue('{\n  "message": "{{api_token}}",\n  "attempt": 1\n}');
+  await capture(page, testInfo, "realtime-shared-json-editor");
+
+  const settingsTabs = page.getByRole("tablist", { name: "Connection settings" });
+  await settingsTabs.getByRole("tab", { name: "Auth" }).click();
+  const authEditor = settingsPanel.locator(".editor-block");
+  await expect(authEditor).toHaveClass(/auth-editor/);
+  await expect(authEditor.getByRole("heading", { name: "Auth" })).toBeVisible();
+  await expect(authEditor.getByLabel("Auth type")).toHaveClass(/body-mode-select/);
+  await expect(authEditor.getByText("This connection will be opened without authentication.")).toBeVisible();
+  await authEditor.getByLabel("Auth type").selectOption("bearer");
+  await expect(authEditor.getByLabel("Token")).toBeVisible();
+  const selectedControlBackground = await resolveCssColor(settingsTabs, "--control-selected-bg");
+  await expect(settingsTabs.getByRole("tab", { name: "Auth" })).toHaveCSS("background-color", selectedControlBackground);
+  await capture(page, testInfo, "realtime-shared-auth-editor");
+  await authEditor.getByLabel("Auth type").selectOption("oauth2");
+  await expect(authEditor.getByLabel("Access token")).toBeVisible();
+  await expect(authEditor.getByRole("button", { name: "Fetch token" })).toHaveCount(0);
+
+  await settingsTabs.getByRole("tab", { name: "Reconnect" }).click();
+  const reconnectCheckbox = settingsPanel.getByLabel("Reconnect automatically");
+  await expect(reconnectCheckbox).toHaveClass(/row-toggle/);
+  await expect(reconnectCheckbox).toHaveClass(/settings-checkbox/);
+  await expect(settingsPanel.getByLabel("Maximum attempts")).toBeDisabled();
+  await reconnectCheckbox.check();
+  await expect(reconnectCheckbox).toBeChecked();
+  await expect(reconnectCheckbox).toHaveCSS("background-color", selectedControlBackground);
+  const reconnectCheckmarkTransform = await reconnectCheckbox.evaluate((node) =>
+    getComputedStyle(node, "::before").transform
+  );
+  expect(reconnectCheckmarkTransform).not.toBe("none");
+  await expect(settingsPanel.getByLabel("Maximum attempts")).toBeEnabled();
+  await expect(settingsTabs.getByRole("tab", { name: "Reconnect" })).toHaveCSS("background-color", selectedControlBackground);
+  await capture(page, testInfo, "realtime-styled-reconnect-toggle");
+
   await page.getByLabel("Name").fill("Billing events");
   await page.getByLabel("Connection URL").fill("wss://events.example.test/billing");
   await page.getByRole("button", { name: "Open a new WebSocket tab" }).click();
@@ -81,7 +164,6 @@ test("WebSocket workspace supports tabs, protocol editing, mock sessions, transc
 
   await page.getByLabel("Mode").selectOption("socketio");
   await expect(page.getByRole("heading", { name: "Socket.IO connection" })).toBeVisible();
-  const settingsTabs = page.getByRole("tablist", { name: "Connection settings" });
   await settingsTabs.getByRole("tab", { name: "Query" }).focus();
   await page.keyboard.press("ArrowRight");
   await expect(settingsTabs.getByRole("tab", { name: "Headers & cookies" })).toHaveAttribute("aria-selected", "true");
@@ -91,10 +173,16 @@ test("WebSocket workspace supports tabs, protocol editing, mock sessions, transc
   await expect(page.getByRole("alert")).toContainText("Unexpected");
   await expect(page.getByRole("button", { name: "Connect" })).toBeDisabled();
   await page.getByLabel("Auth payload (JSON object)").fill('{"tenant":"acme"}');
+  await expect(page.getByLabel("Auth payload (JSON object)")).toHaveClass(/variable-input-highlighted/);
+  await expect(settingsPanel.locator(".json-editor-overlay .jt-key")).toContainText('"tenant"');
 
   await page.getByLabel("Arguments (JSON array)").fill("{}");
   await expect(page.getByText("Event arguments must be a JSON array.")).toBeVisible();
   await page.getByLabel("Arguments (JSON array)").fill('[{"invoiceId":"inv_42"}]');
+  await expect(page.getByLabel("Arguments (JSON array)")).toHaveClass(/variable-input-highlighted/);
+  const ackCheckbox = page.getByLabel("Wait for acknowledgement");
+  await expect(ackCheckbox).toHaveClass(/row-toggle/);
+  await expect(ackCheckbox).toHaveClass(/settings-checkbox/);
   await page.getByLabel("Payload type").selectOption("binary");
   await expect(page.getByLabel("Binary source")).toBeVisible();
   await page.getByLabel("Payload type").selectOption("json");

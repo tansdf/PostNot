@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "generatedAt": "2026-07-30T11:00:38.178Z",
+  "generatedAt": "2026-07-30T11:44:34.836Z",
   "viewport": {
     "width": 1995,
     "height": 1179
@@ -43,7 +43,7 @@
       "waitFor": ".settings-page"
     }
   ],
-  "inputHash": "8773531af44dc100301b936add7a4fa165950e5991953cc7526c7cab5af05d8c",
+  "inputHash": "adcd6a12e1adf5e40e6b71e96bda48bcaaff23623e1087668e1ae22cc70fdfd9",
   "inputs": [
     {
       "path": "scripts/capture-docs-screenshots.mjs",
@@ -99,7 +99,7 @@
     },
     {
       "path": "src/lib/components/realtime/RealtimeEditor.svelte",
-      "sha256": "a85066e00ce5532fcdcae522e92e2c66f8099ceed99c4b9dfba9c16c8b15041e"
+      "sha256": "1010fc342ca299809ee9ffa7313e65b36803c9d2f22497ac3e4934a360ef02fd"
     },
     {
       "path": "src/lib/components/realtime/RealtimeKeyValueEditor.svelte",
@@ -114,8 +114,16 @@
       "sha256": "dc78a1141670681991f630542e03a9405a4fe7dc1c454cc664c1bcbc998abfb9"
     },
     {
+      "path": "src/lib/components/request/AuthEditor.svelte",
+      "sha256": "8d4759e5ae8543a3d868c09b952ec6ce1f003a3cd11b45e02874472590bd40e9"
+    },
+    {
+      "path": "src/lib/components/request/JsonEditor.svelte",
+      "sha256": "61da684f03e54fb6a2f40e4ec8293c56d7b21e8f22d63f0ecb955998677f2a7d"
+    },
+    {
       "path": "src/lib/components/request/RequestEditor.svelte",
-      "sha256": "448eb5a94c3bd3fddc759a6313e4394025843dce1f7964f078a122e463990f58"
+      "sha256": "0b1eb79a01767616100d465e27c042d6182301e293d29725434a5d54adeaf32e"
     },
     {
       "path": "src/lib/components/request/RequestTabs.svelte",
@@ -127,7 +135,7 @@
     },
     {
       "path": "src/lib/components/request/VariableField.svelte",
-      "sha256": "d1879e69dc8ec52c032493bd1dfaa71abebad1c37d941aa70b5c6de3d5baaa52"
+      "sha256": "dacd5879e9c47047bf8d331caad71066b179e3bc14d87ed6892c5bad0a6b14ae"
     },
     {
       "path": "src/lib/components/response/JsonViewer.svelte",
@@ -143,7 +151,7 @@
     },
     {
       "path": "src/lib/styles/app.css",
-      "sha256": "d76b7ff07b89ce9a61125fb4af685972d423f32c41a092be343fceccc847b7e1"
+      "sha256": "0075b8e562d4cc0a621774e5c9a31a5e844813f8c924906afb0b14c6153ec8be"
     },
     {
       "path": "src/lib/styles/tokens.css",

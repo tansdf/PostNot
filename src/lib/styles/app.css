@@ -4348,7 +4348,6 @@ body.collection-dnd-active {
   margin: 0;
 }
 
-.realtime-auth-grid,
 .realtime-protocol-grid,
 .realtime-reconnect-grid,
 .realtime-binary-grid,
@@ -4538,7 +4537,6 @@ body.collection-dnd-active {
 
 @media (max-width: 1220px) {
   .realtime-connection-header,
-  .realtime-auth-grid,
   .realtime-protocol-grid,
   .realtime-reconnect-grid,
   .realtime-binary-grid,

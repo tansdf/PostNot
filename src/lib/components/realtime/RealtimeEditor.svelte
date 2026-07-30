@@ -7,10 +7,11 @@
     type EnvironmentVariable,
     type RealtimeBinaryPayload,
     type RealtimeProtocol,
-    type RealtimeRequestDraft,
-    type RequestAuth
+    type RealtimeRequestDraft
   } from "$lib/api/types";
   import RealtimeKeyValueEditor from "$lib/components/realtime/RealtimeKeyValueEditor.svelte";
+  import AuthEditor from "$lib/components/request/AuthEditor.svelte";
+  import JsonEditor from "$lib/components/request/JsonEditor.svelte";
   import VariableField from "$lib/components/request/VariableField.svelte";
 
   let {
@@ -126,10 +127,6 @@
       reconnect: draft.reconnect
     } as RealtimeRequestDraft;
     composerError = "";
-  }
-
-  function patchAuth(patch: Partial<RequestAuth>) {
-    patchCommon({ auth: { ...draft.auth, ...patch } });
   }
 
   function patchWebSocket(patch: Partial<WebSocketDraft>) {
@@ -349,27 +346,12 @@
         onAuxiliaryAction={addCookieHeader}
       />
     {:else if activePanel === "auth"}
-      <div class="auth-grid realtime-auth-grid">
-        <label>
-          <span class="field-label">Authentication</span>
-          <select class="text-input" value={draft.auth.type} onchange={(event) => patchAuth({ type: event.currentTarget.value as RequestAuth["type"] })}>
-            <option value="none">None</option>
-            <option value="basic">Basic auth</option>
-            <option value="bearer">Bearer token</option>
-            <option value="api-key">API key</option>
-          </select>
-        </label>
-        {#if draft.auth.type === "basic"}
-          <label><span class="field-label">Username</span><VariableField value={draft.auth.basicUsername} {variables} className="text-input" onValueInput={(value) => patchAuth({ basicUsername: value })} /></label>
-          <label><span class="field-label">Password</span><VariableField value={draft.auth.basicPassword} {variables} className="text-input" type="password" onValueInput={(value) => patchAuth({ basicPassword: value })} /></label>
-        {:else if draft.auth.type === "bearer"}
-          <label class="realtime-wide-field"><span class="field-label">Bearer token</span><VariableField value={draft.auth.bearerToken} {variables} className="text-input" type="password" onValueInput={(value) => patchAuth({ bearerToken: value })} /></label>
-        {:else if draft.auth.type === "api-key"}
-          <label><span class="field-label">Key name</span><VariableField value={draft.auth.apiKeyName} {variables} className="text-input" onValueInput={(value) => patchAuth({ apiKeyName: value })} /></label>
-          <label><span class="field-label">Key value</span><VariableField value={draft.auth.apiKeyValue} {variables} className="text-input" type="password" onValueInput={(value) => patchAuth({ apiKeyValue: value })} /></label>
-          <label><span class="field-label">Placement</span><select class="text-input" value={draft.auth.apiKeyIn} onchange={(event) => patchAuth({ apiKeyIn: event.currentTarget.value as "header" | "query" })}><option value="header">Header</option><option value="query">Query</option></select></label>
-        {/if}
-      </div>
+      <AuthEditor
+        auth={draft.auth}
+        {variables}
+        emptyMessage="This connection will be opened without authentication."
+        onAuthChange={(auth) => patchCommon({ auth })}
+      />
     {:else if activePanel === "protocol"}
       {#if draft.requestType === "websocket"}
         <label>
@@ -388,13 +370,24 @@
           <label><span class="field-label">Engine.IO path</span><VariableField value={draft.path} {variables} className="text-input" onValueInput={(value) => patchSocketIo({ path: value })} /></label>
           <label><span class="field-label">Namespace</span><VariableField value={draft.namespace} {variables} className="text-input" onValueInput={(value) => patchSocketIo({ namespace: value })} /></label>
           <label><span class="field-label">Transport</span><select class="text-input" value={draft.transport} onchange={(event) => patchSocketIo({ transport: event.currentTarget.value as "auto" | "websocketOnly" })}><option value="auto">Auto (polling + upgrade)</option><option value="websocketOnly">WebSocket only</option></select></label>
-          <label class="realtime-wide-field"><span class="field-label">Auth payload (JSON object)</span><textarea class="body-textarea realtime-json-input" spellcheck="false" bind:value={authPayloadText} oninput={(event) => setSocketIoJson("authPayload", event.currentTarget.value)} aria-invalid={Boolean(authPayloadError)}></textarea>{#if authPayloadError}<span class="field-error" role="alert">{authPayloadError}</span>{/if}</label>
+          <label class="realtime-wide-field">
+            <span class="field-label">Auth payload (JSON object)</span>
+            <JsonEditor
+              value={authPayloadText}
+              {variables}
+              className="body-textarea realtime-json-input"
+              ariaLabel="Auth payload (JSON object)"
+              ariaInvalid={Boolean(authPayloadError)}
+              onValueInput={(value) => setSocketIoJson("authPayload", value)}
+            />
+            {#if authPayloadError}<span class="field-error" role="alert">{authPayloadError}</span>{/if}
+          </label>
         </div>
       {/if}
     {:else}
       <div class="realtime-reconnect-grid">
         <label class="settings-checkbox-line">
-          <input type="checkbox" checked={draft.reconnect.enabled} onchange={(event) => patchCommon({ reconnect: { ...draft.reconnect, enabled: event.currentTarget.checked } })} />
+          <input class="row-toggle settings-checkbox" type="checkbox" checked={draft.reconnect.enabled} onchange={(event) => patchCommon({ reconnect: { ...draft.reconnect, enabled: event.currentTarget.checked } })} />
           <span><strong>Reconnect automatically</strong><small>Retry abnormal transport failures only.</small></span>
         </label>
         <label><span class="field-label">Maximum attempts</span><input class="text-input" type="number" min="1" max="20" value={draft.reconnect.maxAttempts} disabled={!draft.reconnect.enabled} oninput={(event) => patchCommon({ reconnect: { ...draft.reconnect, maxAttempts: event.currentTarget.valueAsNumber || 1 } })} /></label>
@@ -427,15 +420,25 @@
     {#if draft.requestType === "websocket"}
       <div class="realtime-composer-toolbar">
         <label><span class="field-label">Payload type</span><select class="body-mode-select" value={draft.composer.mode} onchange={(event) => patchRawComposer({ mode: event.currentTarget.value as "text" | "json" | "binary" })}><option value="text">Text</option><option value="json">JSON</option><option value="binary">Binary</option></select></label>
-        {#if draft.composer.mode === "json"}<button class="button-secondary button-compact" type="button" onclick={formatJson}>Format JSON</button>{/if}
+        {#if draft.composer.mode === "json"}<button class="button-secondary button-compact" type="button" onclick={formatJson}>Format</button>{/if}
       </div>
       {#if draft.composer.mode === "binary"}
         <div class="realtime-binary-grid">
           <label><span class="field-label">Binary source</span><select class="text-input" value={binarySource(draft.composer.binary)} onchange={(event) => patchRawComposer({ binary: buildBinary(event.currentTarget.value as "file" | "hex" | "base64", binaryValue(draft.requestType === "websocket" ? draft.composer.binary : null)) })}><option value="file">Local file path</option><option value="hex">Hex</option><option value="base64">Base64</option></select></label>
           <label><span class="field-label">{binarySource(draft.composer.binary) === "file" ? "File" : "Binary value"}</span><div class="realtime-file-control"><VariableField value={binaryValue(draft.composer.binary)} {variables} className="text-input" disabled={binarySource(draft.composer.binary) === "file"} placeholder={binarySource(draft.composer.binary) === "file" ? "Choose a local file" : ""} onValueInput={(value) => patchRawComposer({ binary: buildBinary(binarySource(draft.requestType === "websocket" ? draft.composer.binary : null), value) })} />{#if binarySource(draft.composer.binary) === "file"}<button class="button-secondary" type="button" onclick={pickBinaryFile} disabled={isPickingBinaryFile}>{isPickingBinaryFile ? "Choosing…" : "Choose file…"}</button>{/if}</div></label>
         </div>
+      {:else if draft.composer.mode === "json"}
+        <JsonEditor
+          value={draft.composer.content}
+          {variables}
+          className="body-textarea realtime-message-input"
+          placeholder={'{\n  "message": "hello"\n}'}
+          ariaLabel="JSON message"
+          ariaInvalid={Boolean(composerError)}
+          onValueInput={(value) => patchRawComposer({ content: value })}
+        />
       {:else}
-        <VariableField value={draft.composer.content} {variables} className="body-textarea realtime-message-input" multiline={true} spellcheck={false} placeholder={draft.composer.mode === "json" ? '{\n  \"message\": \"hello\"\n}' : "Type a message…"} onValueInput={(value) => patchRawComposer({ content: value })} />
+        <VariableField value={draft.composer.content} {variables} className="body-textarea realtime-message-input" multiline={true} spellcheck={false} placeholder="Type a message…" onValueInput={(value) => patchRawComposer({ content: value })} />
       {/if}
     {:else}
       <div class="realtime-event-grid">
@@ -445,9 +448,20 @@
           <label><span class="field-label">Binary source</span><select class="text-input" value={binarySource(draft.composer.binary)} onchange={(event) => patchSocketIoComposer({ binary: buildBinary(event.currentTarget.value as "file" | "hex" | "base64", binaryValue(draft.requestType === "socketio" ? draft.composer.binary : null)) })}><option value="file">Local file</option><option value="hex">Hex</option><option value="base64">Base64</option></select></label>
           <label class="realtime-wide-field"><span class="field-label">{binarySource(draft.composer.binary) === "file" ? "File" : "Binary value"}</span><div class="realtime-file-control"><VariableField value={binaryValue(draft.composer.binary)} {variables} className="text-input" disabled={binarySource(draft.composer.binary) === "file"} placeholder={binarySource(draft.composer.binary) === "file" ? "Choose a local file" : ""} onValueInput={(value) => patchSocketIoComposer({ binary: buildBinary(binarySource(draft.requestType === "socketio" ? draft.composer.binary : null), value) })} />{#if binarySource(draft.composer.binary) === "file"}<button class="button-secondary" type="button" onclick={pickBinaryFile} disabled={isPickingBinaryFile}>{isPickingBinaryFile ? "Choosing…" : "Choose file…"}</button>{/if}</div></label>
         {:else}
-          <label class="realtime-wide-field"><span class="field-label">Arguments (JSON array)</span><textarea class="body-textarea realtime-message-input" spellcheck="false" bind:value={argumentsText} oninput={(event) => setSocketIoJson("arguments", event.currentTarget.value)} aria-invalid={Boolean(argumentsError)}></textarea>{#if argumentsError}<span class="field-error" role="alert">{argumentsError}</span>{/if}</label>
+          <label class="realtime-wide-field">
+            <span class="field-label">Arguments (JSON array)</span>
+            <JsonEditor
+              value={argumentsText}
+              {variables}
+              className="body-textarea realtime-message-input"
+              ariaLabel="Arguments (JSON array)"
+              ariaInvalid={Boolean(argumentsError)}
+              onValueInput={(value) => setSocketIoJson("arguments", value)}
+            />
+            {#if argumentsError}<span class="field-error" role="alert">{argumentsError}</span>{/if}
+          </label>
         {/if}
-        <label class="settings-checkbox-line"><input type="checkbox" checked={draft.composer.waitForAck} onchange={(event) => patchSocketIoComposer({ waitForAck: event.currentTarget.checked })} /><span><strong>Wait for acknowledgement</strong><small>Show the server ACK or timeout.</small></span></label>
+        <label class="settings-checkbox-line"><input class="row-toggle settings-checkbox" type="checkbox" checked={draft.composer.waitForAck} onchange={(event) => patchSocketIoComposer({ waitForAck: event.currentTarget.checked })} /><span><strong>Wait for acknowledgement</strong><small>Show the server ACK or timeout.</small></span></label>
         <label><span class="field-label">ACK timeout (ms)</span><input class="text-input" type="number" min="100" max="60000" value={draft.composer.ackTimeoutMs} disabled={!draft.composer.waitForAck} oninput={(event) => patchSocketIoComposer({ ackTimeoutMs: event.currentTarget.valueAsNumber || 5000 })} /></label>
       </div>
     {/if}
