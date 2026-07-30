@@ -35,6 +35,8 @@
     multiline = false,
     disabled = false,
     list = "",
+    ariaLabel = "",
+    ariaInvalid = false,
     onExtraKeydown = undefined,
     highlightTokens = [],
     highlightOverlayClassName = ""
@@ -50,6 +52,8 @@
     multiline?: boolean;
     disabled?: boolean;
     list?: string;
+    ariaLabel?: string;
+    ariaInvalid?: boolean;
     onExtraKeydown?: ((event: KeyboardEvent) => void) | undefined;
     highlightTokens?: HighlightToken[];
     highlightOverlayClassName?: string;
@@ -626,6 +630,8 @@
         autocapitalize=off
         autocomplete=off
         {disabled}
+        aria-label={ariaLabel || undefined}
+        aria-invalid={ariaInvalid ? "true" : undefined}
         value={value}
         onblur={handleBlur}
         onclick={handleCursorMovement}
@@ -646,6 +652,8 @@
         {disabled}
         {type}
         {list}
+        aria-label={ariaLabel || undefined}
+        aria-invalid={ariaInvalid ? "true" : undefined}
         value={value}
         onblur={handleBlur}
         onclick={handleCursorMovement}

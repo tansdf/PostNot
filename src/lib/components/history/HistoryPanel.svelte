@@ -55,7 +55,7 @@
   let hasActiveDetail = $derived(Boolean(detail || isDetailLoading || detailErrorText));
 </script>
 
-<section class="panel history-panel">
+<section class="panel panel-inset history-panel">
   <div class="editor-header">
     <div class="history-heading">
       <h2>History</h2>

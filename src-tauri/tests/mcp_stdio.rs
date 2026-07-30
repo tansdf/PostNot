@@ -45,12 +45,19 @@ fn headless_mode_negotiates_and_lists_authoring_tools() {
         .iter()
         .filter_map(|tool| tool["name"].as_str())
         .collect();
-    assert_eq!(names.len(), 11);
+    assert_eq!(names.len(), 16);
     assert!(names.contains(&"create_requests"));
     assert!(names.contains(&"preview_saved_request"));
-    assert!(!names
-        .iter()
-        .any(|name| name.contains("delete") || name.contains("send")));
+    for realtime_tool in [
+        "list_realtime_requests",
+        "get_realtime_request",
+        "create_realtime_request",
+        "update_realtime_request",
+        "delete_realtime_request",
+    ] {
+        assert!(names.contains(&realtime_tool));
+    }
+    assert!(!names.iter().any(|name| name.contains("send")));
 
     child.kill().expect("stop MCP");
     child.wait().expect("wait for MCP");

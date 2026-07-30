@@ -6,6 +6,31 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-07-30
+
+### Added
+
+- Added native raw WebSocket and Socket.IO 3.x/4.x connections with reusable workspaces, multiple connection tabs, opt-in reconnection, text/JSON/binary payloads, acknowledgements, and bounded session transcripts.
+- Added saved WebSocket and Socket.IO definitions to collection trees, including protocol-aware routing, mixed PostNot collection import/export, and safe MCP authoring support.
+- Added realtime runtime settings for connection timeouts, concurrent sessions, payload limits, and transcript retention.
+
+### Changed
+
+- Kept live realtime sessions active across app navigation while restoring persisted drafts disconnected after an app restart.
+- Reused the Requests workspace's authentication, JSON, query/header, collection-save, and tab-strip patterns throughout the WebSockets workspace.
+- Expanded the design system and browser coverage for consistent panel spacing, responsive layouts, keyboard navigation, styled controls, and accessible realtime interactions.
+
+### Fixed
+
+- Corrected Socket.IO transport defaults, native transcript-limit handling, connection-state messaging, and realtime settings copy.
+- Aligned realtime connection controls, headers, query parameters, authentication, reconnect controls, and message editors with the existing application layout and component standards.
+- Silenced vendored Socket.IO build warnings without weakening project-wide Rust diagnostics.
+
+### Security
+
+- Realtime transcripts remain process-scoped and are never persisted to request history; large payloads use temporary opaque handles that are released on cleanup or startup.
+- Environment variables resolve only when connecting or sending, preserving stored templates and the existing secret-storage boundary.
+
 ## [0.22.0] - 2026-07-22
 
 ### Added

@@ -12,12 +12,17 @@ import {
   updateCollectionFolder as updateCollectionFolderCommand,
   updateSavedRequest as updateSavedRequestCommand
 } from "$lib/api/commands";
+import {
+  saveRealtimeRequestToCollection,
+  updateSavedRealtimeRequest
+} from "$lib/api/realtime";
 import type {
   CollectionItemSummary,
   CollectionSummary,
   CreateCollectionInput,
   MoveCollectionItemInput,
   RequestDraft,
+  RealtimeRequestDraft,
   UpdateCollectionFolderInput
 } from "$lib/api/types";
 import { notifications } from "$lib/stores/notifications.svelte";
@@ -287,6 +292,45 @@ class CollectionsStore {
       const savedRequest = await updateSavedRequestCommand(itemId, request, expectedUpdatedAt);
       await Promise.all([this.loadCollections(collectionId), this.loadCollectionItems(collectionId)]);
       notifications.success(savedRequest.name, "Request updated");
+      return savedRequest;
+    } catch (error) {
+      this.errorText = error instanceof Error ? error.message : String(error);
+      return null;
+    } finally {
+      this.isSavingRequest = false;
+    }
+  }
+
+  async saveNewRealtimeRequest(
+    collectionId: string,
+    request: RealtimeRequestDraft,
+    parentId?: string | null
+  ) {
+    this.isSavingRequest = true;
+    try {
+      const savedRequest = await saveRealtimeRequestToCollection(collectionId, request, parentId);
+      await Promise.all([this.loadCollections(collectionId), this.loadCollectionItems(collectionId)]);
+      notifications.success(savedRequest.name, "Connection saved");
+      return savedRequest;
+    } catch (error) {
+      this.errorText = error instanceof Error ? error.message : String(error);
+      return null;
+    } finally {
+      this.isSavingRequest = false;
+    }
+  }
+
+  async updateExistingRealtimeRequest(
+    itemId: string,
+    collectionId: string,
+    request: RealtimeRequestDraft,
+    expectedUpdatedAt?: string | null
+  ) {
+    this.isSavingRequest = true;
+    try {
+      const savedRequest = await updateSavedRealtimeRequest(itemId, request, expectedUpdatedAt);
+      await Promise.all([this.loadCollections(collectionId), this.loadCollectionItems(collectionId)]);
+      notifications.success(savedRequest.name, "Connection updated");
       return savedRequest;
     } catch (error) {
       this.errorText = error instanceof Error ? error.message : String(error);

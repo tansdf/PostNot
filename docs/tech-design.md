@@ -20,6 +20,8 @@ Core principles:
 - UI language: TypeScript
 - Local database: SQLite
 - HTTP client: `reqwest`
+- Raw WebSocket client: `tokio-tungstenite`
+- Socket.IO client: pinned `rust_socketio` 0.6 adapter
 - Async runtime: `tokio`
 - Serialization: `serde`
 - SQL layer: `sqlx`
@@ -30,6 +32,8 @@ Why this stack:
 - SvelteKit gives a productive UI layer without browser-side request constraints
 - SQLite gives durable local persistence without introducing a separate service
 - `reqwest` keeps request execution in the native layer, which avoids browser CORS behavior and makes TLS and redirect settings controllable
+
+`rust_socketio` is pinned to 0.6.0 and vendored under `src-tauri/vendor/rust_socketio-0.6.0` with two targeted corrections documented in [`POSTNOT_PATCH.md`](../src-tauri/vendor/rust_socketio-0.6.0/POSTNOT_PATCH.md). First, an outgoing binary event that requests an ACK remains a `BinaryEvent` packet carrying an ACK id instead of being encoded as a client-originated `BinaryAck`. Second, the asynchronous client exposes terminal callbacks for reconnect exhaustion and a closed packet stream without reconnect; upstream otherwise only logs exhaustion or leaves consumers without a terminal signal. PostNot uses those callbacks to move dead sessions to Failed or Disconnected and release their runtime task. Remove the vendor override only after an upstream release contains both behaviors and the pinned Socket.IO 4.8.1 fixture still passes Auto, WebSocket-only, JSON/binary ACK, successful reconnect, reconnect exhaustion, and no-reconnect transport-loss cases.
 
 ## 3. High-Level Architecture
 
@@ -49,6 +53,9 @@ Responsibilities:
 - Provide sidebar collection search that navigates directly to matching collections, folders, or saved requests
 - Render and execute playbooks in the frontend so sequential runs reuse worker-backed request scripting, active environment writes, cancellation, notifications, and normal request-history behavior
 - Keep URL query parameters for saved requests, collections, and environments in sync with the visible editor or browser, including canceling stale async work when the user navigates quickly
+- Persist and restore the dedicated WebSockets tab workspace while deliberately restoring every tab disconnected and without a transcript
+- Keep live realtime sessions available while the user navigates between routes, reconcile ordered native events by connection generation and sequence, and request a native snapshot when an event gap is detected
+- Render raw WebSocket and Socket.IO definitions through one protocol-aware editor, while routing saved definitions from collection trees to `/websockets`
 - Run inherited collection, folder, and saved-request pre-request and test scripts in a worker-backed JavaScript sandbox before and after invoking `send_request`
 - Invoke typed Tauri commands for persistence and request execution
 - Provide a desktop-oriented workflow without browser networking
@@ -68,6 +75,7 @@ Responsibilities:
 - Build one canonical prepared-request model for both sends and resolved previews after environment and dynamic-variable resolution, then mask credential-looking values before preview data returns to the UI
 - Coordinate signed release checks against GitHub Releases' stable `latest` updater manifest, Linux installer-target selection, download progress events, retryable failure handling, and install handoff for the Settings updater flow
 - Resolve app data paths
+- Own application-wide realtime connection state, bounded session transcripts, and temporary file-backed payload handles
 - Expose a stable Tauri command surface to the UI
 
 ### Data Flow
@@ -84,6 +92,20 @@ Responsibilities:
 10. Rust copies the downloaded response into its history path, inserts the history row, adopts the copied file only after the insert succeeds, and redacts secret-derived environment substitutions back to their original `{{variable}}` form
 11. Frontend runs inherited collection, folder, and saved-request test scripts (if any) against the returned response for assertion output
 12. Frontend reloads history, updates the originating tab, and persists the refreshed workspace state
+
+### Realtime Data Flow
+
+1. The user opens or creates a raw WebSocket or Socket.IO definition in the dedicated `/websockets` workspace
+2. The frontend persists open tab definitions and active-tab selection through `realtime_workspace_state`; connection status, generation counters, errors, and transcripts are stripped to a disconnected empty state on every persistence boundary
+3. On Connect, Rust resolves the active environment and built-in dynamic variables across the URL, enabled query and header rows, authentication, protocol fields, and the saved composer snapshot
+4. The application-wide connection manager creates a new generation for that tab ID, applies the persisted connect timeout, TLS policy, concurrent-session limit, and message-size limit, and owns the transport task independently of the current route
+5. The manager publishes status and transcript updates over a Tauri `Channel`; every update carries `connectionId`, `generation`, and a monotonically increasing `sequence`
+6. The frontend rejects stale generations and requests `get_realtime_session_snapshot` if it detects a sequence gap
+7. Outgoing composer values are resolved again when Send is invoked, so an active environment change affects the next message; changing connection fields or the environment while connected marks the tab as requiring a reconnect
+8. The native manager records sent, received, lifecycle, ping/pong, ACK, and error entries in a bounded session-only transcript. Payloads over 256 KiB are stored in temporary app-data files and cross IPC as a handle plus a 4 KiB preview
+9. Closing a tab disconnects and releases its native session and temporary payload handles. Restart restores its editable definition but never reconnects or restores its transcript
+
+Realtime definitions do not enter HTTP history and do not run collection, folder, or saved-request pre-request/test scripts in v1.
 
 ### Playbook Data Flow
 
@@ -121,6 +143,7 @@ PostNot/
     lib/
       api/
         commands.ts
+        realtime.ts
         types.ts
       components/
         collections/
@@ -138,6 +161,11 @@ PostNot/
           DialogShell.svelte
           NotificationHost.svelte
           SidebarCollections.svelte
+        realtime/
+          RealtimeEditor.svelte
+          RealtimeKeyValueEditor.svelte
+          RealtimeTabs.svelte
+          RealtimeTranscript.svelte
         request/
           RequestEditor.svelte
           RequestTabs.svelte
@@ -152,12 +180,14 @@ PostNot/
         drag-and-drop.ts
       request-scripts.ts
       request-script-worker.ts
+      realtime-workspace.ts
       stores/
         collection-dnd.svelte.ts
         collection-search.svelte.ts
         collections.svelte.ts
         notifications.svelte.ts
         request-workspace.svelte.ts
+        realtime-workspace.svelte.ts
         updater.svelte.ts
       async-stale-guard.ts
       modal-focus-trap.ts
@@ -178,12 +208,16 @@ PostNot/
         +page.svelte
       settings/
         +page.svelte
+      websockets/
+        +page.svelte
   src-tauri/
     Cargo.toml
     tauri.conf.json
     build.rs
     capabilities/
       default.json
+    vendor/
+      rust_socketio-0.6.0/
     icons/
       icon.png
     migrations/
@@ -195,6 +229,8 @@ PostNot/
       0006_collection_integrity.sql
       0007_playbook_integrity.sql
       0008_environment_integrity.sql
+      0009_agent_activity.sql
+      0010_realtime_requests.sql
     src/
       main.rs
       lib.rs
@@ -206,6 +242,7 @@ PostNot/
         environments.rs
         imports.rs
         playbooks.rs
+        realtime.rs
         requests.rs
         settings.rs
         history.rs
@@ -219,7 +256,9 @@ PostNot/
         history.rs
         imports.rs
         playbooks.rs
+        portability.rs
         mod.rs
+        realtime.rs
         requests.rs
         settings.rs
         updates.rs
@@ -237,11 +276,16 @@ PostNot/
           curl.rs
           openapi.rs
           postman.rs
+          postnot.rs
           shared.rs
         playbooks_service.rs
         playbooks_service_tests.rs
         request_plan_service.rs
         request_preview_service.rs
+        realtime_payload_service.rs
+        realtime_resolution_service.rs
+        realtime_service.rs
+        realtime_socketio_service.rs
         response_body_service.rs
         response_body_service_tests.rs
         secret_store_service.rs
@@ -251,6 +295,9 @@ PostNot/
       storage/
         mod.rs
         paths.rs
+    tests/
+      fixtures/
+        socketio-server.mjs
   build/
     .gitkeep
   static/
@@ -293,6 +340,31 @@ Fields:
 - error text
 - executed at timestamp
 
+### Realtime Request Definition
+
+Saved realtime definitions use a versioned discriminated model. `requestType` is either `websocket` or `socketio`; HTTP remains a separate `SendRequestPayload`.
+
+Shared fields:
+
+- name and connection URL
+- enabled query parameters and handshake headers
+- Basic, Bearer, or API-key authentication
+- opt-in reconnect policy with attempt and delay bounds
+
+Raw WebSocket fields:
+
+- requested subprotocols
+- one saved composer in text, JSON, or binary mode
+- binary source as a local file, hexadecimal text, or base64 text
+
+Socket.IO fields:
+
+- Engine.IO path, namespace, auth JSON object, and transport selection
+- one saved event composer with a JSON argument array or one binary payload
+- optional client-requested ACK and timeout
+
+The serialized object carries `version: 1`, allowing later readers to reject unsupported schema revisions rather than guessing how to interpret them.
+
 ### App Settings
 
 Represents persisted request behavior settings.
@@ -308,6 +380,11 @@ Fields:
 - Requests-page history collapsed flag
 - environment autosave flag
 - notification timeout in milliseconds
+- realtime connect timeout in milliseconds
+- maximum concurrent realtime sessions
+- maximum realtime message size
+- per-session transcript entry limit
+- per-session transcript byte limit
 - last successful update check timestamp
 
 ### History Entry Summary
@@ -328,7 +405,7 @@ Fields:
 
 ## 6. SQLite Storage Design
 
-The schema is created by forward-only migrations in `src-tauri/migrations/`. Migrations `0001` through `0003` define the original tables, collection scripts, and playbooks; `0005` adds response-body metadata. Migration `0006` removes the superseded collection FTS shadow table and adds sibling-ordering support, `0007` adds the folder-chain index used by playbooks, and `0008` repairs competing active environments before enforcing the one-active-environment invariant. Released migrations, including the now-superseded `0004` FTS migration, remain unchanged so existing databases upgrade safely.
+The schema is created by forward-only migrations in `src-tauri/migrations/`. Migrations `0001` through `0003` define the original tables, collection scripts, and playbooks; `0005` adds response-body metadata. Migration `0006` removes the superseded collection FTS shadow table and adds sibling-ordering support, `0007` adds the folder-chain index used by playbooks, `0008` repairs competing active environments before enforcing the one-active-environment invariant, and `0009` adds MCP Agent Activity. Migration `0010` adds the collection request discriminator and versioned realtime definition storage. Released migrations, including the now-superseded `0004` FTS migration, remain unchanged so existing databases upgrade safely.
 
 ### Database Location
 
@@ -361,11 +438,19 @@ Keys written by the app:
 - `is_history_collapsed`
 - `environment_autosave`
 - `notification_timeout_ms`
+- `realtime_connect_timeout_ms`
+- `realtime_max_concurrent_sessions`
+- `realtime_max_message_bytes`
+- `realtime_transcript_max_entries`
+- `realtime_transcript_max_bytes`
 - `last_update_checked_at`
 - `collection_sidebar_state`
 - `request_workspace_state`
+- `realtime_workspace_state`
 
 Settings reads load the stored rows once and merge them over Rust defaults without rewriting defaults on the read path. A full settings save upserts all normalized values in one transaction, while history pruning reads only the `history_limit` key.
+
+`realtime_workspace_state` stores editable tabs and active-tab selection, not a durable session. The native save boundary normalizes status to disconnected, clears generation and sequence state, and removes transcript and error content. This guarantees that application restart never reconnects implicitly or resurrects received data.
 
 #### `history_entries`
 
@@ -410,9 +495,13 @@ Stores both saved requests and folders within a collection tree.
 Implementation notes:
 
 - `kind` distinguishes folders from saved requests
+- `request_type` distinguishes `http`, `websocket`, and `socketio` while preserving the existing `folder`/`request` tree shape
+- HTTP rows keep using the normalized HTTP columns; realtime rows keep a `version: 1` discriminated definition in `realtime_request_json` and retain URL/name columns for tree and search projection
+- HTTP service queries explicitly filter `request_type = 'http'`, while realtime CRUD accepts only the two realtime discriminators and uses revision-checked updates
 - `parent_id` allows nested folders and request placement inside folders
 - `prerequest_script` and `test_script` are persisted per collection, folder, and saved request; the UI runs inherited collection scripts first, then ancestor folder scripts from root to leaf, then saved-request scripts in the frontend (`request-scripts.ts`) before invoking Rust for send (pre-request) and after the response returns (tests), not inside the native HTTP layer
 - collection search loads current collection and item rows directly, builds ancestor paths from that snapshot, classifies and ranks matches in memory, and applies the result limit; committed renames and moves therefore require no shadow-index rebuild
+- collection trees and search results project protocol badges and route HTTP items to `/`, but route WebSocket and Socket.IO items to `/websockets`
 
 #### `environments`
 
@@ -441,8 +530,9 @@ At startup, the Tauri app:
 3. applies SQL migrations
 4. ensures default settings exist
 5. initializes the OS-backed secret store
-6. stores the SQLite pool and secret store in app state
-7. restores and tracks the main window size and position
+6. clears the previous process's temporary realtime payload directory and initializes the application-wide realtime connection manager
+7. stores the SQLite pool, secret store, and realtime manager in app state
+8. restores and tracks the main window size and position
 
 ### Request Execution
 
@@ -510,6 +600,54 @@ On canceled request execution:
 - the in-flight native request is aborted
 - no history entry is written
 
+### Realtime Sessions
+
+Realtime connections are app-wide native resources keyed by the frontend tab ID. A route change does not destroy a connection; closing its tab calls both disconnect and release. Reconnecting the same ID increments its generation and disconnects the superseded task so late events from an older transport cannot mutate the current tab.
+
+Raw WebSocket execution uses `tokio-tungstenite` and supports:
+
+- `ws://` and `wss://`
+- enabled query parameters and custom handshake headers
+- Basic, Bearer, and API-key header or query authentication
+- a standard `Cookie` header
+- ordered requested subprotocols
+- text, validated JSON text, binary file, hexadecimal, and base64 sends
+- received text/JSON classification, binary frames, ping, pong, and close lifecycle entries
+- explicit Ping and graceful Close controls
+
+Socket.IO execution uses the pinned `rust_socketio` 0.6 adapter for protocol v5 / Engine.IO v4 servers (Socket.IO 3.x and 4.x). The adapter accepts HTTP(S) and WS(S) connection URLs, a configurable Engine.IO path, one namespace, enabled query and opening-header rows, Basic/Bearer/API-key authentication, an auth JSON object, and the shared TLS validation policy. Auto transport begins with HTTP polling and permits WebSocket upgrade; WebSocket-only skips polling. The composer emits an event with either a JSON argument array or one binary payload and may request a client-side ACK with a bounded timeout. Incoming events and ACKs enter the same sequenced transcript, while Engine.IO ping/pong remains library-managed.
+
+The connection manager applies:
+
+- connect timeout: default 30 seconds, normalized to 1–120 seconds
+- concurrent live sessions: default 20, normalized to 1–100
+- message size: default 64 MiB, normalized to 64 KiB–256 MiB
+- transcript entries: default 2,000, normalized to 1–10,000 per session
+- transcript retained bytes: default 64 MiB, normalized to 64 KiB–512 MiB per session
+- the shared `validate_tls` setting for secure transports
+
+Reconnect is opt-in and defaults to five attempts with a 500 ms initial delay and 10 second maximum delay. The manager uses capped exponential backoff with jitter only after connection/network/abnormal transport failures. Manual disconnect, graceful close, and a server close frame stop the session. Commands sent during reconnect are not queued. The retry loop uses the resolved definition snapshot from the last explicit Connect; edits or active-environment changes are applied only after the user reconnects.
+
+The native transcript is an ordered, bounded `VecDeque`, not SQLite history. When an entry or byte bound is crossed, old entries and their payload handles are released and a visible trim marker is inserted. Text and binary payloads at or below 256 KiB remain inline; larger payloads are written under the process-scoped realtime payload directory and represented over IPC by an opaque handle, a 4 KiB preview, size, encoding, and truncation flag. The UI can copy bounded payloads, save a complete file-backed payload, clear the transcript, or export a session transcript. Restart clears the temporary directory.
+
+All `Channel` status and transcript events carry a connection generation and monotonic sequence. A transcript trim or clear emits a reset event; the frontend requests a complete session snapshot if it observes an event gap.
+
+### Realtime v1 Boundaries
+
+The first realtime release intentionally excludes:
+
+- collection/folder/saved-request pre-request and test scripts for realtime definitions
+- Playbook steps for realtime definitions
+- durable or cross-session WebSocket/Socket.IO history
+- legacy Socket.IO 2.x / Engine.IO 3
+- custom CA bundles, mutual TLS, and explicit proxy configuration
+- WebSocket `permessage-deflate`
+- replies to server-requested Socket.IO ACKs
+- multiple or mixed JSON/binary Socket.IO placeholder arguments
+- STOMP, GraphQL subscription, WebTransport, and other protocol adapters
+
+These are product boundaries, not fields silently ignored by the runtime. Unsupported handshake headers, URL schemes, payload structures, and protocol combinations are rejected with actionable errors.
+
 ## 8. Tauri Command Boundary
 
 Commands exposed to the frontend:
@@ -522,6 +660,19 @@ Commands exposed to the frontend:
 - `update_settings`
 - `get_request_workspace_state`
 - `save_request_workspace_state`
+- `get_realtime_workspace_state`
+- `save_realtime_workspace_state`
+- `connect_realtime_connection`
+- `disconnect_realtime_connection`
+- `release_realtime_connection`
+- `send_realtime_message`
+- `ping_realtime_connection`
+- `close_realtime_connection`
+- `get_realtime_session_snapshot`
+- `clear_realtime_transcript`
+- `read_realtime_payload`
+- `save_realtime_payload`
+- `export_realtime_transcript`
 - `check_for_updates`
 - `install_update`
 - `list_history`
@@ -542,8 +693,13 @@ Commands exposed to the frontend:
 - `save_request_to_collection`
 - `update_saved_request`
 - `get_saved_request`
+- `list_saved_realtime_requests`
+- `save_realtime_request_to_collection`
+- `update_saved_realtime_request`
+- `get_saved_realtime_request`
 - `delete_collection_item`
 - `delete_saved_request`
+- `delete_saved_realtime_request`
 - `export_collection`
 - `list_playbooks`
 - `create_playbook`
@@ -583,6 +739,19 @@ Commands exposed to the frontend:
 - `update_settings`: persists settings and returns the saved values
 - `get_request_workspace_state`: loads the persisted Requests tab workspace snapshot from `app_settings`
 - `save_request_workspace_state`: stores the Requests tab workspace snapshot in `app_settings`
+- `get_realtime_workspace_state`: loads the normalized WebSockets tab workspace snapshot from `app_settings`
+- `save_realtime_workspace_state`: stores editable WebSockets tabs after forcing session state and transcripts to a disconnected empty form
+- `connect_realtime_connection`: resolves an immutable connection snapshot against the active environment, applies persisted limits, subscribes a Tauri event channel, and starts or replaces the tab's native session generation
+- `disconnect_realtime_connection`: manually stops a native realtime session without scheduling reconnect
+- `release_realtime_connection`: removes a session from the manager and releases its transcript payload handles
+- `send_realtime_message`: resolves the current composer against the active environment and sends one protocol-matched message without queueing
+- `ping_realtime_connection`: sends a raw WebSocket Ping frame with an optional payload
+- `close_realtime_connection`: validates and sends a raw WebSocket graceful close code and reason
+- `get_realtime_session_snapshot`: returns the authoritative status, generation, sequence, transcript, and retained byte count for event-gap recovery
+- `clear_realtime_transcript`: clears a session transcript, releases payload handles, and emits a transcript reset
+- `read_realtime_payload`: reads a bounded temporary payload by opaque handle for expanded UI display
+- `save_realtime_payload`: copies a complete temporary payload to a user-selected path
+- `export_realtime_transcript`: writes the current session transcript to a user-selected JSON file
 - `check_for_updates`: checks the configured signed updater feed for a newer stable GitHub Release and stores a pending update when available
 - `install_update`: downloads the pending signed update with progress events and hands it off to the native installer, using the detected Debian/RPM/AppImage install type on Linux
 - `list_history`: returns recent history entries ordered by execution time descending
@@ -603,9 +772,14 @@ Commands exposed to the frontend:
 - `save_request_to_collection`: stores the current request draft in a collection
 - `update_saved_request`: updates an existing saved request in place
 - `get_saved_request`: loads one saved request back into the editor
+- `list_saved_realtime_requests`: lists raw WebSocket and Socket.IO definitions within one collection
+- `save_realtime_request_to_collection`: validates and stores a versioned realtime definition in a collection or folder
+- `update_saved_realtime_request`: revision-checks and replaces a realtime definition in place
+- `get_saved_realtime_request`: loads one realtime definition into the WebSockets editor
 - `delete_collection_item`: removes a folder or saved request item from a collection tree
 - `delete_saved_request`: removes one saved request from a collection
-- `export_collection`: exports one collection to Postman Collection v2.1 JSON through a native save dialog
+- `delete_saved_realtime_request`: removes one realtime definition from a collection
+- `export_collection`: exports a lossless mixed PostNot collection or an HTTP-only Postman Collection v2.1 file through a native save dialog; Postman results report omitted realtime definitions
 - `list_playbooks`: returns Playbook summaries
 - `create_playbook`: creates a Playbook
 - `get_playbook`: returns one Playbook with its steps
@@ -630,7 +804,7 @@ Commands exposed to the frontend:
 - `set_active_environment`: marks one environment active or clears the active environment
 - `import_postman_environment`: imports a Postman environment JSON file or payload into a new PostNot environment
 - `export_environment`: exports one environment to Postman environment JSON through a native save dialog
-- `import_requests`: imports requests from Postman collection JSON or cURL into PostNot collections
+- `import_requests`: imports PostNot mixed collection JSON, Postman collection JSON, OpenAPI, or cURL into PostNot collections
 - `import_curl_request_to_draft`: parses a cURL command into an editable request draft without saving it yet
 - `import_openapi_request_to_draft`: parses one OpenAPI operation into an editable request draft without saving it yet
 
@@ -665,6 +839,7 @@ UI responsibilities:
 - notification timeout input
 - follow redirects toggle
 - validate TLS toggle
+- realtime connect timeout, concurrent-session, message-size, transcript-entry, and transcript-byte limits
 - updater status and install surface
 - live download progress with byte counts when content length is known
 - available-update notes rendered from the signed updater metadata
@@ -677,11 +852,29 @@ UI responsibilities:
 - collection browser with nested folders and saved requests
 - dedicated collection editor view (`CollectionDetailForm.svelte` for metadata drafts)
 - root-folder and subfolder creation
-- collection import/export actions
+- collection import/export actions, with lossless mixed PostNot JSON and an explicit realtime-omission warning for HTTP-only Postman export
 - selected collection tree for folders and saved requests with vertical tree guides and folder open/closed icons (`FolderGlyph.svelte` + shared SVG paths in `folderPaths.ts`)
 - drag-and-drop saved-request and folder management that matches the sidebar tree: reorder among siblings, move into folders, move across collections, and move back to collection root
 - matching sidebar tree styling for nested collections (see `SidebarCollections.svelte` and `app.css`)
-- open-in-requests and delete actions for saved requests
+- `WS` and `S.IO` badges for realtime definitions
+- protocol-aware open actions that route HTTP definitions to Requests and realtime definitions to WebSockets
+- open and delete actions for saved definitions
+
+### WebSockets Page
+
+UI responsibilities:
+
+- horizontal persistent connection tabs with protocol, dirty, and connection-status indicators
+- raw WebSocket and Socket.IO mode selection
+- active environment selection plus reconnect-required feedback after connection-affecting edits
+- connection URL, enabled query parameters, headers/cookies, authentication, and protocol configuration
+- opt-in reconnect controls
+- text/JSON/binary raw WebSocket composer with JSON formatting, Ping, and graceful Close controls
+- Socket.IO event composer with JSON argument-array or single-binary mode and optional client-requested ACK
+- connection status and actionable failure feedback, including background failure notifications that return to the affected tab
+- ordered searchable session transcript with follow/pause behavior, copy/expand/save actions, trim markers, clear, and JSON export
+- save, update, save-as, external-change, and dirty-close flows shared with collection persistence
+- route-addressable opening through `savedRequestId` and `tabId`, with stale generation and sequence-gap handling delegated to the workspace store
 
 ### Environments Page
 
@@ -726,13 +919,24 @@ Screenshot workflow note:
 - history snapshots redact resolved values that came from secret environment variables
 - single-request cURL and PostNot JSON exports redact credential-looking literal values, including bearer tokens, OAuth2 access tokens, client secrets, API keys, cookies, and basic-auth passwords; the export dialog can inline active non-secret environment variables, while secret variables remain parameterized or are replaced with `***`
 - resolved request preview masks credential-looking values and secret-derived environment substitutions before showing outgoing request data
+- realtime connection and composer templates resolve against the active environment natively; secret-derived outgoing transcript payloads, lifecycle labels, errors, transcript exports, and MCP reads are masked, while server-received payloads remain exactly as received
+- raw WebSocket callers cannot override transport-owned handshake headers such as `Host`, `Connection`, `Upgrade`, `Sec-WebSocket-Key`, `Sec-WebSocket-Version`, `Sec-WebSocket-Extensions`, or `Sec-WebSocket-Protocol`; explicit authentication/header conflicts are rejected
+- Socket.IO applies the same transport-header and authentication-conflict checks, rejects caller-supplied `EIO`, `transport`, and `sid` query keys (including API-key names), and coalesces repeated opening headers without silently dropping values
+- realtime transcript payload handles are process-scoped and opaque, live outside SQLite, and are deleted when evicted, cleared, released, or on the next app startup
 - decoded response bodies are persisted as full text history body files
 - if an environment update or delete fails after partially changing the credential store, rollback of secrets is attempted; failure to roll back is logged with `log::warn` for diagnostics (the primary error still returns to the UI)
 - the installed executable can run as a windowless stdio MCP server with `--mcp`; it resolves the same `data_dir/com.postnot.app` database, runs migrations, and uses the existing native collection and preview services
 - MCP environment context includes non-secret values but omits secret values; saved credential literals are returned as `***` with explicit preservation paths for revision-checked updates
+- MCP exposes authoring-only list/get/create/update tools for raw WebSocket and Socket.IO definitions. Reads redact credential-looking literals and preserve-path updates use optimistic revisions; MCP never connects, sends, runs scripts, or reads session transcripts
 - `agent_activity` retains the latest 1,000 MCP operation records with actor, target, outcome, and changed field names, never request values
 
 Environment-backed secrets are protected in storage and history, while single-request export uses local pattern-based redaction for credential-looking values before users copy cURL or PostNot JSON.
+
+### Collection Portability
+
+PostNot collection JSON is the lossless mixed format. Its versioned document preserves collection/folder hierarchy and scripts, HTTP definitions and their scripts, and versioned WebSocket/Socket.IO definitions. Import validates the top-level schema and version, validates each realtime definition version, and creates the mixed collection atomically.
+
+Postman Collection v2.1 export remains an HTTP interoperability format. Realtime definitions are omitted rather than misrepresented; the export result returns a warning and exact omission count, and the Collections dialog explains the limitation before export.
 
 ## 11. Design Trade-Offs
 
@@ -747,6 +951,12 @@ If the product grows toward multi-device workflows, the persistence boundary sho
 Routing all HTTP traffic through Rust avoids browser CORS limits and keeps TLS, redirect, timeout, cancellation, multipart file access, response decoding, and history persistence under one native pipeline. The trade-off is that browser-mode development needs mocks or degraded behavior for desktop-only capabilities.
 
 The command boundary should stay narrow: frontend code prepares drafts and renders results, while native services own network and durable persistence concerns.
+
+### Native Realtime Execution
+
+Keeping WebSocket and Socket.IO transports in an application-wide native manager avoids WebView lifetime and browser networking constraints and lets sessions survive route changes. It also gives one place to enforce connection/message/transcript limits, TLS policy, secret masking, ordering, reconnect behavior, and temporary payload ownership.
+
+The trade-off is that realtime session data is deliberately ephemeral and protocol support is intentionally narrower than the editable HTTP pipeline. Durable history, scripts, Playbook execution, proxy/custom-certificate controls, and additional realtime protocols must be designed at the native session boundary rather than added as frontend-only behavior.
 
 ### Frontend Script Runtime
 
@@ -771,5 +981,7 @@ Any prerelease channel should remain opt-in and should preserve the signed-updat
 PostNot uses the official Rust MCP SDK over stdio and starts the server before Tauri initialization when the executable receives `--mcp`. Reusing the application binary keeps signing, AppImage behavior, and updater delivery aligned without a second sidecar artifact.
 
 The MCP surface is deliberately authoring-only. Collection reads and masked previews reuse native services, while creates and revision-checked request replacements write the same SQLite database. Request sending and script execution remain outside MCP because the script runtime is worker-backed frontend JavaScript and cannot yet provide identical headless behavior.
+
+Realtime MCP tools follow the same rule: they list, read, create, and revision-check saved definitions but cannot open sessions or send messages.
 
 The desktop polls the monotonic Agent Activity cursor while focused. New successful rows refresh affected collection trees and mark open saved-request drafts as externally changed rather than overwriting them.

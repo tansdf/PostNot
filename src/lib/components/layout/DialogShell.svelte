@@ -29,7 +29,7 @@
   use:modalBackdropDismiss={{ onDismiss: dismiss }}
 >
   <div
-    class={["panel", sizeClass]}
+    class={["panel", "panel-custom-inset", sizeClass]}
     role="dialog"
     tabindex="-1"
     aria-modal="true"

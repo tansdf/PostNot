@@ -226,9 +226,9 @@
   <title>PostNot Settings</title>
 </svelte:head>
 
-<section class="settings-page panel">
+<section class="settings-page panel panel-inset">
     <div class="request-section-header">
-      <h1>Settings</h1>
+      <h1 class="panel-title">Settings</h1>
       {#if isLoading}
         <span class="history-meta">Loading...</span>
       {/if}
@@ -240,7 +240,7 @@
           <div class="settings-column">
             <section class="settings-section-card">
               <div class="settings-section-heading">
-                <div>
+                <div class="panel-heading">
                   <h2>General</h2>
                   <p class="settings-section-lede">Desktop look and feel across the entire shell.</p>
                 </div>
@@ -285,7 +285,7 @@
 
             <section class="settings-section-card">
               <div class="settings-section-heading">
-                <div>
+                <div class="panel-heading">
                   <h2>Requests</h2>
                   <p class="settings-section-lede">Default execution behavior for outgoing HTTP requests.</p>
                 </div>
@@ -308,12 +308,69 @@
                 <span>Validate TLS certificates</span>
               </label>
             </section>
+
+            <section class="settings-section-card">
+              <div class="settings-section-heading">
+                <div class="panel-heading">
+                  <h2>WebSockets</h2>
+                  <p class="settings-section-lede">Connection and session transcript retention limits for WebSocket and Socket.IO.</p>
+                </div>
+              </div>
+
+              <div class="settings-field-grid">
+                <label>
+                  <span class="field-label">Connect timeout (seconds)</span>
+                  <input
+                    class="text-input"
+                    type="number"
+                    min="1"
+                    max="120"
+                    step="1"
+                    value={settings.realtimeConnectTimeoutMs / 1000}
+                    oninput={(event) => (settings = { ...settings, realtimeConnectTimeoutMs: Math.max(1, event.currentTarget.valueAsNumber || 30) * 1000 })}
+                  />
+                </label>
+                <label>
+                  <span class="field-label">Maximum live sessions</span>
+                  <input class="text-input" type="number" min="1" max="100" step="1" bind:value={settings.realtimeMaxConcurrentSessions} />
+                </label>
+                <label>
+                  <span class="field-label">Maximum message (MiB)</span>
+                  <input
+                    class="text-input"
+                    type="number"
+                    min="0.0625"
+                    max="256"
+                    step="1"
+                    value={settings.realtimeMaxMessageBytes / (1024 * 1024)}
+                    oninput={(event) => (settings = { ...settings, realtimeMaxMessageBytes: Math.round(Math.max(0.0625, event.currentTarget.valueAsNumber || 64) * 1024 * 1024) })}
+                  />
+                </label>
+                <label>
+                  <span class="field-label">Transcript entries per session</span>
+                  <input class="text-input" type="number" min="1" max="10000" step="1" bind:value={settings.realtimeTranscriptMaxEntries} />
+                </label>
+                <label>
+                  <span class="field-label">Transcript retained data per session (MiB)</span>
+                  <input
+                    class="text-input"
+                    type="number"
+                    min="0.0625"
+                    max="512"
+                    step="1"
+                    value={settings.realtimeTranscriptMaxBytes / (1024 * 1024)}
+                    oninput={(event) => (settings = { ...settings, realtimeTranscriptMaxBytes: Math.round(Math.max(0.0625, event.currentTarget.valueAsNumber || 64) * 1024 * 1024) })}
+                  />
+                </label>
+              </div>
+              <p class="field-help">Transcripts are session-only and never restored; large payloads use temporary files cleared on release or startup.</p>
+            </section>
           </div>
 
           <div class="settings-column">
             <section class="settings-section-card settings-updates-card">
               <div class="settings-section-heading">
-                <div>
+                <div class="panel-heading">
                   <h2>Updates</h2>
                   <p class="settings-section-lede">Check for newer signed PostNot builds published to the latest stable GitHub Release.</p>
                 </div>
@@ -428,7 +485,7 @@
 
             <section class="settings-section-card">
               <div class="settings-section-heading">
-                <div>
+                <div class="panel-heading">
                   <h2>History</h2>
                   <p class="settings-section-lede">How much recent request activity PostNot keeps on disk.</p>
                 </div>
@@ -445,7 +502,7 @@
 
             <section class="settings-section-card">
               <div class="settings-section-heading">
-                <div>
+                <div class="panel-heading">
                   <h2>Notifications</h2>
                   <p class="settings-section-lede">Floating notification behavior for action feedback across the app.</p>
                 </div>

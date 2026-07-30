@@ -1,13 +1,18 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use serde::Serialize;
 use sqlx::SqlitePool;
 
 use crate::{
     domain::{
-        collections::{CollectionItemSummary, SavedRequestDetail},
+        collections::{CollectionItemSummary, SavedRealtimeRequestDetail, SavedRequestDetail},
         environments::EnvironmentVariable,
-        exports::ExportResult,
+        exports::{CollectionExportResult, ExportResult},
+        portability::{
+            PostNotCollectionDocument, PostNotCollectionItem, PostNotCollectionMetadata,
+            POSTNOT_COLLECTION_SCHEMA, POSTNOT_COLLECTION_VERSION,
+        },
+        realtime::VersionedRealtimeRequest,
         requests::{FileRow, KeyValueRow, RequestAuth, RequestBody},
     },
     error::{AppError, AppResult},
@@ -17,7 +22,72 @@ use crate::{
 pub async fn export_collection(
     pool: &SqlitePool,
     collection_id: &str,
-) -> AppResult<Option<ExportResult>> {
+) -> AppResult<Option<CollectionExportResult>> {
+    export_collection_with_format(pool, collection_id, "postman").await
+}
+
+pub async fn export_collection_with_format(
+    pool: &SqlitePool,
+    collection_id: &str,
+    format: &str,
+) -> AppResult<Option<CollectionExportResult>> {
+    let (json, suggested_name, title, omitted_count) = match format {
+        "postman" => {
+            let (json, collection_name, omitted_count) =
+                serialize_postman_collection(pool, collection_id).await?;
+            let suggested_name = format!(
+                "{}.postman_collection.json",
+                sanitize_file_stem(&collection_name, "collection")
+            );
+            (
+                json,
+                suggested_name,
+                "Export collection as Postman Collection JSON",
+                omitted_count,
+            )
+        }
+        "postnot" => {
+            let (json, collection_name) = serialize_postnot_collection(pool, collection_id).await?;
+            let suggested_name = format!(
+                "{}.postnot_collection.json",
+                sanitize_file_stem(&collection_name, "collection")
+            );
+            (
+                json,
+                suggested_name,
+                "Export collection as PostNot Collection JSON",
+                0,
+            )
+        }
+        _ => {
+            return Err(AppError::Message(
+                "Unsupported collection export format.".to_string(),
+            ));
+        }
+    };
+    let warnings = if omitted_count == 0 {
+        Vec::new()
+    } else {
+        vec![format!(
+            "{omitted_count} realtime request{} omitted because Postman collection export supports HTTP requests only.",
+            if omitted_count == 1 { " was" } else { "s were" }
+        )]
+    };
+    save_collection_json_file(
+        title,
+        &suggested_name,
+        json,
+        format,
+        warnings,
+        omitted_count,
+    )
+    .await
+}
+
+pub(crate) async fn serialize_postman_collection(
+    pool: &SqlitePool,
+    collection_id: &str,
+) -> AppResult<(String, String, usize)> {
     let collection = collections_service::get_collection(pool, collection_id).await?;
     let items = collections_service::list_collection_items(pool, collection_id).await?;
     let requests = collections_service::list_saved_request_details(pool, collection_id).await?;
@@ -26,6 +96,7 @@ pub async fn export_collection(
         .map(|request| (request.id.clone(), request))
         .collect();
 
+    let mut omitted_count = 0;
     let payload = PostmanCollectionExport {
         info: PostmanCollectionInfoExport {
             name: collection.name.clone(),
@@ -34,21 +105,42 @@ pub async fn export_collection(
                 .to_string(),
         },
         event: build_events(&collection.pre_request_script, &collection.test_script),
-        item: map_collection_items(&items, &requests_by_id)?,
+        item: map_collection_items(&items, &requests_by_id, &mut omitted_count)?,
     };
 
     let json = serde_json::to_string_pretty(&payload)?;
-    let suggested_name = format!(
-        "{}.postman_collection.json",
-        sanitize_file_stem(&collection.name, "collection")
-    );
+    Ok((json, collection.name, omitted_count))
+}
 
-    save_json_file(
-        "Export collection as Postman Collection JSON",
-        &suggested_name,
-        json,
-    )
-    .await
+pub(crate) async fn serialize_postnot_collection(
+    pool: &SqlitePool,
+    collection_id: &str,
+) -> AppResult<(String, String)> {
+    let collection = collections_service::get_collection(pool, collection_id).await?;
+    let items = collections_service::list_collection_items(pool, collection_id).await?;
+    let http_requests: HashMap<String, SavedRequestDetail> =
+        collections_service::list_saved_request_details(pool, collection_id)
+            .await?
+            .into_iter()
+            .map(|request| (request.id.clone(), request))
+            .collect();
+    let mut realtime_requests = HashMap::new();
+    for summary in collections_service::list_saved_realtime_requests(pool, collection_id).await? {
+        let detail = collections_service::get_saved_realtime_request(pool, &summary.id).await?;
+        realtime_requests.insert(summary.id, detail);
+    }
+    let document = PostNotCollectionDocument {
+        schema: POSTNOT_COLLECTION_SCHEMA.to_string(),
+        version: POSTNOT_COLLECTION_VERSION,
+        collection: PostNotCollectionMetadata {
+            name: collection.name.clone(),
+            description: collection.description,
+            pre_request_script: collection.pre_request_script,
+            test_script: collection.test_script,
+        },
+        items: map_postnot_collection_items(&items, &http_requests, &realtime_requests)?,
+    };
+    Ok((serde_json::to_string_pretty(&document)?, collection.name))
 }
 
 pub async fn export_environment(
@@ -113,28 +205,121 @@ async fn save_json_file(
     .await?
 }
 
+async fn save_collection_json_file(
+    title: &str,
+    suggested_name: &str,
+    json: String,
+    format: &str,
+    warnings: Vec<String>,
+    omitted_realtime_request_count: usize,
+) -> AppResult<Option<CollectionExportResult>> {
+    let title = title.to_string();
+    let suggested_name = suggested_name.to_string();
+    let format = format.to_string();
+
+    tauri::async_runtime::spawn_blocking(move || -> AppResult<Option<CollectionExportResult>> {
+        let Some(path) = rfd::FileDialog::new()
+            .set_title(&title)
+            .set_file_name(&suggested_name)
+            .add_filter("JSON", &["json"])
+            .save_file()
+        else {
+            return Ok(None);
+        };
+
+        std::fs::write(&path, json)?;
+        Ok(Some(CollectionExportResult {
+            file_path: path.to_string_lossy().to_string(),
+            format,
+            warnings,
+            omitted_realtime_request_count,
+        }))
+    })
+    .await?
+}
+
 fn map_collection_items(
     items: &[CollectionItemSummary],
-    requests_by_id: &std::collections::HashMap<String, SavedRequestDetail>,
+    requests_by_id: &HashMap<String, SavedRequestDetail>,
+    omitted_count: &mut usize,
 ) -> AppResult<Vec<PostmanCollectionItemExport>> {
-    items
-        .iter()
-        .map(|item| match item.kind.as_str() {
-            "folder" => Ok(PostmanCollectionItemExport {
+    let mut exported = Vec::new();
+    for item in items {
+        match item.kind.as_str() {
+            "folder" => exported.push(PostmanCollectionItemExport {
                 name: item.name.clone(),
                 request: None,
                 event: build_events(&item.pre_request_script, &item.test_script),
-                item: map_collection_items(&item.children, requests_by_id)?,
+                item: map_collection_items(&item.children, requests_by_id, omitted_count)?,
             }),
             "request" => {
+                if item.request_type.as_deref() != Some("http") {
+                    *omitted_count += 1;
+                    continue;
+                }
                 let request = requests_by_id.get(&item.id).ok_or_else(|| {
                     AppError::Message(format!(
                         "Saved request details were missing for collection item {}.",
                         item.id
                     ))
                 })?;
-                Ok(map_saved_request_item(request))
+                exported.push(map_saved_request_item(request));
             }
+            _ => {
+                return Err(AppError::Message(format!(
+                    "Unsupported collection item kind: {}",
+                    item.kind
+                )));
+            }
+        }
+    }
+    Ok(exported)
+}
+
+fn map_postnot_collection_items(
+    items: &[CollectionItemSummary],
+    http_requests: &HashMap<String, SavedRequestDetail>,
+    realtime_requests: &HashMap<String, SavedRealtimeRequestDetail>,
+) -> AppResult<Vec<PostNotCollectionItem>> {
+    items
+        .iter()
+        .map(|item| match item.kind.as_str() {
+            "folder" => Ok(PostNotCollectionItem::Folder {
+                name: item.name.clone(),
+                pre_request_script: item.pre_request_script.clone(),
+                test_script: item.test_script.clone(),
+                items: map_postnot_collection_items(
+                    &item.children,
+                    http_requests,
+                    realtime_requests,
+                )?,
+            }),
+            "request" if item.request_type.as_deref() == Some("http") => {
+                let request = http_requests.get(&item.id).ok_or_else(|| {
+                    AppError::Message(format!(
+                        "Saved HTTP request details were missing for collection item {}.",
+                        item.id
+                    ))
+                })?;
+                Ok(PostNotCollectionItem::Http {
+                    request: request.request.clone(),
+                })
+            }
+            "request" if matches!(item.request_type.as_deref(), Some("websocket" | "socketio")) => {
+                let request = realtime_requests.get(&item.id).ok_or_else(|| {
+                    AppError::Message(format!(
+                        "Saved realtime request details were missing for collection item {}.",
+                        item.id
+                    ))
+                })?;
+                Ok(PostNotCollectionItem::Realtime {
+                    request: VersionedRealtimeRequest::new(request.request.clone()),
+                })
+            }
+            "request" => Err(AppError::Message(format!(
+                "Unsupported collection request type: {}",
+                item.request_type.as_deref().unwrap_or("missing")
+            ))),
             _ => Err(AppError::Message(format!(
                 "Unsupported collection item kind: {}",
                 item.kind

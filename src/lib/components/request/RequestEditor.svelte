@@ -3,16 +3,18 @@
   import {
     createFileRow,
     createKeyValueRow,
-    type AuthType,
     type BodyMode,
     type EnvironmentVariable,
     type FileRow,
     type KeyValueRow,
     type RequestDraft
   } from "$lib/api/types";
+  import AuthEditor from "$lib/components/request/AuthEditor.svelte";
+  import JsonEditor from "$lib/components/request/JsonEditor.svelte";
+  import KeyValueEditor from "$lib/components/request/KeyValueEditor.svelte";
   import ScriptEditor from "$lib/components/request/ScriptEditor.svelte";
   import VariableField from "$lib/components/request/VariableField.svelte";
-  import { insertTextIntoEditableControl } from "$lib/dom-editing";
+  import { getHeaderNameSuggestions, getHeaderValueSuggestions } from "$lib/header-suggestions";
   import { formatScript } from "$lib/script-formatting";
   import type { Attachment } from "svelte/attachments";
 
@@ -99,11 +101,6 @@
   let jsonValidationError = $state("");
   let multipartErrorText = $state("");
   let isPickingMultipartFiles = $state(false);
-  let isFetchingOAuth2Token = $state(false);
-  let oauth2FetchErrorText = $state("");
-  let oauth2FetchStatusText = $state("");
-  let shouldPersistOAuth2Token = $state(true);
-
   const panels = [
     { id: "query", label: "Query" },
     { id: "headers", label: "Headers" },
@@ -119,64 +116,6 @@
   pn.expect(pn.response.code).toBe(200);
 });`;
 
-  const GENERAL_HEADER_NAMES = [
-    "Accept",
-    "Accept-Encoding",
-    "Accept-Language",
-    "Authorization",
-    "Cache-Control",
-    "Connection",
-    "Content-Encoding",
-    "Content-Length",
-    "Content-Type",
-    "Cookie",
-    "Host",
-    "If-Match",
-    "If-Modified-Since",
-    "If-None-Match",
-    "If-Unmodified-Since",
-    "Origin",
-    "Pragma",
-    "Prefer",
-    "Range",
-    "Referer",
-    "User-Agent",
-    "X-API-Key",
-    "X-Request-ID",
-    "X-Trace-ID"
-  ];
-
-  const GENERAL_HEADER_VALUE_SUGGESTIONS: Record<string, string[]> = {
-    accept: ["application/json", "application/xml", "text/plain", "text/html", "*/*"],
-    "accept-encoding": ["gzip, deflate, br", "gzip", "identity"],
-    "accept-language": ["en-US,en;q=0.9", "en-US", "en"],
-    authorization: ["Bearer {{oauth_access_token}}", "Bearer ", "Basic "],
-    "cache-control": ["no-cache", "no-store", "max-age=0", "max-age=3600"],
-    connection: ["keep-alive", "close"],
-    "content-encoding": ["gzip", "br", "deflate", "identity"],
-    "content-type": [
-      "application/json",
-      "application/x-www-form-urlencoded",
-      "multipart/form-data",
-      "text/plain",
-      "application/xml",
-      "text/html"
-    ],
-    cookie: ["session=", "token="],
-    "if-match": ["*"],
-    "if-none-match": ["*"],
-    origin: ["http://localhost:3000", "http://localhost:5173"],
-    pragma: ["no-cache"],
-    prefer: ["return=representation", "return=minimal"],
-    range: ["bytes=0-"],
-    referer: ["http://localhost:3000", "http://localhost:5173"],
-    "user-agent": ["PostNot"],
-    "x-api-key": ["{{api_key}}"],
-    "x-request-id": ["{{$guid}}"],
-    "x-trace-id": ["{{$guid}}"]
-  };
-
-  let canPersistOAuth2Token = $derived(Boolean(activeEnvironmentName && handleFetchOAuth2Token));
   let headerNameSuggestions = $derived(getHeaderNameSuggestions(request.headers));
 
   function splitUrlAndQuery(value: string) {
@@ -252,81 +191,14 @@
     };
   }
 
-  function toggleRow(kind: "queryParams" | "headers", index: number, enabled: boolean) {
-    updateRows(kind, index, { enabled });
-  }
-
   function toggleFormEnabled(index: number, enabled: boolean) {
     updateFormRow(index, { enabled });
   }
 
   let displayUrl = $derived(buildDisplayUrl(request.url, request.queryParams));
 
-  function updateRows(kind: "queryParams" | "headers", index: number, patch: Partial<KeyValueRow>) {
-    const nextRows = request[kind].map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row));
-    request = { ...request, [kind]: nextRows };
-  }
-
-  function normalizeHeaderName(value: string) {
-    return value.trim().toLowerCase();
-  }
-
-  function uniqueStrings(values: string[]) {
-    const seen: Record<string, true> = {};
-    const result: string[] = [];
-
-    for (const value of values) {
-      const trimmedValue = value.trim();
-      const lookupKey = trimmedValue.toLowerCase();
-
-      if (!trimmedValue || seen[lookupKey]) {
-        continue;
-      }
-
-      seen[lookupKey] = true;
-      result.push(trimmedValue);
-    }
-
-    return result;
-  }
-
-  function getHeaderNameSuggestions(rows: KeyValueRow[]) {
-    return uniqueStrings([
-      ...GENERAL_HEADER_NAMES,
-      ...rows.map((row) => row.key)
-    ]).sort((a, b) => a.localeCompare(b));
-  }
-
-  function getHeaderValueSuggestions(headerName: string, rows: KeyValueRow[]) {
-    const normalizedHeaderName = normalizeHeaderName(headerName);
-
-    if (!normalizedHeaderName) {
-      return [];
-    }
-
-    return uniqueStrings([
-      ...rows
-        .filter((row) => normalizeHeaderName(row.key) === normalizedHeaderName)
-        .map((row) => row.value),
-      ...(GENERAL_HEADER_VALUE_SUGGESTIONS[normalizedHeaderName] ?? [])
-    ]);
-  }
-
-  function getHeaderNameListId(rowId: string) {
-    return `header-name-suggestions-${rowId}`;
-  }
-
-  function getHeaderValueListId(rowId: string) {
-    return `header-value-suggestions-${rowId}`;
-  }
-
-  function addRow(kind: "queryParams" | "headers") {
-    request = { ...request, [kind]: [...request[kind], createKeyValueRow()] };
-  }
-
-  function removeRow(kind: "queryParams" | "headers", id: string) {
-    const nextRows = request[kind].length === 1 ? [createKeyValueRow()] : request[kind].filter((row) => row.id !== id);
-    request = { ...request, [kind]: nextRows };
+  function updateKeyValueRows(kind: "queryParams" | "headers", rows: KeyValueRow[]) {
+    request = { ...request, [kind]: rows };
   }
 
   function updateBodyMode(mode: BodyMode) {
@@ -383,10 +255,6 @@
 
   const variableTokenPattern = /{{\s*(?:\$[A-Za-z0-9_.-]+(?:\[\d+\])?|[A-Za-z0-9_.-]+)\s*}}/g;
 
-  function matchVariableToken(source: string, start: number) {
-    return source.slice(start).match(/^{{\s*(?:\$[A-Za-z0-9_.-]+(?:\[\d+\])?|[A-Za-z0-9_.-]+)\s*}}/)?.[0] ?? null;
-  }
-
   function pushVariableAwareText(tokens: HighlightToken[], value: string, baseType: HighlightToken["type"]) {
     if (!value) {
       return;
@@ -412,58 +280,6 @@
     }
   }
 
-  function tokenizeJson(json: string): HighlightToken[] {
-    const tokens: HighlightToken[] = [];
-    let i = 0;
-    while (i < json.length) {
-      const variableToken = matchVariableToken(json, i);
-
-      if (variableToken) {
-        tokens.push({ type: "variable", value: variableToken });
-        i += variableToken.length;
-        continue;
-      }
-
-      const ch = json[i];
-      if (ch === '"') {
-        const start = i;
-        i++;
-        while (i < json.length && json[i] !== '"') { if (json[i] === '\\') i++; i++; }
-        i++;
-        const raw = json.slice(start, i);
-        let j = i;
-        while (j < json.length && (json[j] === ' ' || json[j] === '\t')) j++;
-        pushVariableAwareText(tokens, raw, json[j] === ':' ? "key" : "string");
-        continue;
-      }
-      if (ch === '-' || (ch >= '0' && ch <= '9')) {
-        const start = i;
-        while (i < json.length && /[0-9.eE+\-]/.test(json[i])) i++;
-        tokens.push({ type: "number", value: json.slice(start, i) });
-        continue;
-      }
-      if (json.startsWith("true", i)) { tokens.push({ type: "bool", value: "true" }); i += 4; continue; }
-      if (json.startsWith("false", i)) { tokens.push({ type: "bool", value: "false" }); i += 5; continue; }
-      if (json.startsWith("null", i)) { tokens.push({ type: "null", value: "null" }); i += 4; continue; }
-      if ('{}[]'.includes(ch)) { tokens.push({ type: "bracket", value: ch }); i++; continue; }
-      if (ch === ':') { tokens.push({ type: "colon", value: ":" }); i++; continue; }
-      if (ch === ',') { tokens.push({ type: "comma", value: "," }); i++; continue; }
-      if (ch === '\n') { tokens.push({ type: "newline", value: "\n" }); i++; continue; }
-      if (ch === ' ' || ch === '\t') {
-        const start = i;
-        while (i < json.length && (json[i] === ' ' || json[i] === '\t')) i++;
-        tokens.push({ type: "indent", value: json.slice(start, i) });
-        continue;
-      }
-      tokens.push({ type: "text", value: ch });
-      i++;
-    }
-    return tokens;
-  }
-
-  let jsonTokens = $derived(
-    request.body.mode === "json" ? tokenizeJson(request.body.raw) : []
-  );
   let urlTokens = $derived(pushUrlTokens(displayUrl));
 
   function pushUrlTokens(url: string) {
@@ -471,57 +287,6 @@
     pushVariableAwareText(tokens, url, "text");
     return tokens;
   }
-
-  function handleJsonKeydown(event: KeyboardEvent) {
-    if (request.body.mode !== "json") return;
-    const textarea = event.target as HTMLTextAreaElement;
-    if (textarea.tagName !== "TEXTAREA") return;
-
-    if (event.key === "Enter") {
-      event.preventDefault();
-      const { selectionStart } = textarea;
-      const val = textarea.value;
-      const lineStart = val.lastIndexOf('\n', selectionStart - 1) + 1;
-      const currentLine = val.slice(lineStart, selectionStart);
-      const indent = currentLine.match(/^(\s*)/)?.[1] ?? "";
-      const charBefore = val[selectionStart - 1];
-      const charAfter = val[selectionStart];
-      let insert: string;
-
-      if ((charBefore === '{' || charBefore === '[') && (charAfter === '}' || charAfter === ']')) {
-        insert = `\n${indent}  \n${indent}`;
-        insertTextIntoEditableControl(textarea, insert, {
-          selectionStart,
-          selectionEnd: selectionStart,
-          cursorOffset: indent.length + 3
-        });
-      } else if (charBefore === '{' || charBefore === '[') {
-        insert = `\n${indent}  `;
-        insertTextIntoEditableControl(textarea, insert, {
-          selectionStart,
-          selectionEnd: selectionStart
-        });
-      } else {
-        insert = `\n${indent}`;
-        insertTextIntoEditableControl(textarea, insert, {
-          selectionStart,
-          selectionEnd: selectionStart
-        });
-      }
-      return;
-    }
-
-    if (event.key === "Tab") {
-      event.preventDefault();
-      const { selectionStart, selectionEnd } = textarea;
-      const insert = "  ";
-      insertTextIntoEditableControl(textarea, insert, {
-        selectionStart,
-        selectionEnd
-      });
-    }
-  }
-
 
   function updateFormRow(index: number, patch: Partial<KeyValueRow>) {
     const nextRows = request.body.form.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row));
@@ -630,16 +395,6 @@
     }
   }
 
-  function updateAuthType(type: AuthType) {
-    request = {
-      ...request,
-      auth: {
-        ...request.auth,
-        type
-      }
-    };
-  }
-
   function updateName(name: string) {
     request = {
       ...request,
@@ -651,26 +406,6 @@
     request = {
       ...request,
       method
-    };
-  }
-
-  function updateApiKeyName(value: string) {
-    request = {
-      ...request,
-      auth: {
-        ...request.auth,
-        apiKeyName: value
-      }
-    };
-  }
-
-  function updateApiKeyPlacement(value: RequestDraft["auth"]["apiKeyIn"]) {
-    request = {
-      ...request,
-      auth: {
-        ...request.auth,
-        apiKeyIn: value
-      }
     };
   }
 
@@ -689,43 +424,12 @@
     return `Remove ${label}`;
   }
 
-  async function fetchOAuth2Token() {
-    if (!handleFetchOAuth2Token || isFetchingOAuth2Token) {
-      return;
-    }
-
-    isFetchingOAuth2Token = true;
-    oauth2FetchErrorText = "";
-    oauth2FetchStatusText = "";
-
-    try {
-      const result = await handleFetchOAuth2Token({
-        persistToEnvironment: canPersistOAuth2Token && shouldPersistOAuth2Token
-      });
-      request = {
-        ...request,
-        auth: {
-          ...request.auth,
-          type: "oauth2",
-          oauth2AccessToken: result.persistedToEnvironment ? "{{oauth_access_token}}" : result.accessToken
-        }
-      };
-      const expiryText = result.expiresIn ? ` Expires in ${result.expiresIn}s.` : "";
-      oauth2FetchStatusText = result.persistedToEnvironment
-        ? `Token saved to ${activeEnvironmentName} as {{oauth_access_token}}.${expiryText}`
-        : `Token fetched into this request field.${expiryText}`;
-    } catch (error) {
-      oauth2FetchErrorText = error instanceof Error ? error.message : String(error);
-    } finally {
-      isFetchingOAuth2Token = false;
-    }
-  }
 </script>
 
 <svelte:window onkeydown={closeSaveMenuOnWindowKeydown} />
 <svelte:document onclickcapture={closeSaveMenuOnDocumentClick} />
 
-<section class="panel request-panel">
+<section class="panel panel-inset request-panel">
   <div class="request-section-header">
     <div class="request-section-title">
       <h2>Request</h2>
@@ -869,114 +573,26 @@
   </div>
 
   {#if activePanel === "query"}
-    <div class="editor-block">
-      <div class="editor-header">
-        <h2>Query Parameters</h2>
-        <button class="button-secondary" type="button" onclick={() => addRow("queryParams")}>Add row</button>
-      </div>
-
-      <div class="row-list">
-        {#each request.queryParams as row, index (row.id)}
-          <div class="kv-row">
-            <input
-              class="row-toggle"
-              type="checkbox"
-              checked={row.enabled}
-              aria-label="Enable query parameter row"
-              onchange={(event) => toggleRow("queryParams", index, event.currentTarget.checked)}
-            />
-            <input class="text-input" value={row.key} placeholder="Key" oninput={(event) => updateRows("queryParams", index, { key: event.currentTarget.value })} />
-            <VariableField
-              className="text-input"
-              value={row.value}
-              variables={environmentVariables}
-              placeholder="Value"
-              onValueInput={(nextValue) => updateRows("queryParams", index, { value: nextValue })}
-            />
-            <button
-              class="icon-button row-action-button row-action-danger"
-              type="button"
-              title={removeActionLabel("query parameter row")}
-              aria-label={removeActionLabel("query parameter row")}
-              onclick={() => removeRow("queryParams", row.id)}
-            >
-              <svg viewBox="0 0 20 20" aria-hidden="true">
-                <path d="M3 5h14" />
-                <path d="M8 5V3h4v2" />
-                <path d="M6 8v8" />
-                <path d="M10 8v8" />
-                <path d="M14 8v8" />
-                <path d="M5 5l1 12h8l1-12" />
-              </svg>
-            </button>
-          </div>
-        {/each}
-      </div>
-    </div>
+    <KeyValueEditor
+      rows={request.queryParams}
+      variables={environmentVariables}
+      title="Query Parameters"
+      keyLabel="Key"
+      rowLabel="query parameter"
+      onRowsChange={(rows) => updateKeyValueRows("queryParams", rows)}
+    />
   {/if}
 
   {#if activePanel === "headers"}
-    <div class="editor-block">
-      <div class="editor-header">
-        <h2>Headers</h2>
-        <button class="button-secondary" type="button" onclick={() => addRow("headers")}>Add row</button>
-      </div>
-
-      <div class="row-list">
-        {#each request.headers as row, index (row.id)}
-          <div class="kv-row">
-            <input
-              class="row-toggle"
-              type="checkbox"
-              checked={row.enabled}
-              aria-label="Enable header row"
-              onchange={(event) => toggleRow("headers", index, event.currentTarget.checked)}
-            />
-            <input
-              class="text-input"
-              value={row.key}
-              placeholder="Header"
-              list={getHeaderNameListId(row.id)}
-              oninput={(event) => updateRows("headers", index, { key: event.currentTarget.value })}
-            />
-            <datalist id={getHeaderNameListId(row.id)}>
-              {#each headerNameSuggestions as headerName (headerName)}
-                <option value={headerName}></option>
-              {/each}
-            </datalist>
-            <VariableField
-              className="text-input"
-              value={row.value}
-              variables={environmentVariables}
-              placeholder="Value"
-              list={getHeaderValueListId(row.id)}
-              onValueInput={(nextValue) => updateRows("headers", index, { value: nextValue })}
-            />
-            <datalist id={getHeaderValueListId(row.id)}>
-              {#each getHeaderValueSuggestions(row.key, request.headers) as headerValue (headerValue)}
-                <option value={headerValue}></option>
-              {/each}
-            </datalist>
-            <button
-              class="icon-button row-action-button row-action-danger"
-              type="button"
-              title={removeActionLabel("header row")}
-              aria-label={removeActionLabel("header row")}
-              onclick={() => removeRow("headers", row.id)}
-            >
-              <svg viewBox="0 0 20 20" aria-hidden="true">
-                <path d="M3 5h14" />
-                <path d="M8 5V3h4v2" />
-                <path d="M6 8v8" />
-                <path d="M10 8v8" />
-                <path d="M14 8v8" />
-                <path d="M5 5l1 12h8l1-12" />
-              </svg>
-            </button>
-          </div>
-        {/each}
-      </div>
-    </div>
+    <KeyValueEditor
+      rows={request.headers}
+      variables={environmentVariables}
+      title="Headers"
+      keyLabel="Header"
+      keySuggestions={headerNameSuggestions}
+      getValueSuggestions={(key) => getHeaderValueSuggestions(key, request.headers)}
+      onRowsChange={(rows) => updateKeyValueRows("headers", rows)}
+    />
   {/if}
 
   {#if activePanel === "body"}
@@ -1005,20 +621,15 @@
       {/if}
 
       {#if request.body.mode === "json"}
-        <div class="json-editor-shell" onfocusout={validateJsonOnBlur} onfocusin={() => { jsonValidationError = ""; }}>
-          <VariableField
-            className="body-textarea json-editor-textarea"
-            multiline={true}
-            value={request.body.raw}
-            variables={environmentVariables}
-            highlightTokens={jsonTokens}
-            highlightOverlayClassName="json-editor-overlay"
-            placeholder={'{"hello":"world"}'}
-            spellcheck={false}
-            onValueInput={(nextValue) => updateBodyField("raw", nextValue)}
-            onExtraKeydown={handleJsonKeydown}
-          />
-        </div>
+        <JsonEditor
+          value={request.body.raw}
+          variables={environmentVariables}
+          placeholder={'{"hello":"world"}'}
+          ariaLabel="JSON request body"
+          onValueInput={(nextValue) => updateBodyField("raw", nextValue)}
+          onBlur={validateJsonOnBlur}
+          onFocus={() => { jsonValidationError = ""; }}
+        />
         {#if jsonValidationError}
           <p class="json-validation-error">{jsonValidationError}</p>
         {/if}
@@ -1200,225 +811,13 @@
   {/if}
 
   {#if activePanel === "auth"}
-    <div class="editor-block">
-      <div class="editor-header">
-        <h2>Auth</h2>
-        <label class="body-mode-control">
-          <span class="sr-only">Auth type</span>
-          <select class="body-mode-select" value={request.auth.type} onchange={(event) => updateAuthType(event.currentTarget.value as AuthType)}>
-            <option value="none">None</option>
-            <option value="basic">Basic</option>
-            <option value="bearer">Bearer</option>
-            <option value="api-key">API key</option>
-            <option value="oauth2">OAuth2</option>
-          </select>
-        </label>
-      </div>
-
-      {#if request.auth.type === "none"}
-        <div class="empty-state body-empty-state">
-          This request will be sent without authentication.
-        </div>
-      {/if}
-
-      {#if request.auth.type === "basic"}
-        <div class="auth-grid">
-          <label>
-            <span class="field-label">Username</span>
-            <VariableField
-              className="text-input"
-              value={request.auth.basicUsername}
-              variables={environmentVariables}
-              onValueInput={(nextValue) =>
-                (request = {
-                  ...request,
-                  auth: { ...request.auth, basicUsername: nextValue }
-                })}
-            />
-          </label>
-          <label>
-            <span class="field-label">Password</span>
-            <VariableField
-              className="text-input"
-              type="password"
-              value={request.auth.basicPassword}
-              variables={environmentVariables}
-              onValueInput={(nextValue) =>
-                (request = {
-                  ...request,
-                  auth: { ...request.auth, basicPassword: nextValue }
-                })}
-            />
-          </label>
-        </div>
-      {/if}
-
-      {#if request.auth.type === "bearer"}
-        <div class="auth-grid">
-          <label>
-            <span class="field-label">Token</span>
-            <VariableField
-              className="text-input"
-              type="password"
-              value={request.auth.bearerToken}
-              variables={environmentVariables}
-              placeholder={"{{api_token}}"}
-              onValueInput={(nextValue) =>
-                (request = {
-                  ...request,
-                  auth: { ...request.auth, bearerToken: nextValue }
-                })}
-            />
-          </label>
-        </div>
-      {/if}
-
-      {#if request.auth.type === "api-key"}
-        <div class="auth-grid">
-          <label>
-            <span class="field-label">Key</span>
-            <input
-              class="text-input"
-              value={request.auth.apiKeyName}
-              oninput={(event) => updateApiKeyName(event.currentTarget.value)}
-            />
-          </label>
-          <label>
-            <span class="field-label">Value</span>
-            <VariableField
-              className="text-input"
-              type="password"
-              value={request.auth.apiKeyValue}
-              variables={environmentVariables}
-              onValueInput={(nextValue) =>
-                (request = {
-                  ...request,
-                  auth: { ...request.auth, apiKeyValue: nextValue }
-                })}
-            />
-          </label>
-          <label>
-            <span class="field-label">Send in</span>
-            <select
-              class="text-input"
-              value={request.auth.apiKeyIn}
-              onchange={(event) => updateApiKeyPlacement(event.currentTarget.value as RequestDraft["auth"]["apiKeyIn"])}
-            >
-              <option value="header">Header</option>
-              <option value="query">Query parameter</option>
-            </select>
-          </label>
-        </div>
-      {/if}
-
-      {#if request.auth.type === "oauth2"}
-        <div class="auth-grid">
-          <label>
-            <span class="field-label">Access token</span>
-            <VariableField
-              className="text-input"
-              type="password"
-              value={request.auth.oauth2AccessToken}
-              variables={environmentVariables}
-              placeholder={"{{oauth_access_token}}"}
-              onValueInput={(nextValue) =>
-                (request = {
-                  ...request,
-                  auth: { ...request.auth, oauth2AccessToken: nextValue }
-                })}
-            />
-          </label>
-          <label>
-            <span class="field-label">Token URL</span>
-            <VariableField
-              className="text-input"
-              value={request.auth.oauth2TokenUrl}
-              variables={environmentVariables}
-              placeholder={"{{oauth_token_url}}"}
-              onValueInput={(nextValue) =>
-                (request = {
-                  ...request,
-                  auth: { ...request.auth, oauth2TokenUrl: nextValue }
-                })}
-            />
-          </label>
-          <label>
-            <span class="field-label">Client ID</span>
-            <VariableField
-              className="text-input"
-              value={request.auth.oauth2ClientId}
-              variables={environmentVariables}
-              placeholder={"{{oauth_client_id}}"}
-              onValueInput={(nextValue) =>
-                (request = {
-                  ...request,
-                  auth: { ...request.auth, oauth2ClientId: nextValue }
-                })}
-            />
-          </label>
-          <label>
-            <span class="field-label">Client secret</span>
-            <VariableField
-              className="text-input"
-              type="password"
-              value={request.auth.oauth2ClientSecret}
-              variables={environmentVariables}
-              placeholder={"{{oauth_client_secret}}"}
-              onValueInput={(nextValue) =>
-                (request = {
-                  ...request,
-                  auth: { ...request.auth, oauth2ClientSecret: nextValue }
-                })}
-            />
-          </label>
-          <label>
-            <span class="field-label">Scope</span>
-            <VariableField
-              className="text-input"
-              value={request.auth.oauth2Scope}
-              variables={environmentVariables}
-              placeholder={"{{oauth_scope}}"}
-              onValueInput={(nextValue) =>
-                (request = {
-                  ...request,
-                  auth: { ...request.auth, oauth2Scope: nextValue }
-                })}
-            />
-          </label>
-          <div class="auth-action-row">
-            <div class="oauth2-actions">
-              <button
-                class="button-primary"
-                type="button"
-                onclick={fetchOAuth2Token}
-                disabled={!handleFetchOAuth2Token || isFetchingOAuth2Token}
-              >
-                {isFetchingOAuth2Token ? "Fetching..." : "Fetch token"}
-              </button>
-              <label class={["inline-checkbox", !canPersistOAuth2Token && "inline-checkbox-disabled"]}>
-                <input
-                  type="checkbox"
-                  checked={shouldPersistOAuth2Token && canPersistOAuth2Token}
-                  disabled={!canPersistOAuth2Token || isFetchingOAuth2Token}
-                  onchange={(event) => (shouldPersistOAuth2Token = event.currentTarget.checked)}
-                />
-                <span>
-                  {canPersistOAuth2Token
-                    ? `Save to ${activeEnvironmentName} as {{oauth_access_token}}`
-                    : "Activate an environment to save the token as {{oauth_access_token}}"}
-                </span>
-              </label>
-            </div>
-            {#if oauth2FetchStatusText}
-              <p class="auth-status-text">{oauth2FetchStatusText}</p>
-            {/if}
-            {#if oauth2FetchErrorText}
-              <p class="auth-error-text">{oauth2FetchErrorText}</p>
-            {/if}
-          </div>
-        </div>
-      {/if}
-    </div>
+    <AuthEditor
+      auth={request.auth}
+      variables={environmentVariables}
+      {activeEnvironmentName}
+      {handleFetchOAuth2Token}
+      onAuthChange={(auth) => (request = { ...request, auth })}
+    />
   {/if}
 
   {#if activePanel === "scripts"}

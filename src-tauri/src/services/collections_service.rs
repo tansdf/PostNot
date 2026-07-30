@@ -9,7 +9,12 @@ use crate::{
         collections::{
             CollectionItemSummary, CollectionSearchResult, CollectionSummary,
             CreateCollectionFolderInput, CreateCollectionInput, MoveCollectionItemInput,
-            SavedRequestDetail, SavedRequestSummary, UpdateCollectionFolderInput,
+            SavedRealtimeRequestDetail, SavedRealtimeRequestSummary, SavedRequestDetail,
+            SavedRequestSummary, UpdateCollectionFolderInput,
+        },
+        realtime::{
+            RealtimeRequestDraft, RequestType, VersionedRealtimeRequest,
+            REALTIME_REQUEST_SCHEMA_VERSION,
         },
         requests::SendRequestPayload,
     },
@@ -31,6 +36,13 @@ pub struct ImportCollectionRequest {
     pub parent_id: Option<String>,
     pub sort_order: i64,
     pub request: SendRequestPayload,
+}
+
+#[derive(Debug, Clone)]
+pub struct ImportCollectionRealtimeRequest {
+    pub parent_id: Option<String>,
+    pub sort_order: i64,
+    pub request: RealtimeRequestDraft,
 }
 
 const STARTER_COLLECTION_SEEDED_KEY: &str = "starter_collection_seeded";
@@ -170,6 +182,7 @@ pub async fn search_collection_entities(
                     collection_id: collection.id,
                     parent_id: None,
                     name: collection.name.clone(),
+                    request_type: None,
                     method: None,
                     url: None,
                     updated_at: collection.updated_at,
@@ -215,6 +228,7 @@ pub async fn search_collection_entities(
                     collection_id: item.collection_id,
                     parent_id: item.parent_id,
                     name: item.name,
+                    request_type: item.request_type,
                     method: item.method,
                     url: item.url,
                     updated_at: item.updated_at,
@@ -343,8 +357,9 @@ pub async fn import_collection_atomic(
             INSERT INTO collection_items (
               id, collection_id, parent_id, kind, name, sort_order, method, url,
               query_params_json, headers_json, body_json, auth_json,
-              prerequest_script, test_script, created_at, updated_at
-            ) VALUES (?1, ?2, ?3, 'request', ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
+              prerequest_script, test_script, request_type, realtime_request_json,
+              created_at, updated_at
+            ) VALUES (?1, ?2, ?3, 'request', ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, 'http', NULL, ?14, ?15)
             "#,
         )
         .bind(&item_id)
@@ -360,6 +375,133 @@ pub async fn import_collection_atomic(
         .bind(serde_json::to_string(&request.auth)?)
         .bind(&request.pre_request_script)
         .bind(&request.test_script)
+        .bind(&now)
+        .bind(&now)
+        .execute(&mut *transaction)
+        .await?;
+    }
+
+    transaction.commit().await?;
+    get_collection(pool, &collection_id).await
+}
+
+pub async fn import_mixed_collection_atomic(
+    pool: &SqlitePool,
+    input: &CreateCollectionInput,
+    folders: &[ImportCollectionFolder],
+    requests: &[ImportCollectionRequest],
+    realtime_requests: &[ImportCollectionRealtimeRequest],
+) -> AppResult<CollectionSummary> {
+    let name = input.name.trim();
+    if name.is_empty() {
+        return Err(AppError::Message(
+            "Collection name is required.".to_string(),
+        ));
+    }
+
+    let mut transaction = pool.begin().await?;
+    let collection_id = Uuid::new_v4().to_string();
+    let now = now_iso();
+    sqlx::query(
+        r#"
+        INSERT INTO collections (
+          id, name, description, prerequest_script, test_script, created_at, updated_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+        "#,
+    )
+    .bind(&collection_id)
+    .bind(name)
+    .bind(input.description.trim())
+    .bind(&input.pre_request_script)
+    .bind(&input.test_script)
+    .bind(&now)
+    .bind(&now)
+    .execute(&mut *transaction)
+    .await?;
+
+    for folder in folders {
+        sqlx::query(
+            r#"
+            INSERT INTO collection_items (
+              id, collection_id, parent_id, kind, name, sort_order, method, url,
+              query_params_json, headers_json, body_json, auth_json,
+              prerequest_script, test_script, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, 'folder', ?4, ?5, NULL, NULL, '[]', '[]', '{}', '{}', ?6, ?7, ?8, ?9)
+            "#,
+        )
+        .bind(&folder.id)
+        .bind(&collection_id)
+        .bind(folder.parent_id.as_deref())
+        .bind(folder.name.trim())
+        .bind(folder.sort_order)
+        .bind(&folder.pre_request_script)
+        .bind(&folder.test_script)
+        .bind(&now)
+        .bind(&now)
+        .execute(&mut *transaction)
+        .await?;
+    }
+
+    for imported_request in requests {
+        let request = &imported_request.request;
+        let item_id = Uuid::new_v4().to_string();
+        let item_name = saved_request_name(request);
+        sqlx::query(
+            r#"
+            INSERT INTO collection_items (
+              id, collection_id, parent_id, kind, name, sort_order, method, url,
+              query_params_json, headers_json, body_json, auth_json,
+              prerequest_script, test_script, request_type, realtime_request_json,
+              created_at, updated_at
+            ) VALUES (?1, ?2, ?3, 'request', ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, 'http', NULL, ?14, ?15)
+            "#,
+        )
+        .bind(&item_id)
+        .bind(&collection_id)
+        .bind(imported_request.parent_id.as_deref())
+        .bind(&item_name)
+        .bind(imported_request.sort_order)
+        .bind(&request.method)
+        .bind(&request.url)
+        .bind(serde_json::to_string(&request.query_params)?)
+        .bind(serde_json::to_string(&request.headers)?)
+        .bind(serde_json::to_string(&request.body)?)
+        .bind(serde_json::to_string(&request.auth)?)
+        .bind(&request.pre_request_script)
+        .bind(&request.test_script)
+        .bind(&now)
+        .bind(&now)
+        .execute(&mut *transaction)
+        .await?;
+    }
+
+    for imported_request in realtime_requests {
+        validate_realtime_request(&imported_request.request)?;
+        let request = &imported_request.request;
+        let item_id = Uuid::new_v4().to_string();
+        let item_name = saved_realtime_request_name(request);
+        let versioned_request = VersionedRealtimeRequest::new(request.clone());
+        sqlx::query(
+            r#"
+            INSERT INTO collection_items (
+              id, collection_id, parent_id, kind, name, sort_order, method, url,
+              query_params_json, headers_json, body_json, auth_json,
+              prerequest_script, test_script, request_type, realtime_request_json,
+              created_at, updated_at
+            ) VALUES (
+              ?1, ?2, ?3, 'request', ?4, ?5, NULL, ?6,
+              '[]', '[]', '{}', '{}', '', '', ?7, ?8, ?9, ?10
+            )
+            "#,
+        )
+        .bind(&item_id)
+        .bind(&collection_id)
+        .bind(imported_request.parent_id.as_deref())
+        .bind(&item_name)
+        .bind(imported_request.sort_order)
+        .bind(&request.common().url)
+        .bind(request.request_type().as_str())
+        .bind(serde_json::to_string(&versioned_request)?)
         .bind(&now)
         .bind(&now)
         .execute(&mut *transaction)
@@ -676,7 +818,7 @@ pub async fn list_saved_requests(
         r#"
         SELECT id, collection_id, parent_id, name, method, url, updated_at
         FROM collection_items
-        WHERE collection_id = ?1 AND kind = 'request'
+        WHERE collection_id = ?1 AND kind = 'request' AND request_type = 'http'
         ORDER BY updated_at DESC, name ASC
         "#,
     )
@@ -695,7 +837,7 @@ pub async fn list_saved_request_details(
         r#"
         SELECT id, collection_id, parent_id, name, method, url, query_params_json, headers_json, body_json, auth_json, prerequest_script, test_script, updated_at
         FROM collection_items
-        WHERE collection_id = ?1 AND kind = 'request'
+        WHERE collection_id = ?1 AND kind = 'request' AND request_type = 'http'
         ORDER BY updated_at DESC, name ASC
         "#,
     )
@@ -725,8 +867,9 @@ pub async fn save_request(
         INSERT INTO collection_items (
           id, collection_id, parent_id, kind, name, sort_order, method, url,
           query_params_json, headers_json, body_json, auth_json,
-          prerequest_script, test_script, created_at, updated_at
-        ) VALUES (?1, ?2, ?3, 'request', ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
+          prerequest_script, test_script, request_type, realtime_request_json,
+          created_at, updated_at
+        ) VALUES (?1, ?2, ?3, 'request', ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, 'http', NULL, ?14, ?15)
         "#,
     )
     .bind(&item_id)
@@ -784,8 +927,9 @@ pub async fn save_requests_atomic(
             r#"INSERT INTO collection_items (
               id, collection_id, parent_id, kind, name, sort_order, method, url,
               query_params_json, headers_json, body_json, auth_json,
-              prerequest_script, test_script, created_at, updated_at
-            ) VALUES (?1, ?2, ?3, 'request', ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)"#,
+              prerequest_script, test_script, request_type, realtime_request_json,
+              created_at, updated_at
+            ) VALUES (?1, ?2, ?3, 'request', ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, 'http', NULL, ?14, ?15)"#,
         )
         .bind(&item_id)
         .bind(collection_id)
@@ -833,7 +977,7 @@ pub async fn update_saved_request_with_revision(
     expected_updated_at: Option<&str>,
 ) -> AppResult<SavedRequestSummary> {
     let collection_id: Option<String> = sqlx::query_scalar(
-        "SELECT collection_id FROM collection_items WHERE id = ?1 AND kind = 'request'",
+        "SELECT collection_id FROM collection_items WHERE id = ?1 AND kind = 'request' AND request_type = 'http'",
     )
     .bind(item_id)
     .fetch_optional(pool)
@@ -859,7 +1003,7 @@ pub async fn update_saved_request_with_revision(
             prerequest_script = ?9,
             test_script = ?10,
             updated_at = ?11
-        WHERE id = ?1 AND kind = 'request'
+        WHERE id = ?1 AND kind = 'request' AND request_type = 'http'
           AND (?12 IS NULL OR updated_at = ?12)
         "#,
     )
@@ -880,7 +1024,7 @@ pub async fn update_saved_request_with_revision(
 
     if result.rows_affected() == 0 {
         let current_updated_at: Option<String> = sqlx::query_scalar(
-            "SELECT updated_at FROM collection_items WHERE id = ?1 AND kind = 'request'",
+            "SELECT updated_at FROM collection_items WHERE id = ?1 AND kind = 'request' AND request_type = 'http'",
         )
         .bind(item_id)
         .fetch_optional(pool)
@@ -900,7 +1044,7 @@ pub async fn get_saved_request(pool: &SqlitePool, item_id: &str) -> AppResult<Sa
         r#"
         SELECT id, collection_id, parent_id, name, method, url, query_params_json, headers_json, body_json, auth_json, prerequest_script, test_script, updated_at
         FROM collection_items
-        WHERE id = ?1 AND kind = 'request'
+        WHERE id = ?1 AND kind = 'request' AND request_type = 'http'
         "#,
     )
     .bind(item_id)
@@ -928,6 +1072,193 @@ pub async fn get_saved_request(pool: &SqlitePool, item_id: &str) -> AppResult<Sa
     })
 }
 
+pub async fn list_saved_realtime_requests(
+    pool: &SqlitePool,
+    collection_id: &str,
+) -> AppResult<Vec<SavedRealtimeRequestSummary>> {
+    let rows = sqlx::query(
+        r#"
+        SELECT id, collection_id, parent_id, name, request_type, url, updated_at
+        FROM collection_items
+        WHERE collection_id = ?1
+          AND kind = 'request'
+          AND request_type IN ('websocket', 'socketio')
+        ORDER BY updated_at DESC, name ASC
+        "#,
+    )
+    .bind(collection_id)
+    .fetch_all(pool)
+    .await?;
+
+    rows.into_iter()
+        .map(map_saved_realtime_request_summary)
+        .collect()
+}
+
+pub async fn save_realtime_request(
+    pool: &SqlitePool,
+    collection_id: &str,
+    parent_id: Option<&str>,
+    request: &RealtimeRequestDraft,
+) -> AppResult<SavedRealtimeRequestSummary> {
+    ensure_collection_exists(pool, collection_id).await?;
+    validate_parent_folder(pool, collection_id, parent_id).await?;
+    validate_realtime_request(request)?;
+
+    let item_id = Uuid::new_v4().to_string();
+    let item_name = saved_realtime_request_name(request);
+    let now = now_iso();
+    let sort_order = next_sort_order(pool, collection_id, parent_id).await?;
+    let versioned_request = VersionedRealtimeRequest::new(request.clone());
+
+    sqlx::query(
+        r#"
+        INSERT INTO collection_items (
+          id, collection_id, parent_id, kind, name, sort_order, method, url,
+          query_params_json, headers_json, body_json, auth_json,
+          prerequest_script, test_script, request_type, realtime_request_json,
+          created_at, updated_at
+        ) VALUES (
+          ?1, ?2, ?3, 'request', ?4, ?5, NULL, ?6,
+          '[]', '[]', '{}', '{}', '', '', ?7, ?8, ?9, ?10
+        )
+        "#,
+    )
+    .bind(&item_id)
+    .bind(collection_id)
+    .bind(parent_id)
+    .bind(&item_name)
+    .bind(sort_order)
+    .bind(&request.common().url)
+    .bind(request.request_type().as_str())
+    .bind(serde_json::to_string(&versioned_request)?)
+    .bind(&now)
+    .bind(&now)
+    .execute(pool)
+    .await?;
+
+    touch_collection(pool, collection_id).await?;
+    get_saved_realtime_request_summary(pool, &item_id).await
+}
+
+pub async fn update_saved_realtime_request(
+    pool: &SqlitePool,
+    item_id: &str,
+    request: &RealtimeRequestDraft,
+) -> AppResult<SavedRealtimeRequestSummary> {
+    update_saved_realtime_request_with_revision(pool, item_id, request, None).await
+}
+
+pub async fn update_saved_realtime_request_with_revision(
+    pool: &SqlitePool,
+    item_id: &str,
+    request: &RealtimeRequestDraft,
+    expected_updated_at: Option<&str>,
+) -> AppResult<SavedRealtimeRequestSummary> {
+    validate_realtime_request(request)?;
+
+    let collection_id: Option<String> = sqlx::query_scalar(
+        r#"
+        SELECT collection_id
+        FROM collection_items
+        WHERE id = ?1
+          AND kind = 'request'
+          AND request_type IN ('websocket', 'socketio')
+        "#,
+    )
+    .bind(item_id)
+    .fetch_optional(pool)
+    .await?;
+
+    let Some(collection_id) = collection_id else {
+        return Err(AppError::Message(
+            "Saved realtime request not found.".to_string(),
+        ));
+    };
+
+    let item_name = saved_realtime_request_name(request);
+    let now = now_iso();
+    let versioned_request = VersionedRealtimeRequest::new(request.clone());
+    let request_json = serde_json::to_string(&versioned_request)?;
+
+    let result = sqlx::query(
+        r#"
+        UPDATE collection_items
+        SET name = ?2,
+            method = NULL,
+            url = ?3,
+            query_params_json = '[]',
+            headers_json = '[]',
+            body_json = '{}',
+            auth_json = '{}',
+            prerequest_script = '',
+            test_script = '',
+            request_type = ?4,
+            realtime_request_json = ?5,
+            updated_at = ?6
+        WHERE id = ?1
+          AND kind = 'request'
+          AND request_type IN ('websocket', 'socketio')
+          AND (?7 IS NULL OR updated_at = ?7)
+        "#,
+    )
+    .bind(item_id)
+    .bind(&item_name)
+    .bind(&request.common().url)
+    .bind(request.request_type().as_str())
+    .bind(request_json)
+    .bind(&now)
+    .bind(expected_updated_at)
+    .execute(pool)
+    .await?;
+
+    if result.rows_affected() == 0 {
+        let current_updated_at: Option<String> = sqlx::query_scalar(
+            r#"
+            SELECT updated_at
+            FROM collection_items
+            WHERE id = ?1
+              AND kind = 'request'
+              AND request_type IN ('websocket', 'socketio')
+            "#,
+        )
+        .bind(item_id)
+        .fetch_optional(pool)
+        .await?;
+        return match current_updated_at {
+            Some(current_updated_at) => Err(AppError::Conflict { current_updated_at }),
+            None => Err(AppError::Message(
+                "Saved realtime request not found.".to_string(),
+            )),
+        };
+    }
+
+    touch_collection(pool, &collection_id).await?;
+    get_saved_realtime_request_summary(pool, item_id).await
+}
+
+pub async fn get_saved_realtime_request(
+    pool: &SqlitePool,
+    item_id: &str,
+) -> AppResult<SavedRealtimeRequestDetail> {
+    let row = sqlx::query(
+        r#"
+        SELECT id, collection_id, parent_id, name, request_type,
+               realtime_request_json, updated_at
+        FROM collection_items
+        WHERE id = ?1
+          AND kind = 'request'
+          AND request_type IN ('websocket', 'socketio')
+        "#,
+    )
+    .bind(item_id)
+    .fetch_optional(pool)
+    .await?
+    .ok_or_else(|| AppError::Message("Saved realtime request not found.".to_string()))?;
+
+    map_saved_realtime_request_detail(row)
+}
+
 pub async fn delete_collection_item(pool: &SqlitePool, item_id: &str) -> AppResult<()> {
     let collection_id: Option<String> =
         sqlx::query_scalar("SELECT collection_id FROM collection_items WHERE id = ?1")
@@ -950,7 +1281,9 @@ pub async fn delete_collection_item(pool: &SqlitePool, item_id: &str) -> AppResu
 
 pub async fn delete_saved_request(pool: &SqlitePool, item_id: &str) -> AppResult<()> {
     let exists: Option<String> =
-        sqlx::query_scalar("SELECT id FROM collection_items WHERE id = ?1 AND kind = 'request'")
+        sqlx::query_scalar(
+            "SELECT id FROM collection_items WHERE id = ?1 AND kind = 'request' AND request_type = 'http'",
+        )
             .bind(item_id)
             .fetch_optional(pool)
             .await?;
@@ -960,6 +1293,74 @@ pub async fn delete_saved_request(pool: &SqlitePool, item_id: &str) -> AppResult
     }
 
     delete_collection_item(pool, item_id).await
+}
+
+pub async fn delete_saved_realtime_request(pool: &SqlitePool, item_id: &str) -> AppResult<()> {
+    let exists: Option<String> = sqlx::query_scalar(
+        r#"
+        SELECT id
+        FROM collection_items
+        WHERE id = ?1
+          AND kind = 'request'
+          AND request_type IN ('websocket', 'socketio')
+        "#,
+    )
+    .bind(item_id)
+    .fetch_optional(pool)
+    .await?;
+
+    if exists.is_none() {
+        return Err(AppError::Message(
+            "Saved realtime request not found.".to_string(),
+        ));
+    }
+
+    delete_collection_item(pool, item_id).await
+}
+
+pub async fn delete_saved_realtime_request_with_revision(
+    pool: &SqlitePool,
+    item_id: &str,
+    expected_updated_at: &str,
+) -> AppResult<()> {
+    let mut transaction = pool.begin_with("BEGIN IMMEDIATE").await?;
+    let row = sqlx::query(
+        r#"
+        SELECT collection_id, updated_at
+        FROM collection_items
+        WHERE id = ?1
+          AND kind = 'request'
+          AND request_type IN ('websocket', 'socketio')
+        "#,
+    )
+    .bind(item_id)
+    .fetch_optional(&mut *transaction)
+    .await?
+    .ok_or_else(|| AppError::Message("Saved realtime request not found.".to_string()))?;
+
+    let collection_id: String = row.get("collection_id");
+    let current_updated_at: String = row.get("updated_at");
+    if current_updated_at != expected_updated_at {
+        return Err(AppError::Conflict { current_updated_at });
+    }
+
+    sqlx::query(
+        r#"
+        DELETE FROM collection_items
+        WHERE id = ?1
+          AND kind = 'request'
+          AND request_type IN ('websocket', 'socketio')
+          AND updated_at = ?2
+        "#,
+    )
+    .bind(item_id)
+    .bind(expected_updated_at)
+    .execute(&mut *transaction)
+    .await?;
+    let now = now_iso();
+    touch_collection_in_transaction(&mut transaction, &collection_id, &now).await?;
+    transaction.commit().await?;
+    Ok(())
 }
 
 pub async fn get_collection(
@@ -1194,7 +1595,7 @@ async fn get_saved_request_summary(
     item_id: &str,
 ) -> AppResult<SavedRequestSummary> {
     let row = sqlx::query(
-        "SELECT id, collection_id, parent_id, name, method, url, updated_at FROM collection_items WHERE id = ?1 AND kind = 'request'",
+        "SELECT id, collection_id, parent_id, name, method, url, updated_at FROM collection_items WHERE id = ?1 AND kind = 'request' AND request_type = 'http'",
     )
     .bind(item_id)
     .fetch_optional(pool)
@@ -1204,13 +1605,36 @@ async fn get_saved_request_summary(
     Ok(map_saved_request_summary(row))
 }
 
+async fn get_saved_realtime_request_summary(
+    pool: &SqlitePool,
+    item_id: &str,
+) -> AppResult<SavedRealtimeRequestSummary> {
+    let row = sqlx::query(
+        r#"
+        SELECT id, collection_id, parent_id, name, request_type, url, updated_at
+        FROM collection_items
+        WHERE id = ?1
+          AND kind = 'request'
+          AND request_type IN ('websocket', 'socketio')
+        "#,
+    )
+    .bind(item_id)
+    .fetch_optional(pool)
+    .await?
+    .ok_or_else(|| AppError::Message("Saved realtime request not found.".to_string()))?;
+
+    map_saved_realtime_request_summary(row)
+}
+
 async fn get_collection_item_summary(
     pool: &SqlitePool,
     item_id: &str,
 ) -> AppResult<CollectionItemSummary> {
     let row = sqlx::query(
         r#"
-        SELECT id, collection_id, parent_id, kind, name, method, url, prerequest_script, test_script, updated_at
+        SELECT id, collection_id, parent_id, kind, name,
+               CASE WHEN kind = 'request' THEN request_type END AS request_type,
+               method, url, prerequest_script, test_script, updated_at
         FROM collection_items
         WHERE id = ?1
         "#,
@@ -1226,6 +1650,7 @@ async fn get_collection_item_summary(
         parent_id: row.get("parent_id"),
         kind: row.get("kind"),
         name: row.get("name"),
+        request_type: row.get("request_type"),
         method: row.get("method"),
         url: row.get("url"),
         pre_request_script: row.get("prerequest_script"),
@@ -1241,7 +1666,9 @@ async fn list_collection_item_rows(
 ) -> AppResult<Vec<CollectionItemRow>> {
     let rows = sqlx::query(
         r#"
-        SELECT id, collection_id, parent_id, kind, name, method, url, prerequest_script, test_script, updated_at, sort_order
+        SELECT id, collection_id, parent_id, kind, name,
+               CASE WHEN kind = 'request' THEN request_type END AS request_type,
+               method, url, prerequest_script, test_script, updated_at, sort_order
         FROM collection_items
         WHERE collection_id = ?1
         ORDER BY sort_order ASC, updated_at DESC, name ASC
@@ -1259,6 +1686,7 @@ async fn list_collection_item_rows(
             parent_id: row.get("parent_id"),
             kind: row.get("kind"),
             name: row.get("name"),
+            request_type: row.get("request_type"),
             method: row.get("method"),
             url: row.get("url"),
             pre_request_script: row.get("prerequest_script"),
@@ -1303,7 +1731,9 @@ async fn list_search_collection_item_rows(
 ) -> AppResult<Vec<SearchCollectionItemRow>> {
     let rows = sqlx::query(
         r#"
-        SELECT id, collection_id, parent_id, kind, name, method, url, updated_at
+        SELECT id, collection_id, parent_id, kind, name,
+               CASE WHEN kind = 'request' THEN request_type END AS request_type,
+               method, url, updated_at
         FROM collection_items
         ORDER BY updated_at DESC, name ASC
         "#,
@@ -1319,6 +1749,7 @@ async fn list_search_collection_item_rows(
             parent_id: row.get("parent_id"),
             kind: row.get("kind"),
             name: row.get("name"),
+            request_type: row.get("request_type"),
             method: row.get("method"),
             url: row.get("url"),
             updated_at: row.get("updated_at"),
@@ -1371,6 +1802,7 @@ fn build_collection_item_branch(
                 parent_id: row.parent_id,
                 kind: row.kind,
                 name: row.name,
+                request_type: row.request_type,
                 method: row.method,
                 url: row.url,
                 pre_request_script: row.pre_request_script,
@@ -1584,6 +2016,84 @@ fn map_saved_request_detail(row: sqlx::sqlite::SqliteRow) -> AppResult<SavedRequ
     })
 }
 
+fn map_saved_realtime_request_summary(
+    row: sqlx::sqlite::SqliteRow,
+) -> AppResult<SavedRealtimeRequestSummary> {
+    Ok(SavedRealtimeRequestSummary {
+        id: row.get("id"),
+        collection_id: row.get("collection_id"),
+        parent_id: row.get("parent_id"),
+        name: row.get("name"),
+        request_type: parse_realtime_request_type(&row.get::<String, _>("request_type"))?,
+        url: row.get("url"),
+        updated_at: row.get("updated_at"),
+    })
+}
+
+fn map_saved_realtime_request_detail(
+    row: sqlx::sqlite::SqliteRow,
+) -> AppResult<SavedRealtimeRequestDetail> {
+    let stored_request_type = parse_realtime_request_type(&row.get::<String, _>("request_type"))?;
+    let request_json: Option<String> = row.get("realtime_request_json");
+    let request_json = request_json.ok_or_else(|| {
+        AppError::Message("Saved realtime request payload is missing.".to_string())
+    })?;
+    let versioned: VersionedRealtimeRequest = serde_json::from_str(&request_json)?;
+    if versioned.version != REALTIME_REQUEST_SCHEMA_VERSION {
+        return Err(AppError::Message(format!(
+            "Unsupported saved realtime request version: {}.",
+            versioned.version
+        )));
+    }
+    if versioned.request.request_type() != stored_request_type {
+        return Err(AppError::Message(
+            "Saved realtime request type does not match its payload.".to_string(),
+        ));
+    }
+
+    Ok(SavedRealtimeRequestDetail {
+        id: row.get("id"),
+        collection_id: row.get("collection_id"),
+        parent_id: row.get("parent_id"),
+        name: row.get("name"),
+        request_type: stored_request_type,
+        updated_at: row.get("updated_at"),
+        request: versioned.request,
+    })
+}
+
+fn parse_realtime_request_type(value: &str) -> AppResult<RequestType> {
+    match value {
+        "websocket" => Ok(RequestType::Websocket),
+        "socketio" => Ok(RequestType::Socketio),
+        _ => Err(AppError::Message(format!(
+            "Unsupported realtime request type: {value}."
+        ))),
+    }
+}
+
+fn validate_realtime_request(request: &RealtimeRequestDraft) -> AppResult<()> {
+    if let RealtimeRequestDraft::Socketio {
+        auth_payload,
+        composer,
+        ..
+    } = request
+    {
+        if !auth_payload.is_object() {
+            return Err(AppError::Message(
+                "Socket.IO auth payload must be a JSON object.".to_string(),
+            ));
+        }
+        if !composer.arguments.is_array() {
+            return Err(AppError::Message(
+                "Socket.IO event arguments must be a JSON array.".to_string(),
+            ));
+        }
+    }
+
+    Ok(())
+}
+
 fn saved_request_name(request: &SendRequestPayload) -> String {
     let trimmed_name = request.name.trim();
     if !trimmed_name.is_empty() {
@@ -1591,6 +2101,22 @@ fn saved_request_name(request: &SendRequestPayload) -> String {
     }
 
     format!("{} {}", request.method, request.url)
+}
+
+fn saved_realtime_request_name(request: &RealtimeRequestDraft) -> String {
+    let common = request.common();
+    let trimmed_name = common.name.trim();
+    if !trimmed_name.is_empty() {
+        return trimmed_name.to_string();
+    }
+
+    let protocol_name = match request {
+        RealtimeRequestDraft::Websocket { .. } => "WebSocket",
+        RealtimeRequestDraft::Socketio { .. } => "Socket.IO",
+    };
+    format!("{protocol_name} {}", common.url)
+        .trim_end()
+        .to_string()
 }
 
 fn now_iso() -> String {
@@ -1604,6 +2130,7 @@ struct CollectionItemRow {
     parent_id: Option<String>,
     kind: String,
     name: String,
+    request_type: Option<String>,
     method: Option<String>,
     url: Option<String>,
     pre_request_script: String,
@@ -1627,6 +2154,7 @@ struct SearchCollectionItemRow {
     parent_id: Option<String>,
     kind: String,
     name: String,
+    request_type: Option<String>,
     method: Option<String>,
     url: Option<String>,
     updated_at: String,

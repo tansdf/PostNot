@@ -1,13 +1,20 @@
 use sqlx::{Row, SqlitePool};
 
 use super::{
-    create_collection, create_collection_folder, delete_collection, ensure_starter_collection,
-    list_collections, move_collection_item, save_request, search_collection_entities,
+    create_collection, create_collection_folder, delete_collection,
+    delete_saved_realtime_request_with_revision, ensure_starter_collection,
+    get_saved_realtime_request, get_saved_request, list_collections, list_saved_realtime_requests,
+    list_saved_requests, move_collection_item, save_realtime_request, save_request,
+    search_collection_entities, update_saved_realtime_request_with_revision,
     update_saved_request_with_revision, STARTER_COLLECTION_DESCRIPTION, STARTER_COLLECTION_NAME,
     STARTER_COLLECTION_SEEDED_KEY,
 };
 use crate::domain::{
     collections::{CreateCollectionFolderInput, CreateCollectionInput, MoveCollectionItemInput},
+    realtime::{
+        RawWebSocketComposer, RealtimeRequestCommon, RealtimeRequestDraft, ReconnectPolicy,
+        SocketIoComposer, SocketIoTransport,
+    },
     requests::{RequestAuth, RequestBody, SendRequestPayload},
 };
 
@@ -48,6 +55,9 @@ async fn setup_test_db() -> SqlitePool {
           auth_json TEXT NOT NULL DEFAULT '{}',
           prerequest_script TEXT NOT NULL DEFAULT '',
           test_script TEXT NOT NULL DEFAULT '',
+          request_type TEXT NOT NULL DEFAULT 'http'
+            CHECK (request_type IN ('http', 'websocket', 'socketio')),
+          realtime_request_json TEXT NULL,
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL,
           FOREIGN KEY (collection_id) REFERENCES collections(id) ON DELETE CASCADE,
@@ -107,6 +117,177 @@ async fn optimistic_request_update_rejects_a_stale_revision() {
     assert!(matches!(stale, crate::error::AppError::Conflict { .. }));
 }
 
+#[tokio::test]
+async fn realtime_migration_defaults_existing_items_to_http() {
+    let pool = SqlitePool::connect("sqlite::memory:")
+        .await
+        .expect("in-memory database");
+    sqlx::query(
+        r#"
+        CREATE TABLE collection_items (
+          id TEXT PRIMARY KEY,
+          kind TEXT NOT NULL CHECK (kind IN ('folder', 'request'))
+        )
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .expect("create legacy collection items");
+    sqlx::query("INSERT INTO collection_items (id, kind) VALUES ('request-1', 'request')")
+        .execute(&pool)
+        .await
+        .expect("insert legacy request");
+
+    sqlx::raw_sql(include_str!("../../migrations/0010_realtime_requests.sql"))
+        .execute(&pool)
+        .await
+        .expect("apply realtime migration");
+
+    let row = sqlx::query(
+        "SELECT request_type, realtime_request_json FROM collection_items WHERE id = 'request-1'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("read migrated request");
+    assert_eq!(row.get::<String, _>("request_type"), "http");
+    assert_eq!(row.get::<Option<String>, _>("realtime_request_json"), None);
+}
+
+#[tokio::test]
+async fn realtime_crud_round_trips_and_enforces_optimistic_revision() {
+    let pool = setup_test_db().await;
+    let collection = create_collection(&pool, &collection_input("Realtime"))
+        .await
+        .expect("create collection");
+    let folder = create_collection_folder(&pool, &collection.id, &folder_input("Streams", None))
+        .await
+        .expect("create folder");
+    let websocket = websocket_request("Events", "wss://example.test/events");
+
+    let created = save_realtime_request(&pool, &collection.id, Some(&folder.id), &websocket)
+        .await
+        .expect("save websocket request");
+    assert_eq!(
+        created.request_type,
+        crate::domain::realtime::RequestType::Websocket
+    );
+    assert_eq!(created.url, "wss://example.test/events");
+
+    let detail = get_saved_realtime_request(&pool, &created.id)
+        .await
+        .expect("get websocket request");
+    assert_eq!(detail.parent_id.as_deref(), Some(folder.id.as_str()));
+    assert_eq!(
+        serde_json::to_value(detail.request).expect("serialize detail"),
+        serde_json::to_value(&websocket).expect("serialize fixture")
+    );
+
+    let socketio = socketio_request("Presence", "https://example.test");
+    let updated = update_saved_realtime_request_with_revision(
+        &pool,
+        &created.id,
+        &socketio,
+        Some(&created.updated_at),
+    )
+    .await
+    .expect("update websocket as socket.io");
+    assert_eq!(
+        updated.request_type,
+        crate::domain::realtime::RequestType::Socketio
+    );
+    assert_ne!(updated.updated_at, created.updated_at);
+
+    let stale = update_saved_realtime_request_with_revision(
+        &pool,
+        &created.id,
+        &websocket,
+        Some(&created.updated_at),
+    )
+    .await
+    .expect_err("stale realtime revision must conflict");
+    assert!(matches!(stale, crate::error::AppError::Conflict { .. }));
+}
+
+#[tokio::test]
+async fn protocol_specific_lists_and_getters_do_not_cross_protocols() {
+    let pool = setup_test_db().await;
+    let collection = create_collection(&pool, &collection_input("Mixed"))
+        .await
+        .expect("create collection");
+    let http = save_request(
+        &pool,
+        &collection.id,
+        None,
+        &request("Health", "GET", "https://example.test/health"),
+    )
+    .await
+    .expect("save http request");
+    let realtime = save_realtime_request(
+        &pool,
+        &collection.id,
+        None,
+        &websocket_request("Events", "wss://example.test/events"),
+    )
+    .await
+    .expect("save realtime request");
+
+    let http_items = list_saved_requests(&pool, &collection.id)
+        .await
+        .expect("list http requests");
+    assert_eq!(http_items.len(), 1);
+    assert_eq!(http_items[0].id, http.id);
+
+    let realtime_items = list_saved_realtime_requests(&pool, &collection.id)
+        .await
+        .expect("list realtime requests");
+    assert_eq!(realtime_items.len(), 1);
+    assert_eq!(realtime_items[0].id, realtime.id);
+
+    assert!(get_saved_request(&pool, &realtime.id).await.is_err());
+    assert!(get_saved_realtime_request(&pool, &http.id).await.is_err());
+
+    let collections = list_collections(&pool).await.expect("list collections");
+    assert_eq!(
+        collections[0].request_count, 2,
+        "collection counts include every request protocol"
+    );
+    let search = search_collection_entities(&pool, "Events", None)
+        .await
+        .expect("search realtime request");
+    assert_eq!(search[0].request_type.as_deref(), Some("websocket"));
+}
+
+#[tokio::test]
+async fn realtime_delete_requires_the_current_revision() {
+    let pool = setup_test_db().await;
+    let collection = create_collection(&pool, &collection_input("Realtime"))
+        .await
+        .expect("create collection");
+    let created = save_realtime_request(
+        &pool,
+        &collection.id,
+        None,
+        &websocket_request("Events", "wss://example.test/events"),
+    )
+    .await
+    .expect("save realtime request");
+
+    let stale = delete_saved_realtime_request_with_revision(&pool, &created.id, "stale-revision")
+        .await
+        .expect_err("stale delete must conflict");
+    assert!(matches!(stale, crate::error::AppError::Conflict { .. }));
+    get_saved_realtime_request(&pool, &created.id)
+        .await
+        .expect("stale delete preserves request");
+
+    delete_saved_realtime_request_with_revision(&pool, &created.id, &created.updated_at)
+        .await
+        .expect("delete current revision");
+    assert!(get_saved_realtime_request(&pool, &created.id)
+        .await
+        .is_err());
+}
+
 fn collection_input(name: &str) -> CreateCollectionInput {
     CreateCollectionInput {
         name: name.to_string(),
@@ -122,6 +303,40 @@ fn folder_input(name: &str, parent_id: Option<String>) -> CreateCollectionFolder
         parent_id,
         pre_request_script: String::new(),
         test_script: String::new(),
+    }
+}
+
+fn realtime_common(name: &str, url: &str) -> RealtimeRequestCommon {
+    RealtimeRequestCommon {
+        name: name.to_string(),
+        url: url.to_string(),
+        query_params: Vec::new(),
+        headers: Vec::new(),
+        auth: RequestAuth::default(),
+        reconnect: ReconnectPolicy::default(),
+    }
+}
+
+fn websocket_request(name: &str, url: &str) -> RealtimeRequestDraft {
+    RealtimeRequestDraft::Websocket {
+        common: realtime_common(name, url),
+        subprotocols: vec!["graphql-transport-ws".to_string()],
+        composer: RawWebSocketComposer::default(),
+    }
+}
+
+fn socketio_request(name: &str, url: &str) -> RealtimeRequestDraft {
+    RealtimeRequestDraft::Socketio {
+        common: realtime_common(name, url),
+        path: "/socket.io/".to_string(),
+        namespace: "/presence".to_string(),
+        auth_payload: serde_json::json!({"tenant": "test"}),
+        transport: SocketIoTransport::Auto,
+        composer: SocketIoComposer {
+            event: "join".to_string(),
+            arguments: serde_json::json!(["room-1"]),
+            ..SocketIoComposer::default()
+        },
     }
 }
 

@@ -154,7 +154,7 @@ function createMockCollections(): CollectionSummary[] {
       description: "Saved local-first API workflows",
       preRequestScript: "await pn.variables.set('run_started_at', new Date().toISOString());",
       testScript: "pn.test('response finished', () => pn.expect(pn.response.durationMs).toBeLessThan(1000));",
-      requestCount: 4,
+      requestCount: 5,
       updatedAt: new Date().toISOString()
     },
     {
@@ -203,6 +203,34 @@ function createMockSavedRequests(): SavedRequestSummary[] {
 
 function createMockCollectionItems(): CollectionItemSummary[] {
   return [
+    {
+      id: "mock-realtime-websocket-1",
+      collectionId: "mock-collection-1",
+      parentId: null,
+      kind: "request",
+      requestType: "websocket",
+      name: "Live order events",
+      method: null,
+      url: "wss://events.example.test/orders",
+      preRequestScript: "",
+      testScript: "",
+      updatedAt: new Date().toISOString(),
+      children: []
+    },
+    {
+      id: "mock-realtime-socketio-1",
+      collectionId: "mock-collection-1",
+      parentId: null,
+      kind: "request",
+      requestType: "socketio",
+      name: "Support presence",
+      method: null,
+      url: "https://presence.example.test",
+      preRequestScript: "",
+      testScript: "",
+      updatedAt: new Date().toISOString(),
+      children: []
+    },
     {
       id: "mock-folder-1",
       collectionId: "mock-collection-1",
@@ -942,7 +970,9 @@ export async function searchCollectionEntities(
 ): Promise<CollectionSearchResult[]> {
   if (!hasTauriRuntime()) {
     const collection = createMockCollections()[0];
-    const item = createMockCollectionItems()[0]?.children[0];
+    const mockItems = createMockCollectionItems();
+    const item = mockItems.find((candidate) => candidate.kind === "folder")?.children[0];
+    const realtimeItem = mockItems.find((candidate) => candidate.requestType === "websocket");
     const results: CollectionSearchResult[] = item
       ? [
           {
@@ -972,7 +1002,24 @@ export async function searchCollectionEntities(
             ancestorIds: item.parentId ? [item.parentId] : [],
             ancestorNames: ["Examples"],
             requestCount: null
-          }
+          },
+          ...(realtimeItem
+            ? [{
+                id: realtimeItem.id,
+                kind: "request" as const,
+                requestType: realtimeItem.requestType,
+                collectionId: realtimeItem.collectionId,
+                parentId: realtimeItem.parentId ?? null,
+                name: realtimeItem.name,
+                method: null,
+                url: realtimeItem.url,
+                updatedAt: realtimeItem.updatedAt,
+                collectionName: collection.name,
+                ancestorIds: [],
+                ancestorNames: [],
+                requestCount: null
+              }]
+            : [])
         ]
       : [];
 
@@ -1192,14 +1239,20 @@ export async function deleteCollectionItem(itemId: string): Promise<void> {
   await invoke("delete_collection_item", { itemId });
 }
 
-export async function exportCollection(collectionId: string): Promise<ExportResult | null> {
+export async function exportCollection(
+  collectionId: string,
+  format: "postman" | "postnot" = "postman"
+): Promise<ExportResult | null> {
   if (!hasTauriRuntime()) {
     return {
-      filePath: `/tmp/${collectionId}.postman_collection.json`
+      filePath: `/tmp/${collectionId}.${format === "postnot" ? "postnot_collection" : "postman_collection"}.json`,
+      format,
+      warnings: [],
+      omittedRealtimeRequestCount: 0
     };
   }
 
-  return invoke<ExportResult | null>("export_collection", { collectionId });
+  return invoke<ExportResult | null>("export_collection", { collectionId, format });
 }
 
 export async function listPlaybooks(): Promise<PlaybookSummary[]> {

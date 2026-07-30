@@ -13,6 +13,7 @@ use crate::{
 mod curl;
 mod openapi;
 mod postman;
+mod postnot;
 mod shared;
 
 fn require_non_empty_source(source: &str) -> AppResult<&str> {
@@ -33,6 +34,7 @@ pub async fn import_requests(
 
     match input.format.as_str() {
         "postman" => postman::import_postman_collection(pool, source).await,
+        "postnot" => postnot::import_postnot_collection(pool, source).await,
         "openapi" => openapi::import_openapi_collection(pool, source).await,
         "curl" => {
             curl::import_curl_request(pool, source, input.target_collection_id.as_deref()).await

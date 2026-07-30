@@ -678,10 +678,10 @@
 </svelte:head>
 
 <div class="workspace-grid">
-    <section class="panel collections-page-panel">
+    <section class="panel panel-inset collections-page-panel">
       <div class="request-section-header">
         <div class="request-section-title">
-          <h1>Environments</h1>
+          <h1 class="panel-title">Environments</h1>
           <button class="button-secondary button-compact" type="button" onclick={handleExportEnvironment} disabled={!environmentDetail || isExporting}>
             {isExporting ? "Exporting..." : "Export"}
           </button>
@@ -755,7 +755,7 @@
       {/if}
     </section>
 
-    <section class="panel collections-page-panel">
+    <section class="panel panel-inset collections-page-panel">
       <div class="editor-header">
         <h2>Environment Detail</h2>
         {#if environmentSaveStatus}

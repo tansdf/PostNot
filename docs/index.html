@@ -6,7 +6,7 @@
     <title>PostNot — private, local-first desktop API client</title>
     <meta
       name="description"
-      content="PostNot is a free and open-source desktop API client. Send, organize, automate, and let local AI agents safely author requests without a cloud workspace."
+      content="PostNot is a free, open-source desktop API client for HTTP, WebSocket, Socket.IO, automation, and safe local AI agent authoring."
     />
     <meta name="theme-color" content="#111917" />
     <meta name="color-scheme" content="light dark" />
@@ -14,7 +14,7 @@
     <meta property="og:title" content="PostNot — Post APIs. Not your data." />
     <meta
       property="og:description"
-      content="A private, local-first desktop API client with safe MCP authoring for AI agents. No account or cloud workspace."
+      content="Native HTTP, WebSocket, and Socket.IO workflows with safe local AI agent authoring. No account or cloud workspace."
     />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://post-not.com/" />
@@ -26,7 +26,7 @@
     <meta name="twitter:title" content="PostNot — Post APIs. Not your data." />
     <meta
       name="twitter:description"
-      content="A private, local-first desktop API client with no account and no cloud workspace."
+      content="Native HTTP, WebSocket, and Socket.IO workflows with no account or cloud workspace."
     />
     <meta name="twitter:image" content="https://post-not.com/social-preview.png" />
     <link rel="manifest" href="site.webmanifest" />
@@ -43,7 +43,7 @@
         "operatingSystem": "Windows, macOS, Linux",
         "url": "https://post-not.com/",
         "downloadUrl": "https://github.com/tansdf/PostNot/releases/latest",
-        "softwareVersion": "0.22.0",
+        "softwareVersion": "0.23.0",
         "license": "https://www.apache.org/licenses/LICENSE-2.0",
         "isAccessibleForFree": true,
         "description": "A private, local-first desktop API client with no account or cloud workspace.",
@@ -72,6 +72,7 @@
         <nav id="site-nav" class="site-nav" data-site-nav aria-label="Primary">
           <ul class="nav-links">
             <li><a href="#product">Features</a></li>
+            <li><a href="#realtime">WebSockets</a></li>
             <li><a href="scripting.html">Scripting</a></li>
             <li><a href="#privacy">Data &amp; privacy</a></li>
             <li><a class="nav-links__download" href="#download">Download</a></li>
@@ -87,8 +88,8 @@
           <p class="eyebrow">Private desktop API workbench</p>
           <h1 id="hero-heading">Post APIs.<br />Not your data.</h1>
           <p class="hero__tagline">
-            A local-first desktop API client for sending, organizing, automating, and safely authoring
-            requests with AI agents—without an account or cloud workspace.
+            Send HTTP requests, open WebSocket and Socket.IO connections, organize reusable workflows,
+            and safely author them with AI agents—without an account or cloud workspace.
           </p>
           <div class="cta-row">
             <a class="btn btn--primary" href="#download">Download PostNot</a>
@@ -103,7 +104,7 @@
           </p>
           <ul class="hero__proof" aria-label="Why PostNot">
             <li><strong>Your workspace stays local</strong><span>SQLite data on your machine</span></li>
-            <li><strong>Requests run natively</strong><span>Rust networking, outside browser CORS</span></li>
+            <li><strong>Networking runs natively</strong><span>HTTP · WebSocket · Socket.IO</span></li>
             <li><strong>Your data stays portable</strong><span>Postman, OpenAPI, cURL, and JSON</span></li>
           </ul>
         </div>
@@ -138,17 +139,17 @@
         <span><strong>Local persistence</strong><small>SQLite</small></span>
         <span><strong>Secret storage</strong><small>OS credential store</small></span>
         <span><strong>Safer exports</strong><small>Redacted by default</small></span>
-        <span><strong>Agent authoring</strong><small>Local MCP</small></span>
+        <span><strong>Native realtime</strong><small>WebSocket · Socket.IO</small></span>
         <span><strong>Trusted updates</strong><small>Signed artifacts</small></span>
-        <span><strong>Portable imports</strong><small>Postman · OpenAPI · cURL</small></span>
+        <span><strong>Agent authoring</strong><small>Local MCP</small></span>
       </aside>
 
       <section id="product" aria-labelledby="product-heading">
         <div class="section-heading section-heading--wide">
           <p class="eyebrow">The complete workflow</p>
-          <h2 id="product-heading">Everything important stays close to the request</h2>
+          <h2 id="product-heading">Everything important stays close to the request or connection</h2>
           <p>
-            PostNot covers the daily API loop without turning your local workspace into a hosted service.
+            PostNot covers HTTP and live API workflows without turning your local workspace into a hosted service.
           </p>
         </div>
 
@@ -190,9 +191,47 @@
             </figure>
           </article>
 
-          <article class="workflow">
+          <article id="realtime" class="workflow">
             <div class="workflow__copy">
               <p class="workflow__number">Workflow 02</p>
+              <h3>Open live API connections</h3>
+              <p>
+                Keep raw WebSocket and Socket.IO connections in reusable tabs, send structured or binary
+                messages, and inspect live traffic without mixing it into HTTP request history.
+              </p>
+              <ul class="check-list">
+                <li>Headers, cookies, auth, query parameters, subprotocols, and namespaces</li>
+                <li>Text, tokenized JSON, binary payloads, events, acknowledgements, ping, and pong</li>
+                <li>Saved connection definitions, environment resolution, and opt-in reconnection</li>
+              </ul>
+              <p class="workflow__boundary"><strong>Transcript boundary:</strong> session-only and cleared when the app closes.</p>
+            </div>
+            <figure class="product-shot">
+              <button
+                class="screenshot-trigger"
+                type="button"
+                data-screenshot-src="images/websockets-page.webp"
+                data-screenshot-title="WebSocket workspace"
+                data-screenshot-alt="PostNot WebSocket workspace with a connected saved definition, JSON message composer, and live session transcript"
+              >
+                <img
+                  src="images/websockets-page-960.webp"
+                  srcset="images/websockets-page-960.webp 960w, images/websockets-page.webp 1995w"
+                  sizes="(min-width: 860px) 52vw, 100vw"
+                  width="1995"
+                  height="1179"
+                  alt="PostNot WebSocket workspace with a connected saved definition, JSON message composer, and live session transcript"
+                  loading="lazy"
+                />
+                <span class="screenshot-trigger__label">Open full screenshot</span>
+              </button>
+              <figcaption>Connect, send JSON, and inspect both directions of the session transcript in one workspace.</figcaption>
+            </figure>
+          </article>
+
+          <article class="workflow workflow--image-right">
+            <div class="workflow__copy">
+              <p class="workflow__number">Workflow 03</p>
               <h3>Organize and automate</h3>
               <p>
                 Build nested collections, find saved requests quickly, and run repeatable Playbooks
@@ -228,9 +267,9 @@
             </figure>
           </article>
 
-          <article id="agents" class="workflow workflow--image-right">
+          <article id="agents" class="workflow">
             <div class="workflow__copy">
-              <p class="workflow__number">Workflow 03</p>
+              <p class="workflow__number">Workflow 04</p>
               <h3>Author requests with local AI agents</h3>
               <p>
                 Connect a compatible MCP client to inspect your workspace and prepare reusable
@@ -266,9 +305,9 @@
             </figure>
           </article>
 
-          <article class="workflow">
+          <article class="workflow workflow--image-right">
             <div class="workflow__copy">
-              <p class="workflow__number">Workflow 04</p>
+              <p class="workflow__number">Workflow 05</p>
               <h3>Import, export, and migrate</h3>
               <p>
                 Bring existing work from Postman, OpenAPI 3, or cURL. Export collections and
@@ -303,9 +342,9 @@
             </figure>
           </article>
 
-          <article class="workflow workflow--image-right">
+          <article class="workflow">
             <div class="workflow__copy">
-              <p class="workflow__number">Workflow 05</p>
+              <p class="workflow__number">Workflow 06</p>
               <h3>Protect local data and secrets</h3>
               <p>
                 Use environment variables without storing secret values in plain SQLite. PostNot masks
@@ -380,7 +419,7 @@
         <ol class="data-flow">
           <li>
             <span class="data-flow__number">1</span>
-            <div><h3>Workspace</h3><p>Requests, collections, environments, settings, and history live under the Tauri app data directory in SQLite.</p></div>
+            <div><h3>Workspace</h3><p>Requests, saved connections, collections, environments, settings, and HTTP history live under the Tauri app data directory in SQLite. Live transcripts remain session-only.</p></div>
           </li>
           <li>
             <span class="data-flow__number">2</span>
@@ -392,7 +431,7 @@
           </li>
           <li>
             <span class="data-flow__number">4</span>
-            <div><h3>Network and exports</h3><p>Data leaves when you send or export. Previews mask private values and single-request exports redact credentials by default.</p></div>
+            <div><h3>Network and exports</h3><p>Data leaves when you send a request, open a live connection, or export. Previews mask private values and single-request exports redact credentials by default.</p></div>
           </li>
         </ol>
       </section>

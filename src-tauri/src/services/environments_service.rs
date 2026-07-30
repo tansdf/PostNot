@@ -1087,6 +1087,24 @@ fn resolve_string(input: &str, variables: &HashMap<String, VariableValue>) -> (S
     (resolved, used_secret)
 }
 
+pub(crate) fn resolve_realtime_template(
+    input: &str,
+    active_environment: Option<&EnvironmentDetail>,
+) -> (String, bool) {
+    resolve_string(input, &build_variable_map(active_environment))
+}
+
+pub(crate) fn active_environment_secret_values(
+    active_environment: Option<&EnvironmentDetail>,
+) -> Vec<String> {
+    active_environment
+        .into_iter()
+        .flat_map(|environment| environment.variables.iter())
+        .filter(|variable| variable.enabled && variable.is_secret && !variable.value.is_empty())
+        .map(|variable| variable.value.clone())
+        .collect()
+}
+
 fn now_iso() -> String {
     Utc::now().to_rfc3339()
 }

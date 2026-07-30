@@ -138,6 +138,10 @@ async function testReleaseEnhancement(browser, baseUrl) {
   assert.equal(await page.locator(".trust-strip span > small").count(), 6);
   assert.equal(await page.locator(".trust-strip span > strong").first().textContent(), "Local persistence");
   assert.equal(await page.locator('.preview-shell__bar').textContent(), "Request workspace");
+  assert.equal(await page.locator("#realtime").getByRole("heading", { name: "Open live API connections" }).count(), 1);
+  assert.equal(await page.locator("#realtime .workflow__boundary").getByText(/session-only/i).count(), 1);
+  assert.equal(await page.locator('#realtime img[src*="websockets-page"]').count(), 1);
+  assert.equal(await page.locator(".workflow__number").count(), 6);
   assert.equal(await page.locator("#agents .workflow__boundary").getByText(/cannot send or delete/i).count(), 1);
   const setupLink = page.locator(".asset-row", { hasText: "Setup executable" });
   assert.match(await setupLink.getAttribute("href"), /PostNot_9\.8\.7_x64-setup\.exe$/);
@@ -152,7 +156,7 @@ async function testMarketingNavigation(browser, baseUrl) {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
   const headerBottom = await page.locator(".site-header").evaluate((header) => header.getBoundingClientRect().bottom);
 
-  for (const targetId of ["product", "privacy", "download"]) {
+  for (const targetId of ["product", "realtime", "privacy", "download"]) {
     await page.locator(`.nav-links a[href="#${targetId}"]`).click();
     const targetTop = await page.locator(`#${targetId}`).evaluate((target) => target.getBoundingClientRect().top);
     assert.equal(targetTop >= headerBottom - 1, true, `${targetId} must not scroll underneath the sticky header`);

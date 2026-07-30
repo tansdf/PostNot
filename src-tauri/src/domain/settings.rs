@@ -23,5 +23,35 @@ pub struct AppSettings {
     pub is_history_collapsed: bool,
     pub environment_autosave: bool,
     pub notification_timeout_ms: u64,
+    #[serde(default = "default_realtime_connect_timeout_ms")]
+    pub realtime_connect_timeout_ms: u64,
+    #[serde(default = "default_realtime_max_concurrent_sessions")]
+    pub realtime_max_concurrent_sessions: u32,
+    #[serde(default = "default_realtime_max_message_bytes")]
+    pub realtime_max_message_bytes: u64,
+    #[serde(default = "default_realtime_transcript_max_entries")]
+    pub realtime_transcript_max_entries: u32,
+    #[serde(default = "default_realtime_transcript_max_bytes")]
+    pub realtime_transcript_max_bytes: u64,
     pub last_update_checked_at: Option<String>,
+}
+
+pub fn default_realtime_connect_timeout_ms() -> u64 {
+    30_000
+}
+
+pub fn default_realtime_max_concurrent_sessions() -> u32 {
+    20
+}
+
+pub fn default_realtime_max_message_bytes() -> u64 {
+    64 * 1024 * 1024
+}
+
+pub fn default_realtime_transcript_max_entries() -> u32 {
+    2_000
+}
+
+pub fn default_realtime_transcript_max_bytes() -> u64 {
+    64 * 1024 * 1024
 }

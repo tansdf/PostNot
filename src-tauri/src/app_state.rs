@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 use crate::{
     error::{AppError, AppResult},
+    services::realtime_service::RealtimeConnectionManager,
     services::{response_body_service::ResponseBodyStore, secret_store_service::SecretStore},
 };
 
@@ -38,6 +39,7 @@ pub struct AppState {
     in_flight_request: Mutex<Option<InFlightRequest>>,
     pending_update: Mutex<Option<Update>>,
     response_bodies: ResponseBodyStore,
+    realtime_connections: RealtimeConnectionManager,
 }
 
 impl AppState {
@@ -45,6 +47,7 @@ impl AppState {
         db: SqlitePool,
         secret_store: Arc<dyn SecretStore>,
         response_bodies: ResponseBodyStore,
+        realtime_connections: RealtimeConnectionManager,
     ) -> Self {
         Self {
             db,
@@ -52,11 +55,16 @@ impl AppState {
             in_flight_request: Mutex::new(None),
             pending_update: Mutex::new(None),
             response_bodies,
+            realtime_connections,
         }
     }
 
     pub fn response_bodies(&self) -> &ResponseBodyStore {
         &self.response_bodies
+    }
+
+    pub fn realtime_connections(&self) -> &RealtimeConnectionManager {
+        &self.realtime_connections
     }
 
     pub fn db(&self) -> &SqlitePool {
@@ -160,7 +168,8 @@ mod tests {
 
     use super::AppState;
     use crate::services::{
-        response_body_service::ResponseBodyStore, secret_store_service::InMemorySecretStore,
+        realtime_service::RealtimeConnectionManager, response_body_service::ResponseBodyStore,
+        secret_store_service::InMemorySecretStore,
     };
 
     fn test_state() -> AppState {
@@ -168,6 +177,11 @@ mod tests {
             SqlitePool::connect_lazy("sqlite::memory:").expect("create lazy test pool"),
             Arc::new(InMemorySecretStore::default()),
             ResponseBodyStore::new(PathBuf::from("test-response-bodies")),
+            RealtimeConnectionManager::new(
+                crate::services::realtime_payload_service::RealtimePayloadStore::new(
+                    PathBuf::from("test-realtime-payloads"),
+                ),
+            ),
         )
     }
 

@@ -101,11 +101,11 @@
 
 <svelte:head><title>PostNot MCP Integration</title></svelte:head>
 
-<section class="panel mcp-page">
+<section class="panel panel-inset mcp-page">
   <header class="mcp-page-header">
-    <div class="mcp-page-heading">
+    <div class="panel-heading mcp-page-heading">
       <p class="eyebrow">Local agent bridge</p>
-      <h1>MCP Integration</h1>
+      <h1 class="panel-title">MCP Integration</h1>
       <p>Let compatible AI agents inspect your workspace and prepare reusable requests while you keep control of execution.</p>
     </div>
     <div class="mcp-page-actions">
@@ -135,7 +135,7 @@
 
   <section class="mcp-activity-section" aria-labelledby="mcp-activity-title">
     <div class="mcp-section-heading">
-      <div>
+      <div class="panel-heading">
         <h2 id="mcp-activity-title">Recent agent changes</h2>
         <p>{changeCount === 0 ? "Activity will appear here after an agent changes your workspace." : `${changeCount} recorded ${changeCount === 1 ? "change" : "changes"}`}</p>
       </div>
@@ -203,7 +203,7 @@
 {#if isSetupOpen}
   <DialogShell ariaLabelledby="mcp-setup-title" onDismiss={() => (isSetupOpen = false)} sizeClass="save-dialog mcp-setup-dialog">
     <div class="editor-header mcp-dialog-header">
-      <div>
+      <div class="panel-heading">
         <p class="eyebrow">Agent configuration</p>
         <h2 id="mcp-setup-title">Connect PostNot over MCP</h2>
         <p>Choose your client, copy the generated snippet, and add it to that client's MCP server configuration.</p>

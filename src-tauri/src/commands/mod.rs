@@ -4,6 +4,7 @@ pub mod environments;
 pub mod history;
 pub mod imports;
 pub mod playbooks;
+pub mod realtime;
 pub mod requests;
 pub mod responses;
 pub mod settings;

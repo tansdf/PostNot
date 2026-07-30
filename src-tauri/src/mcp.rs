@@ -17,7 +17,10 @@ use crate::{
     db,
     domain::{
         activity::{AgentActor, NewAgentActivity},
-        collections::{CreateCollectionFolderInput, CreateCollectionInput},
+        collections::{
+            CreateCollectionFolderInput, CreateCollectionInput, SavedRealtimeRequestDetail,
+        },
+        realtime::{RawMessageMode, RealtimeRequestDraft, RequestType},
         requests::SendRequestPayload,
     },
     error::{AppError, AppResult},
@@ -93,6 +96,31 @@ struct UpdateRequestParams {
     preserve_redacted_fields: Vec<String>,
 }
 
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct CreateRealtimeRequestParams {
+    collection_id: String,
+    parent_id: Option<String>,
+    request: RealtimeRequestDraft,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct UpdateRealtimeRequestParams {
+    request_id: String,
+    expected_updated_at: String,
+    request: RealtimeRequestDraft,
+    #[serde(default)]
+    preserve_redacted_fields: Vec<String>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct DeleteRealtimeRequestParams {
+    request_id: String,
+    expected_updated_at: String,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SafeSavedRequest {
@@ -102,6 +130,20 @@ struct SafeSavedRequest {
     name: String,
     updated_at: String,
     request: SendRequestPayload,
+    redacted_fields: Vec<String>,
+    warnings: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SafeSavedRealtimeRequest {
+    id: String,
+    collection_id: String,
+    parent_id: Option<String>,
+    name: String,
+    request_type: RequestType,
+    updated_at: String,
+    request: RealtimeRequestDraft,
     redacted_fields: Vec<String>,
     warnings: Vec<String>,
 }
@@ -176,6 +218,34 @@ impl PostNotMcp {
             .await
             .map_err(to_mcp_error)?;
         let safe = redact_saved_request(detail);
+        serde_json::to_string_pretty(&safe).map_err(json_mcp_error)
+    }
+
+    #[tool(
+        description = "List saved raw WebSocket and Socket.IO definitions in one collection. This authoring tool never connects or sends traffic."
+    )]
+    async fn list_realtime_requests(
+        &self,
+        Parameters(params): Parameters<CollectionIdParams>,
+    ) -> Result<String, McpError> {
+        json_result(
+            collections_service::list_saved_realtime_requests(&self.pool, &params.collection_id)
+                .await,
+        )
+    }
+
+    #[tool(
+        description = "Read a saved raw WebSocket or Socket.IO definition without connecting. Credential-looking literals are returned as *** and listed in redactedFields."
+    )]
+    async fn get_realtime_request(
+        &self,
+        Parameters(params): Parameters<RequestIdParams>,
+    ) -> Result<String, McpError> {
+        let detail =
+            collections_service::get_saved_realtime_request(&self.pool, &params.request_id)
+                .await
+                .map_err(to_mcp_error)?;
+        let safe = redact_saved_realtime_request(detail);
         serde_json::to_string_pretty(&safe).map_err(json_mcp_error)
     }
 
@@ -421,6 +491,51 @@ impl PostNotMcp {
     }
 
     #[tool(
+        description = "Create a saved raw WebSocket or Socket.IO definition. This authoring tool stores the definition but never connects or sends traffic."
+    )]
+    async fn create_realtime_request(
+        &self,
+        Parameters(mut params): Parameters<CreateRealtimeRequestParams>,
+    ) -> Result<String, McpError> {
+        normalize_realtime_request_ids(&mut params.request);
+        if let Err(error) = validate_realtime_request(&params.request) {
+            let batch = Uuid::new_v4().to_string();
+            self.record_failure(
+                &batch,
+                "create_realtime_request",
+                "realtime_request",
+                Some(&params.collection_id),
+                &error,
+            )
+            .await;
+            return Err(to_mcp_error(error));
+        }
+
+        let warnings = realtime_credential_warnings(&params.request);
+        let batch = Uuid::new_v4().to_string();
+        let collection_id = params.collection_id.clone();
+        let result = collections_service::save_realtime_request(
+            &self.pool,
+            &params.collection_id,
+            params.parent_id.as_deref(),
+            &params.request,
+        )
+        .await;
+        self.finish_mutation_with_warnings(
+            &batch,
+            "create_realtime_request",
+            "realtime_request",
+            result,
+            MutationDetails {
+                collection_id: Some(&collection_id),
+                fields: realtime_request_fields(),
+                warnings,
+            },
+        )
+        .await
+    }
+
+    #[tool(
         description = "Fully replace a saved request using optimistic concurrency. Pass expectedUpdatedAt from get_saved_request."
     )]
     async fn update_request(
@@ -464,6 +579,113 @@ impl PostNotMcp {
             },
         )
         .await
+    }
+
+    #[tool(
+        description = "Fully replace a saved raw WebSocket or Socket.IO definition using optimistic concurrency. This authoring tool never connects or sends traffic."
+    )]
+    async fn update_realtime_request(
+        &self,
+        Parameters(mut params): Parameters<UpdateRealtimeRequestParams>,
+    ) -> Result<String, McpError> {
+        normalize_realtime_request_ids(&mut params.request);
+        if let Err(error) = validate_realtime_request(&params.request) {
+            let batch = Uuid::new_v4().to_string();
+            self.record_failure(
+                &batch,
+                "update_realtime_request",
+                "realtime_request",
+                None,
+                &error,
+            )
+            .await;
+            return Err(to_mcp_error(error));
+        }
+
+        let current =
+            collections_service::get_saved_realtime_request(&self.pool, &params.request_id)
+                .await
+                .map_err(to_mcp_error)?;
+        restore_realtime_redacted_fields(
+            &mut params.request,
+            &current.request,
+            &params.preserve_redacted_fields,
+        );
+        let warnings = realtime_credential_warnings(&params.request);
+        let batch = Uuid::new_v4().to_string();
+        let collection_id = current.collection_id.clone();
+        let result = collections_service::update_saved_realtime_request_with_revision(
+            &self.pool,
+            &params.request_id,
+            &params.request,
+            Some(&params.expected_updated_at),
+        )
+        .await;
+        self.finish_mutation_with_warnings(
+            &batch,
+            "update_realtime_request",
+            "realtime_request",
+            result,
+            MutationDetails {
+                collection_id: Some(&collection_id),
+                fields: realtime_request_fields(),
+                warnings,
+            },
+        )
+        .await
+    }
+
+    #[tool(
+        description = "Delete a saved raw WebSocket or Socket.IO definition using optimistic concurrency. No live connection is affected."
+    )]
+    async fn delete_realtime_request(
+        &self,
+        Parameters(params): Parameters<DeleteRealtimeRequestParams>,
+    ) -> Result<String, McpError> {
+        let current =
+            collections_service::get_saved_realtime_request(&self.pool, &params.request_id)
+                .await
+                .map_err(to_mcp_error)?;
+        let batch = Uuid::new_v4().to_string();
+        let result = collections_service::delete_saved_realtime_request_with_revision(
+            &self.pool,
+            &params.request_id,
+            &params.expected_updated_at,
+        )
+        .await;
+
+        match result {
+            Ok(()) => {
+                self.record(
+                    &batch,
+                    "delete_realtime_request",
+                    "realtime_request",
+                    Some(&current.id),
+                    &current.name,
+                    Some(&current.collection_id),
+                    "succeeded",
+                    &["deleted"],
+                    None,
+                    None,
+                )
+                .await;
+                Ok(
+                    json!({ "deleted": true, "requestId": current.id, "activityBatchId": batch })
+                        .to_string(),
+                )
+            }
+            Err(error) => {
+                self.record_failure(
+                    &batch,
+                    "delete_realtime_request",
+                    "realtime_request",
+                    Some(&current.collection_id),
+                    &error,
+                )
+                .await;
+                Err(to_mcp_error(error))
+            }
+        }
     }
 
     async fn finish_mutation<T: Serialize + TargetMetadata>(
@@ -636,7 +858,7 @@ impl ServerHandler for PostNotMcp {
             capabilities: rmcp::model::ServerCapabilities::builder()
                 .enable_tools()
                 .build(),
-            instructions: Some("Author and inspect local PostNot collections safely. V1 never executes requests, scripts, imports, deletes, or moves.".to_string()),
+            instructions: Some("Author and inspect local PostNot collections safely. MCP never executes requests or scripts, opens realtime connections, sends traffic, imports files, or moves collection items. Realtime definition deletion requires an exact revision.".to_string()),
             server_info: rmcp::model::Implementation {
                 name: "postnot".to_string(),
                 title: Some("PostNot".to_string()),
@@ -680,6 +902,17 @@ impl TargetMetadata for crate::domain::collections::CollectionItemSummary {
     }
 }
 impl TargetMetadata for crate::domain::collections::SavedRequestSummary {
+    fn target_id(&self) -> &str {
+        &self.id
+    }
+    fn target_name(&self) -> &str {
+        &self.name
+    }
+    fn collection_id(&self) -> Option<&str> {
+        Some(&self.collection_id)
+    }
+}
+impl TargetMetadata for crate::domain::collections::SavedRealtimeRequestSummary {
     fn target_id(&self) -> &str {
         &self.id
     }
@@ -756,6 +989,64 @@ fn validate_request(request: &SendRequestPayload) -> AppResult<()> {
     Ok(())
 }
 
+fn validate_realtime_request(request: &RealtimeRequestDraft) -> AppResult<()> {
+    let common = request.common();
+    if common.name.trim().is_empty() {
+        return Err(AppError::Message(
+            "Realtime request name is required.".to_string(),
+        ));
+    }
+    if common.url.trim().is_empty() {
+        return Err(AppError::Message(
+            "Realtime request URL is required.".to_string(),
+        ));
+    }
+    if !common.url.contains("{{") {
+        let url = url::Url::parse(&common.url)?;
+        let supported = match request {
+            RealtimeRequestDraft::Websocket { .. } => {
+                matches!(url.scheme(), "ws" | "wss")
+            }
+            RealtimeRequestDraft::Socketio { .. } => {
+                matches!(url.scheme(), "http" | "https" | "ws" | "wss")
+            }
+        };
+        if !supported {
+            return Err(AppError::Message(
+                "Realtime request URL scheme is not supported.".to_string(),
+            ));
+        }
+    }
+    if !["none", "basic", "bearer", "api-key", "oauth2"].contains(&common.auth.auth_type.as_str()) {
+        return Err(AppError::Message(
+            "Realtime request auth type is invalid.".to_string(),
+        ));
+    }
+    if !["header", "query"].contains(&common.auth.api_key_in.as_str()) {
+        return Err(AppError::Message(
+            "API key placement is invalid.".to_string(),
+        ));
+    }
+    if let RealtimeRequestDraft::Socketio {
+        auth_payload,
+        composer,
+        ..
+    } = request
+    {
+        if !auth_payload.is_object() {
+            return Err(AppError::Message(
+                "Socket.IO auth payload must be a JSON object.".to_string(),
+            ));
+        }
+        if !composer.arguments.is_array() {
+            return Err(AppError::Message(
+                "Socket.IO event arguments must be a JSON array.".to_string(),
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn request_fields() -> &'static [&'static str] {
     &[
         "name",
@@ -767,6 +1058,24 @@ fn request_fields() -> &'static [&'static str] {
         "auth",
         "preRequestScript",
         "testScript",
+    ]
+}
+
+fn realtime_request_fields() -> &'static [&'static str] {
+    &[
+        "requestType",
+        "name",
+        "url",
+        "queryParams",
+        "headers",
+        "auth",
+        "reconnect",
+        "subprotocols",
+        "path",
+        "namespace",
+        "authPayload",
+        "transport",
+        "composer",
     ]
 }
 
@@ -785,6 +1094,28 @@ fn normalize_request_ids(request: &mut SendRequestPayload) {
         if file.id.trim().is_empty() {
             file.id = Uuid::new_v4().to_string();
         }
+    }
+}
+
+fn normalize_realtime_request_ids(request: &mut RealtimeRequestDraft) {
+    let common = realtime_common_mut(request);
+    for row in common
+        .query_params
+        .iter_mut()
+        .chain(common.headers.iter_mut())
+    {
+        if row.id.trim().is_empty() {
+            row.id = Uuid::new_v4().to_string();
+        }
+    }
+}
+
+fn realtime_common_mut(
+    request: &mut RealtimeRequestDraft,
+) -> &mut crate::domain::realtime::RealtimeRequestCommon {
+    match request {
+        RealtimeRequestDraft::Websocket { common, .. }
+        | RealtimeRequestDraft::Socketio { common, .. } => common,
     }
 }
 
@@ -849,6 +1180,72 @@ fn credential_warnings(request: &SendRequestPayload) -> Vec<String> {
         warnings.push(
             "A credential-looking body value was stored locally. Prefer {{variables}}.".to_string(),
         );
+    }
+    warnings
+}
+
+fn realtime_credential_warnings(request: &RealtimeRequestDraft) -> Vec<String> {
+    let common = request.common();
+    let mut warnings = Vec::new();
+    let auth = &common.auth;
+    if [
+        auth.basic_password.as_str(),
+        auth.bearer_token.as_str(),
+        auth.api_key_value.as_str(),
+        auth.oauth2_access_token.as_str(),
+        auth.oauth2_client_secret.as_str(),
+    ]
+    .iter()
+    .any(|value| !value.is_empty() && !value.contains("{{"))
+    {
+        warnings.push(
+            "Literal authentication credentials were stored locally. Prefer {{variables}}."
+                .to_string(),
+        );
+    }
+    if common
+        .headers
+        .iter()
+        .any(|row| sensitive_key(&row.key) && !row.value.is_empty() && !row.value.contains("{{"))
+    {
+        warnings.push(
+            "A credential-looking header value was stored locally. Prefer {{variables}}."
+                .to_string(),
+        );
+    }
+    if common
+        .query_params
+        .iter()
+        .any(|row| sensitive_key(&row.key) && !row.value.is_empty() && !row.value.contains("{{"))
+    {
+        warnings.push(
+            "A credential-looking query value was stored locally. Prefer {{variables}}."
+                .to_string(),
+        );
+    }
+    match request {
+        RealtimeRequestDraft::Websocket { composer, .. }
+            if composer.mode == RawMessageMode::Json
+                && raw_body_has_sensitive_keys(&composer.content) =>
+        {
+            warnings.push(
+                "A credential-looking composer value was stored locally. Prefer {{variables}}."
+                    .to_string(),
+            );
+        }
+        RealtimeRequestDraft::Socketio {
+            auth_payload,
+            composer,
+            ..
+        } if json_has_sensitive_keys(auth_payload)
+            || json_has_sensitive_keys(&composer.arguments) =>
+        {
+            warnings.push(
+                "A credential-looking Socket.IO payload value was stored locally. Prefer {{variables}}."
+                    .to_string(),
+            );
+        }
+        _ => {}
     }
     warnings
 }
@@ -935,6 +1332,135 @@ fn redact_saved_request(
     }
 }
 
+fn redact_saved_realtime_request(detail: SavedRealtimeRequestDetail) -> SafeSavedRealtimeRequest {
+    let mut request = detail.request;
+    let mut fields = Vec::new();
+    {
+        let common = realtime_common_mut(&mut request);
+        redact_request_auth(&mut common.auth, &mut fields);
+        redact_key_value_rows(&mut common.headers, "headers", &mut fields);
+        redact_key_value_rows(&mut common.query_params, "queryParams", &mut fields);
+        redact_sensitive_url(&mut common.url, &mut fields);
+    }
+
+    match &mut request {
+        RealtimeRequestDraft::Websocket { composer, .. } => {
+            if composer.mode == RawMessageMode::Json
+                && raw_body_has_sensitive_keys(&composer.content)
+            {
+                composer.content = REDACTED.to_string();
+                fields.push("composer.content".to_string());
+            }
+        }
+        RealtimeRequestDraft::Socketio {
+            auth_payload,
+            composer,
+            ..
+        } => {
+            redact_sensitive_json(auth_payload, "authPayload", &mut fields);
+            redact_sensitive_json(&mut composer.arguments, "composer.arguments", &mut fields);
+        }
+    }
+
+    let warnings = if fields.is_empty() {
+        Vec::new()
+    } else {
+        vec!["Credential-looking values were redacted. Pass the matching redactedFields paths to preserve them during update_realtime_request.".to_string()]
+    };
+    SafeSavedRealtimeRequest {
+        id: detail.id,
+        collection_id: detail.collection_id,
+        parent_id: detail.parent_id,
+        name: detail.name,
+        request_type: detail.request_type,
+        updated_at: detail.updated_at,
+        request,
+        redacted_fields: fields,
+        warnings,
+    }
+}
+
+fn redact_request_auth(auth: &mut crate::domain::requests::RequestAuth, fields: &mut Vec<String>) {
+    for (value, path) in [
+        (&mut auth.basic_password, "auth.basicPassword"),
+        (&mut auth.bearer_token, "auth.bearerToken"),
+        (&mut auth.api_key_value, "auth.apiKeyValue"),
+        (&mut auth.oauth2_access_token, "auth.oauth2AccessToken"),
+        (&mut auth.oauth2_client_secret, "auth.oauth2ClientSecret"),
+    ] {
+        if !value.is_empty() {
+            *value = REDACTED.to_string();
+            fields.push(path.to_string());
+        }
+    }
+}
+
+fn redact_key_value_rows(
+    rows: &mut [crate::domain::requests::KeyValueRow],
+    field_name: &str,
+    fields: &mut Vec<String>,
+) {
+    for row in rows {
+        if sensitive_key(&row.key) && !row.value.is_empty() {
+            row.value = REDACTED.to_string();
+            fields.push(format!("{field_name}.{}.value", row.id));
+        }
+    }
+}
+
+fn redact_sensitive_url(url_text: &mut String, fields: &mut Vec<String>) {
+    let Ok(mut url) = url::Url::parse(url_text.as_str()) else {
+        return;
+    };
+    let pairs: Vec<(String, String)> = url
+        .query_pairs()
+        .map(|(key, value)| (key.into_owned(), value.into_owned()))
+        .collect();
+    if !pairs
+        .iter()
+        .any(|(key, value)| sensitive_key(key) && !value.is_empty())
+    {
+        return;
+    }
+
+    url.query_pairs_mut()
+        .clear()
+        .extend_pairs(pairs.iter().map(|(key, value)| {
+            (
+                key,
+                if sensitive_key(key) && !value.is_empty() {
+                    REDACTED
+                } else {
+                    value.as_str()
+                },
+            )
+        }));
+    *url_text = url.to_string();
+    fields.push("url".to_string());
+}
+
+fn redact_sensitive_json(value: &mut Value, path: &str, fields: &mut Vec<String>) {
+    match value {
+        Value::Object(map) => {
+            for (key, child) in map {
+                let child_path = format!("{path}.{key}");
+                if sensitive_key(key) && !child.is_null() {
+                    *child = Value::String(REDACTED.to_string());
+                    fields.push(child_path);
+                } else {
+                    redact_sensitive_json(child, &child_path, fields);
+                }
+            }
+        }
+        Value::Array(items) => {
+            for (index, child) in items.iter_mut().enumerate() {
+                redact_sensitive_json(child, &format!("{path}.{index}"), fields);
+            }
+        }
+        _ => {}
+    }
+}
+
 fn restore_redacted_fields(
     next: &mut SendRequestPayload,
     current: &SendRequestPayload,
@@ -1014,26 +1540,183 @@ fn restore_redacted_fields(
     }
 }
 
-fn raw_body_has_sensitive_keys(raw: &str) -> bool {
-    fn contains(value: &Value) -> bool {
-        match value {
-            Value::Object(map) => map
-                .iter()
-                .any(|(key, value)| (sensitive_key(key) && !value.is_null()) || contains(value)),
-            Value::Array(items) => items.iter().any(contains),
-            _ => false,
+fn restore_realtime_redacted_fields(
+    next: &mut RealtimeRequestDraft,
+    current: &RealtimeRequestDraft,
+    fields: &[String],
+) {
+    let fields: HashSet<&str> = fields.iter().map(String::as_str).collect();
+    {
+        let next_common = realtime_common_mut(next);
+        let current_common = current.common();
+        restore_auth_fields(&mut next_common.auth, &current_common.auth, &fields);
+        restore_key_value_rows(
+            &mut next_common.headers,
+            &current_common.headers,
+            "headers",
+            &fields,
+        );
+        restore_key_value_rows(
+            &mut next_common.query_params,
+            &current_common.query_params,
+            "queryParams",
+            &fields,
+        );
+        if fields.contains("url") {
+            next_common.url = current_common.url.clone();
         }
     }
+
+    match (next, current) {
+        (
+            RealtimeRequestDraft::Websocket {
+                composer: next_composer,
+                ..
+            },
+            RealtimeRequestDraft::Websocket {
+                composer: current_composer,
+                ..
+            },
+        ) if fields.contains("composer.content") && next_composer.content == REDACTED => {
+            next_composer.content = current_composer.content.clone();
+        }
+        (
+            RealtimeRequestDraft::Socketio {
+                auth_payload: next_auth,
+                composer: next_composer,
+                ..
+            },
+            RealtimeRequestDraft::Socketio {
+                auth_payload: current_auth,
+                composer: current_composer,
+                ..
+            },
+        ) => {
+            restore_sensitive_json(next_auth, current_auth, "authPayload", &fields);
+            restore_sensitive_json(
+                &mut next_composer.arguments,
+                &current_composer.arguments,
+                "composer.arguments",
+                &fields,
+            );
+        }
+        _ => {}
+    }
+}
+
+fn restore_auth_fields(
+    next: &mut crate::domain::requests::RequestAuth,
+    current: &crate::domain::requests::RequestAuth,
+    fields: &HashSet<&str>,
+) {
+    for (next_value, current_value, path) in [
+        (
+            &mut next.basic_password,
+            &current.basic_password,
+            "auth.basicPassword",
+        ),
+        (
+            &mut next.bearer_token,
+            &current.bearer_token,
+            "auth.bearerToken",
+        ),
+        (
+            &mut next.api_key_value,
+            &current.api_key_value,
+            "auth.apiKeyValue",
+        ),
+        (
+            &mut next.oauth2_access_token,
+            &current.oauth2_access_token,
+            "auth.oauth2AccessToken",
+        ),
+        (
+            &mut next.oauth2_client_secret,
+            &current.oauth2_client_secret,
+            "auth.oauth2ClientSecret",
+        ),
+    ] {
+        if fields.contains(path) && next_value == REDACTED {
+            *next_value = current_value.clone();
+        }
+    }
+}
+
+fn restore_key_value_rows(
+    next: &mut [crate::domain::requests::KeyValueRow],
+    current: &[crate::domain::requests::KeyValueRow],
+    field_name: &str,
+    fields: &HashSet<&str>,
+) {
+    for row in next {
+        let path = format!("{field_name}.{}.value", row.id);
+        if fields.contains(path.as_str()) && row.value == REDACTED {
+            if let Some(original) = current
+                .iter()
+                .find(|item| item.id == row.id && sensitive_key(&item.key))
+            {
+                row.value = original.value.clone();
+            }
+        }
+    }
+}
+
+fn restore_sensitive_json(next: &mut Value, current: &Value, path: &str, fields: &HashSet<&str>) {
+    if fields.contains(path) && next.as_str() == Some(REDACTED) {
+        *next = current.clone();
+        return;
+    }
+    match (next, current) {
+        (Value::Object(next_map), Value::Object(current_map)) => {
+            for (key, next_child) in next_map {
+                if let Some(current_child) = current_map.get(key) {
+                    restore_sensitive_json(
+                        next_child,
+                        current_child,
+                        &format!("{path}.{key}"),
+                        fields,
+                    );
+                }
+            }
+        }
+        (Value::Array(next_items), Value::Array(current_items)) => {
+            for (index, (next_child, current_child)) in
+                next_items.iter_mut().zip(current_items).enumerate()
+            {
+                restore_sensitive_json(
+                    next_child,
+                    current_child,
+                    &format!("{path}.{index}"),
+                    fields,
+                );
+            }
+        }
+        _ => {}
+    }
+}
+
+fn raw_body_has_sensitive_keys(raw: &str) -> bool {
     serde_json::from_str::<Value>(raw)
-        .map(|value| contains(&value))
+        .map(|value| json_has_sensitive_keys(&value))
         .unwrap_or(false)
+}
+
+fn json_has_sensitive_keys(value: &Value) -> bool {
+    match value {
+        Value::Object(map) => map.iter().any(|(key, value)| {
+            (sensitive_key(key) && !value.is_null()) || json_has_sensitive_keys(value)
+        }),
+        Value::Array(items) => items.iter().any(json_has_sensitive_keys),
+        _ => false,
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::domain::{
-        collections::SavedRequestDetail,
+        collections::{SavedRealtimeRequestDetail, SavedRequestDetail},
+        realtime::{RealtimeRequestCommon, ReconnectPolicy, SocketIoComposer, SocketIoTransport},
         requests::{RequestAuth, RequestBody},
     };
 
@@ -1098,5 +1781,80 @@ mod tests {
         let mut invalid = request();
         invalid.body.mode = "mystery".into();
         assert!(validate_request(&invalid).is_err());
+    }
+
+    #[test]
+    fn realtime_reads_redact_and_updates_can_preserve_literals() {
+        let original = RealtimeRequestDraft::Socketio {
+            common: RealtimeRequestCommon {
+                name: "Presence".into(),
+                url: "https://example.test?token=url-secret".into(),
+                query_params: vec![crate::domain::requests::KeyValueRow {
+                    id: "query".into(),
+                    key: "api_key".into(),
+                    value: "query-secret".into(),
+                    enabled: true,
+                }],
+                headers: vec![crate::domain::requests::KeyValueRow {
+                    id: "header".into(),
+                    key: "Authorization".into(),
+                    value: "Bearer header-secret".into(),
+                    enabled: true,
+                }],
+                auth: RequestAuth {
+                    auth_type: "bearer".into(),
+                    bearer_token: "auth-secret".into(),
+                    ..RequestAuth::default()
+                },
+                reconnect: ReconnectPolicy::default(),
+            },
+            path: "/socket.io/".into(),
+            namespace: "/".into(),
+            auth_payload: json!({"clientSecret": "payload-secret"}),
+            transport: SocketIoTransport::Auto,
+            composer: SocketIoComposer {
+                event: "join".into(),
+                arguments: json!([{"password": "argument-secret"}]),
+                ..SocketIoComposer::default()
+            },
+        };
+        let safe = redact_saved_realtime_request(SavedRealtimeRequestDetail {
+            id: "request".into(),
+            collection_id: "collection".into(),
+            parent_id: None,
+            name: "Presence".into(),
+            request_type: RequestType::Socketio,
+            updated_at: "revision".into(),
+            request: original.clone(),
+        });
+
+        let safe_json = serde_json::to_string(&safe).expect("serialize safe projection");
+        for secret in [
+            "url-secret",
+            "query-secret",
+            "header-secret",
+            "auth-secret",
+            "payload-secret",
+            "argument-secret",
+        ] {
+            assert!(
+                !safe_json.contains(secret),
+                "safe projection leaked {secret}"
+            );
+        }
+        assert!(safe.redacted_fields.contains(&"url".to_string()));
+        assert!(safe
+            .redacted_fields
+            .contains(&"authPayload.clientSecret".to_string()));
+        assert!(safe
+            .redacted_fields
+            .contains(&"composer.arguments.0.password".to_string()));
+
+        let mut replacement = safe.request;
+        restore_realtime_redacted_fields(&mut replacement, &original, &safe.redacted_fields);
+        assert_eq!(
+            serde_json::to_value(replacement).expect("serialize replacement"),
+            serde_json::to_value(original).expect("serialize original")
+        );
     }
 }

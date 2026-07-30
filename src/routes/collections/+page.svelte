@@ -13,12 +13,15 @@
   import { notifications } from "$lib/stores/notifications.svelte";
   import { collections } from "$lib/stores/collections.svelte";
   import { requestWorkspace } from "$lib/stores/request-workspace.svelte";
+  import { realtimeWorkspace } from "$lib/stores/realtime-workspace.svelte";
 
   let isSavingCollection = $state(false);
-  let importFormat = $state<"postman" | "openapi">("postman");
+  let importFormat = $state<"postman" | "openapi" | "postnot">("postman");
   let importSource = $state("");
   let isImporting = $state(false);
   let isExporting = $state(false);
+  let isExportModalOpen = $state(false);
+  let exportFormat = $state<"postman" | "postnot">("postnot");
   let importErrorText = $state("");
   let isImportModalOpen = $state(false);
   let importFileInput: HTMLInputElement | null = $state(null);
@@ -204,6 +207,7 @@
     }
 
     requestWorkspace.unlinkSavedRequestsForCollection(collectionId);
+    realtimeWorkspace.unlinkSavedRequestsForCollection(collectionId);
 
     const nextCollectionId = collections.selectedCollectionId;
     const navOpts = { replaceState: true, noScroll: true, keepFocus: true } as const;
@@ -214,8 +218,12 @@
     }
   }
 
-  async function handleOpenSavedRequest(itemId: string) {
-    await goto(resolve(`/?savedRequestId=${encodeURIComponent(itemId)}`));
+  async function handleOpenSavedRequest(item: CollectionItemSummary) {
+    if (item.requestType === "websocket" || item.requestType === "socketio") {
+      await goto(resolve(`/websockets?savedRequestId=${encodeURIComponent(item.id)}`));
+      return;
+    }
+    await goto(resolve(`/?savedRequestId=${encodeURIComponent(item.id)}`));
   }
 
   async function handleDeleteCollectionItem(item: CollectionItemSummary) {
@@ -240,6 +248,7 @@
     }
 
     requestWorkspace.unlinkSavedRequests(deletedSavedRequestIds);
+    realtimeWorkspace.unlinkSavedRequests(deletedSavedRequestIds);
     await collections.loadCollections(collection.id);
   }
 
@@ -381,6 +390,11 @@
     else moveErrorText = collections.errorText || "The collection item could not be moved.";
   }
 
+  function openExportModal() {
+    exportFormat = "postnot";
+    isExportModalOpen = true;
+  }
+
   async function handleExportCollection() {
     const collection = collections.selectedCollection;
     if (!collection) {
@@ -391,9 +405,16 @@
 
     try {
       collections.errorText = "";
-      const result = await exportCollection(collection.id);
+      const result = await exportCollection(collection.id, exportFormat);
       if (result) {
-        notifications.success(result.filePath, "Collection exported");
+        isExportModalOpen = false;
+        const omitted = result.omittedRealtimeRequestCount ?? 0;
+        notifications.success(
+          omitted
+            ? `${result.filePath}. ${omitted} realtime request${omitted === 1 ? " was" : "s were"} omitted.`
+            : result.filePath,
+          "Collection exported"
+        );
       }
     } catch (error) {
       collections.errorText = error instanceof Error ? error.message : String(error);
@@ -407,9 +428,10 @@
 
     const source = importSource.trim();
     if (!source) {
-      importErrorText =
-        importFormat === "postman"
-          ? "Open a Postman collection JSON file or paste its JSON payload to import."
+      importErrorText = importFormat === "postman"
+        ? "Open a Postman collection JSON file or paste its JSON payload to import."
+        : importFormat === "postnot"
+          ? "Open a PostNot collection JSON file or paste its JSON payload to import."
           : "Open an OpenAPI 3 JSON or YAML file, or paste its document payload to import.";
       return;
     }
@@ -434,11 +456,11 @@
 
       notifications.success(
         `${result.importedRequestCount} request${result.importedRequestCount === 1 ? "" : "s"} imported into ${result.collectionName}.`,
-        importFormat === "postman" ? "Collection imported" : "OpenAPI collection imported",
+        importFormat === "postman" ? "Collection imported" : importFormat === "postnot" ? "PostNot collection imported" : "OpenAPI collection imported",
         result.details
           ? {
               details: {
-                title: importFormat === "postman" ? "Postman import details" : "OpenAPI import details",
+                title: importFormat === "postman" ? "Postman import details" : importFormat === "postnot" ? "PostNot import details" : "OpenAPI import details",
                 summary: result.details.summary,
                 items: result.details.importedItems,
                 warnings: result.details.warnings,
@@ -498,7 +520,7 @@
     onCreateCollection={handleCreateCollection}
     onCreateRootFolder={() => handleCreateFolder()}
     onCreateChildFolder={(parentId: string) => handleCreateFolder(parentId)}
-    onExportCollection={handleExportCollection}
+    onExportCollection={openExportModal}
     onSaveCollection={handleSaveCollection}
     onSaveFolder={handleSaveFolder}
     onDeleteCollection={handleDeleteCollection}
@@ -506,6 +528,37 @@
     onMoveCollectionItem={openMoveDialog}
     onDeleteCollectionItem={handleDeleteCollectionItem}
   />
+
+  {#if isExportModalOpen}
+    <DialogShell ariaLabelledby="export-collection-title" onDismiss={() => (isExportModalOpen = false)} sizeClass="save-dialog">
+      <div class="editor-header import-dialog-header">
+        <div>
+          <h2 id="export-collection-title">Export collection</h2>
+          <span class="history-meta">{collections.selectedCollection?.name}</span>
+        </div>
+      </div>
+      <div class="editor-block modal-scroll-body">
+        <fieldset class="settings-theme-group">
+          <legend class="field-label">Format</legend>
+          <label class={["settings-theme-option", exportFormat === "postnot" && "settings-theme-option-active"]}>
+            <input type="radio" name="collection-export-format" value="postnot" bind:group={exportFormat} />
+            <span class="settings-theme-copy"><strong>PostNot JSON</strong><span>Lossless export for HTTP, WebSocket, Socket.IO, folders, and scripts.</span></span>
+          </label>
+          <label class={["settings-theme-option", exportFormat === "postman" && "settings-theme-option-active"]}>
+            <input type="radio" name="collection-export-format" value="postman" bind:group={exportFormat} />
+            <span class="settings-theme-copy"><strong>Postman Collection v2.1</strong><span>Exports HTTP requests only. Realtime definitions will be reported and omitted.</span></span>
+          </label>
+        </fieldset>
+        {#if exportFormat === "postman"}
+          <div class="feedback feedback-warning">WebSocket and Socket.IO definitions cannot be represented by the Postman export format.</div>
+        {/if}
+        <div class="collections-page-actions">
+          <button class="button-secondary" type="button" onclick={() => (isExportModalOpen = false)}>Cancel</button>
+          <button class="button-primary" type="button" onclick={handleExportCollection} disabled={isExporting}>{isExporting ? "Exporting…" : "Export collection"}</button>
+        </div>
+      </div>
+    </DialogShell>
+  {/if}
 
   {#if moveItem}
     <DialogShell ariaLabelledby="move-collection-item-title" onDismiss={closeMoveDialog}>
@@ -581,7 +634,7 @@
         <div class="editor-header import-dialog-header">
           <h2 id="import-collection-title">Import</h2>
           <span class="history-meta">
-            {importFormat === "postman" ? "Postman Collection v2.1 JSON" : "OpenAPI 3 JSON or YAML"}
+            {importFormat === "postman" ? "Postman Collection v2.1 JSON" : importFormat === "postnot" ? "PostNot collection JSON" : "OpenAPI 3 JSON or YAML"}
           </span>
         </div>
 
@@ -611,12 +664,26 @@
             >
               OpenAPI 3
             </button>
+            <button
+              class={["button-secondary", "button-compact", importFormat === "postnot" && "toggle-active"]}
+              type="button"
+              role="tab"
+              aria-selected={importFormat === "postnot"}
+              onclick={() => {
+                importFormat = "postnot";
+                importErrorText = "";
+              }}
+            >
+              PostNot
+            </button>
           </div>
 
           <p class="field-help">
             {importFormat === "postman"
               ? "Import a Postman collection by opening a JSON file or pasting the collection payload directly."
-              : "Import an OpenAPI 3 document by opening a JSON or YAML file or pasting the document payload directly."}
+              : importFormat === "postnot"
+                ? "Import a lossless PostNot collection, including WebSocket and Socket.IO definitions."
+                : "Import an OpenAPI 3 document by opening a JSON or YAML file or pasting the document payload directly."}
           </p>
 
           <label>
@@ -626,7 +693,9 @@
               bind:value={importSource}
               placeholder={importFormat === "postman"
                 ? '{ "info": { "name": "My collection" }, "item": [...] }'
-                : 'openapi: 3.0.3\ninfo:\n  title: Example API\npaths:\n  /items:\n    get:\n      summary: List items'}
+                : importFormat === "postnot"
+                  ? '{ "schema": "https://post-not.com/schemas/collection.json", "version": 1, ... }'
+                  : 'openapi: 3.0.3\ninfo:\n  title: Example API\npaths:\n  /items:\n    get:\n      summary: List items'}
             ></textarea>
           </label>
 
@@ -634,7 +703,8 @@
             bind:this={importFileInput}
             class="sr-only"
             type="file"
-            accept={importFormat === "postman"
+            aria-label="Open collection import file"
+            accept={importFormat === "postman" || importFormat === "postnot"
               ? ".json,application/json"
               : ".json,.yaml,.yml,application/json,application/yaml,text/yaml,text/x-yaml"}
             onchange={async (event: Event & { currentTarget: HTMLInputElement }) => {
@@ -654,7 +724,7 @@
 
           <div class="collections-page-actions">
             <button class="button-secondary" type="button" onclick={() => importFileInput?.click()}>
-              {importFormat === "postman" ? "Open JSON file" : "Open file"}
+              {importFormat === "postman" || importFormat === "postnot" ? "Open JSON file" : "Open file"}
             </button>
             <button
               class="button-primary"

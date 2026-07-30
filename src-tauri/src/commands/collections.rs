@@ -6,10 +6,11 @@ use crate::{
         collections::{
             CollectionItemSummary, CollectionSearchResult, CollectionSidebarState,
             CollectionSummary, CreateCollectionFolderInput, CreateCollectionInput,
-            MoveCollectionItemInput, SavedRequestDetail, SavedRequestSummary,
-            UpdateCollectionFolderInput,
+            MoveCollectionItemInput, SavedRealtimeRequestDetail, SavedRealtimeRequestSummary,
+            SavedRequestDetail, SavedRequestSummary, UpdateCollectionFolderInput,
         },
-        exports::ExportResult,
+        exports::CollectionExportResult,
+        realtime::RealtimeRequestDraft,
         requests::SendRequestPayload,
     },
     error::AppResult,
@@ -147,6 +148,54 @@ pub async fn get_saved_request(
 }
 
 #[tauri::command]
+pub async fn list_saved_realtime_requests(
+    state: State<'_, AppState>,
+    collection_id: String,
+) -> AppResult<Vec<SavedRealtimeRequestSummary>> {
+    collections_service::list_saved_realtime_requests(state.db(), &collection_id).await
+}
+
+#[tauri::command]
+pub async fn save_realtime_request_to_collection(
+    state: State<'_, AppState>,
+    collection_id: String,
+    parent_id: Option<String>,
+    request: RealtimeRequestDraft,
+) -> AppResult<SavedRealtimeRequestSummary> {
+    collections_service::save_realtime_request(
+        state.db(),
+        &collection_id,
+        parent_id.as_deref(),
+        &request,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn update_saved_realtime_request(
+    state: State<'_, AppState>,
+    item_id: String,
+    request: RealtimeRequestDraft,
+    expected_updated_at: Option<String>,
+) -> AppResult<SavedRealtimeRequestSummary> {
+    collections_service::update_saved_realtime_request_with_revision(
+        state.db(),
+        &item_id,
+        &request,
+        expected_updated_at.as_deref(),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn get_saved_realtime_request(
+    state: State<'_, AppState>,
+    item_id: String,
+) -> AppResult<SavedRealtimeRequestDetail> {
+    collections_service::get_saved_realtime_request(state.db(), &item_id).await
+}
+
+#[tauri::command]
 pub async fn delete_collection_item(state: State<'_, AppState>, item_id: String) -> AppResult<()> {
     collections_service::delete_collection_item(state.db(), &item_id).await
 }
@@ -157,9 +206,23 @@ pub async fn delete_saved_request(state: State<'_, AppState>, item_id: String) -
 }
 
 #[tauri::command]
+pub async fn delete_saved_realtime_request(
+    state: State<'_, AppState>,
+    item_id: String,
+) -> AppResult<()> {
+    collections_service::delete_saved_realtime_request(state.db(), &item_id).await
+}
+
+#[tauri::command]
 pub async fn export_collection(
     state: State<'_, AppState>,
     collection_id: String,
-) -> AppResult<Option<ExportResult>> {
-    exports_service::export_collection(state.db(), &collection_id).await
+    format: Option<String>,
+) -> AppResult<Option<CollectionExportResult>> {
+    exports_service::export_collection_with_format(
+        state.db(),
+        &collection_id,
+        format.as_deref().unwrap_or("postman"),
+    )
+    .await
 }
