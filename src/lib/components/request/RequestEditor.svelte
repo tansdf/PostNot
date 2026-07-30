@@ -725,7 +725,7 @@
 <svelte:window onkeydown={closeSaveMenuOnWindowKeydown} />
 <svelte:document onclickcapture={closeSaveMenuOnDocumentClick} />
 
-<section class="panel request-panel">
+<section class="panel panel-inset request-panel">
   <div class="request-section-header">
     <div class="request-section-title">
       <h2>Request</h2>

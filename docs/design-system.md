@@ -197,11 +197,24 @@ Use `.text-input`, `.method-select`, `.body-mode-select`, and `.body-textarea` r
 - Do not erase user input after a failed action.
 - Secret fields must support masking and must not expose their resolved values in previews, history, notifications, or default exports.
 
-Key/value editing uses `.row-list`, `.kv-row`, `.row-toggle`, `VariableField.svelte`, and row action controls. Reuse that composition for new header-like or variable-like data.
+Key/value editing uses `.editor-block`, `.editor-header`, `.row-list`, `.kv-row`, `.row-toggle`, `VariableField.svelte`, and row action controls. Reuse that whole composition for new header-like or variable-like data: the title and `Add row` action stay in the header, rows stay in the list, and delete uses the standard icon action. Do not add a full-width creation row below the data.
 
 ### 5.3 Panels and Cards
 
-Use `.panel` for a major workspace region. Use a subtle surface plus a border for nested cards, as demonstrated by `.request-script-card` and `.multipart-file-card`.
+Use `.panel` for a major workspace region. `.panel` is intentionally only the visual shell: it provides the background, border, radius, and shadow, but no content padding. Every panel must declare one inset strategy so a new surface cannot silently render against its border.
+
+| Inset strategy | Class | Spacing | Use |
+|---|---|---|---|
+| Standard | `.panel-inset` | `--space-5`, reduced to `--space-4` at `720px` | Normal editors, results, settings, collection pages, and feature workspaces |
+| Compact | `.panel-inset-compact` | `--space-3` | Tab strips and similarly dense single-row panels |
+| Flush | `.panel-flush` | `0` | Deliberately edge-to-edge content whose children own every inset |
+| Custom | `.panel-custom-inset` plus a purpose-specific class | Defined by that component | Dialogs or constrained layouts that cannot use a standard density |
+
+Do not put feature-local padding on a standard panel. Add the appropriate modifier in markup and let the shared modifier own its responsive behavior. A custom inset is an exception that must be documented with the component, not a substitute for choosing a density.
+
+Use `.panel-title` for a panel's page-level `h1`. Use `.panel-heading` around stacked eyebrow/title/supporting-copy groups; it removes browser-default child margins and supplies one `--space-1` gap. When a parent already supplies `gap`, keep its child heading margins at zero. Do not combine a parent gap with heading `margin-top` or `margin-bottom` to create the same separation twice.
+
+Use a subtle surface plus a border for nested cards, as demonstrated by `.request-script-card` and `.multipart-file-card`.
 
 A panel should have:
 
@@ -210,13 +223,20 @@ A panel should have:
 - a clear loading, error, empty, or content state;
 - no duplicate page-level title.
 
+Panel review checklist:
+
+- Does the `.panel` declare standard, compact, flush, or documented custom inset behavior?
+- Does a stacked heading use `.panel-heading`, with `.panel-title` for a page-level title?
+- Is vertical separation owned by exactly one mechanism: parent `gap`, section margin, or component inset?
+- At the compact breakpoint, does the content retain `--space-4` from the panel edge without horizontal overflow?
+
 ### 5.4 Tabs and Segmented Views
 
 Use tabs only when views are peers and switching does not submit or navigate through a workflow. Implement `role="tablist"`, `role="tab"`, and `aria-selected`. The request workspace uses `RequestTabs.svelte`; local panel tabs use `.panel-tabs` and `.tab-button`.
 
 Selection must remain visible without hover and should not rely on text color alone.
 
-The WebSockets workspace reuses the request-tab chip geometry through `RealtimeTabs.svelte`. Each tab must expose the definition name, protocol badge, connection status text, unsaved marker, and a named close-active-tab action. Restored tabs begin disconnected; do not visually imply that a saved/open tab is a live connection.
+The WebSockets workspace reuses the request-tab chip geometry through `RealtimeTabs.svelte`. Each tab must expose the definition name, protocol badge, connection status text, unsaved marker, and a visible close affordance inside the chip; click that affordance or press Delete on the focused tab to close it. The new-tab action immediately follows the chips but remains outside the semantic `tablist`, because ARIA tablists may own only tabs. Do not move close/new actions into a detached far-edge toolbar. Restored tabs begin disconnected; do not visually imply that a saved/open tab is a live connection.
 
 Realtime workspace tabs, connection-setting tabs, and transcript-filter tabs use roving focus. Left/Right moves to the previous/next peer, Home/End moves to the first/last peer, and focus follows selection. Delete closes the focused workspace tab through the normal dirty/live confirmation flow. Keep the selected tab at `tabindex="0"`, peers at `-1`, and connect each tab to its panel with `aria-controls`/`aria-labelledby`.
 
@@ -277,7 +297,7 @@ Use monospace type and `--bg-code`. Long values must wrap or scroll within their
 
 `RealtimeEditor.svelte` and `RealtimeTranscript.svelte` establish the shared realtime workbench pattern:
 
-- editor and transcript panels use the standard `--space-5` inset, reduced to `--space-4` at the compact breakpoint;
+- editor and transcript panels use `.panel-inset`; the connection tab strip uses `.panel-inset-compact`;
 - one large Connect or Disconnect action in the connection header;
 - a visible status row with text plus `.realtime-status-dot`;
 - peer connection settings in semantic local tabs;

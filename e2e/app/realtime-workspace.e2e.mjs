@@ -48,18 +48,31 @@ test("WebSocket workspace supports tabs, protocol editing, mock sessions, transc
   await expect(page.getByRole("heading", { name: "WebSocket connection" })).toHaveCSS("margin", "0px");
   await expect(page.getByText("Disconnected", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Connect" })).toBeEnabled();
+
+  const settingsPanel = page.locator("#realtime-settings-panel");
+  const queryEditor = settingsPanel.locator(".editor-block");
+  await expect(queryEditor.getByRole("heading", { name: "Query Parameters" })).toBeVisible();
+  await expect(queryEditor.locator(".editor-header").getByRole("button", { name: "Add row" })).toBeVisible();
+  await expect(queryEditor.locator(".row-add-button")).toHaveCount(0);
+  await queryEditor.getByRole("button", { name: "Add row" }).click();
+  await expect(queryEditor.locator(".kv-row")).toHaveCount(2);
+  await queryEditor.getByRole("button", { name: "Remove parameter row 2" }).click();
+  await expect(queryEditor.locator(".kv-row")).toHaveCount(1);
+
   await page.getByLabel("Name").fill("Billing events");
   await page.getByLabel("Connection URL").fill("wss://events.example.test/billing");
   await page.getByRole("button", { name: "Open a new WebSocket tab" }).click();
   const connectionTabs = page.getByRole("tablist", { name: "Open realtime connections" }).getByRole("tab");
   await expect(connectionTabs).toHaveCount(2);
+  await expect(page.locator(".request-tab-chip").nth(1).locator('[title="Close Untitled WebSocket request"]')).toBeVisible();
+  await expect(page.locator(".request-tabs-strip > .request-tab-create")).toBeVisible();
   await connectionTabs.first().focus();
   await page.keyboard.press("ArrowRight");
   await expect(connectionTabs.nth(1)).toHaveAttribute("aria-selected", "true");
   await expectNoSeriousAccessibilityViolations(page);
 
   await page.getByLabel("Name").fill("Uncommitted realtime draft");
-  await page.getByRole("button", { name: "Close Uncommitted realtime draft" }).click();
+  await page.locator('[title="Close Uncommitted realtime draft"]').click();
   const closeDialog = page.getByRole("dialog", { name: "Close connection tab?" });
   await expect(closeDialog).toBeVisible();
   expect(await closeDialog.evaluate((node) => node.contains(document.activeElement))).toBe(true);
@@ -121,7 +134,11 @@ test("WebSocket workspace supports tabs, protocol editing, mock sessions, transc
   await expect(page.getByText("No session messages yet")).toBeVisible();
 
   await page.getByRole("button", { name: "Save as…" }).click();
-  await expect(page.getByRole("dialog", { name: "Save connection as" })).toBeVisible();
+  const saveDialog = page.getByRole("dialog", { name: "Save connection as" });
+  await expect(saveDialog).toBeVisible();
+  await expect(saveDialog).toHaveClass(/panel-custom-inset/);
+  await expect(saveDialog).toHaveCSS("padding", "20px");
+  await expect(saveDialog.getByRole("heading", { name: "Save connection as" })).toHaveCSS("margin", "0px");
   await expect(page.getByRole("listbox", { name: "Choose a collection" })).toBeVisible();
   await page.getByRole("button", { name: "Cancel" }).click();
 

@@ -109,9 +109,9 @@
   }
 </script>
 
-<section class="panel realtime-transcript-panel" aria-labelledby="realtime-transcript-title">
+<section class="panel panel-inset realtime-transcript-panel" aria-labelledby="realtime-transcript-title">
   <div class="request-section-header">
-    <div>
+    <div class="panel-heading">
       <h2 id="realtime-transcript-title">Session transcript</h2>
       <p class="field-help">{entries.length} entries · {formatBytes(sizeBytes)} · cleared when the app closes</p>
     </div>

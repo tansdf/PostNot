@@ -226,9 +226,9 @@
   <title>PostNot Settings</title>
 </svelte:head>
 
-<section class="settings-page panel">
+<section class="settings-page panel panel-inset">
     <div class="request-section-header">
-      <h1>Settings</h1>
+      <h1 class="panel-title">Settings</h1>
       {#if isLoading}
         <span class="history-meta">Loading...</span>
       {/if}
@@ -240,7 +240,7 @@
           <div class="settings-column">
             <section class="settings-section-card">
               <div class="settings-section-heading">
-                <div>
+                <div class="panel-heading">
                   <h2>General</h2>
                   <p class="settings-section-lede">Desktop look and feel across the entire shell.</p>
                 </div>
@@ -285,7 +285,7 @@
 
             <section class="settings-section-card">
               <div class="settings-section-heading">
-                <div>
+                <div class="panel-heading">
                   <h2>Requests</h2>
                   <p class="settings-section-lede">Default execution behavior for outgoing HTTP requests.</p>
                 </div>
@@ -311,7 +311,7 @@
 
             <section class="settings-section-card">
               <div class="settings-section-heading">
-                <div>
+                <div class="panel-heading">
                   <h2>WebSockets</h2>
                   <p class="settings-section-lede">Connection and session transcript retention limits for WebSocket and Socket.IO.</p>
                 </div>
@@ -370,7 +370,7 @@
           <div class="settings-column">
             <section class="settings-section-card settings-updates-card">
               <div class="settings-section-heading">
-                <div>
+                <div class="panel-heading">
                   <h2>Updates</h2>
                   <p class="settings-section-lede">Check for newer signed PostNot builds published to the latest stable GitHub Release.</p>
                 </div>
@@ -485,7 +485,7 @@
 
             <section class="settings-section-card">
               <div class="settings-section-heading">
-                <div>
+                <div class="panel-heading">
                   <h2>History</h2>
                   <p class="settings-section-lede">How much recent request activity PostNot keeps on disk.</p>
                 </div>
@@ -502,7 +502,7 @@
 
             <section class="settings-section-card">
               <div class="settings-section-heading">
-                <div>
+                <div class="panel-heading">
                   <h2>Notifications</h2>
                   <p class="settings-section-lede">Floating notification behavior for action feedback across the app.</p>
                 </div>

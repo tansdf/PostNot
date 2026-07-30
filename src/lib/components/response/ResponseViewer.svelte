@@ -83,7 +83,7 @@
   }
 </script>
 
-<section class="panel response-panel">
+<section class="panel panel-inset response-panel">
   <div class="editor-header">
     <h2>Response</h2>
 

@@ -250,11 +250,11 @@
   }
 </script>
 
-<section class="panel realtime-editor" aria-labelledby="realtime-editor-title">
+<section class="panel panel-inset realtime-editor" aria-labelledby="realtime-editor-title">
   <div class="editor-header">
-    <div>
+    <div class="panel-heading">
       <p class="eyebrow">Realtime request</p>
-      <h1 id="realtime-editor-title">{draft.requestType === "socketio" ? "Socket.IO connection" : "WebSocket connection"}</h1>
+      <h1 class="panel-title" id="realtime-editor-title">{draft.requestType === "socketio" ? "Socket.IO connection" : "WebSocket connection"}</h1>
     </div>
     <div class="request-actions">
       <button class="button-secondary" type="button" onclick={onSaveAs} disabled={isSaving || !structuredJsonValid}>Save as…</button>
@@ -330,13 +330,24 @@
     tabindex="0"
   >
     {#if activePanel === "query"}
-      <RealtimeKeyValueEditor bind:rows={draft.queryParams} {variables} keyLabel="Parameter" valueLabel="Value" addLabel="Add parameter" />
+      <RealtimeKeyValueEditor
+        bind:rows={draft.queryParams}
+        {variables}
+        title="Query Parameters"
+        keyLabel="Parameter"
+        valueLabel="Value"
+      />
     {:else if activePanel === "headers"}
-      <div class="realtime-section-toolbar">
-        <p class="field-help">Handshake headers are resolved when you connect. Add cookies using a standard Cookie header.</p>
-        <button class="button-secondary button-compact" type="button" onclick={addCookieHeader}>Add Cookie header</button>
-      </div>
-      <RealtimeKeyValueEditor bind:rows={draft.headers} {variables} keyLabel="Header" valueLabel="Value" addLabel="Add header" />
+      <RealtimeKeyValueEditor
+        bind:rows={draft.headers}
+        {variables}
+        title="Headers"
+        description="Handshake headers are resolved when you connect. Add cookies using a standard Cookie header."
+        keyLabel="Header"
+        valueLabel="Value"
+        auxiliaryActionLabel="Add Cookie header"
+        onAuxiliaryAction={addCookieHeader}
+      />
     {:else if activePanel === "auth"}
       <div class="auth-grid realtime-auth-grid">
         <label>
@@ -395,7 +406,7 @@
 
   <section class="realtime-composer" aria-labelledby="realtime-composer-title">
     <div class="request-section-header">
-      <div><h2 id="realtime-composer-title">Message composer</h2><p class="field-help">Composer values resolve against the active environment when sent.</p></div>
+      <div class="panel-heading"><h2 id="realtime-composer-title">Message composer</h2><p class="field-help">Composer values resolve against the active environment when sent.</p></div>
       <div class="request-actions">
         {#if isConnected && draft.requestType === "websocket"}
           <button class="button-secondary button-compact" type="button" onclick={onPing}>Ping</button>

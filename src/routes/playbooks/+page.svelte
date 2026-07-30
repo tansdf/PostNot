@@ -703,9 +703,9 @@
 </svelte:head>
 
 <div class="playbooks-page">
-  <section class="panel playbook-list-panel">
+  <section class="panel panel-inset playbook-list-panel">
     <div class="playbook-section-header">
-      <div>
+      <div class="panel-heading">
         <p class="eyebrow">Sequences</p>
         <h2>Playbooks</h2>
       </div>
@@ -738,10 +738,10 @@
     {/if}
   </section>
 
-  <section class="panel playbook-editor-panel">
+  <section class="panel panel-inset playbook-editor-panel">
     {#if selectedPlaybook}
       <div class="playbook-editor-header">
-        <div>
+        <div class="panel-heading">
           <p class="eyebrow">Editor</p>
           <h2>{selectedPlaybook.name}</h2>
         </div>
@@ -928,9 +928,9 @@
     {/if}
   </section>
 
-  <section class="panel playbook-run-panel">
+  <section class="panel panel-inset playbook-run-panel">
     <div class="playbook-section-header">
-      <div>
+      <div class="panel-heading">
         <p class="eyebrow">Run</p>
         <h2>Execution</h2>
       </div>
@@ -1028,7 +1028,6 @@
   .playbook-list-panel,
   .playbook-editor-panel,
   .playbook-run-panel {
-    padding: var(--space-4);
     min-height: 0;
     height: 100%;
     overflow: hidden;

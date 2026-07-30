@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "generatedAt": "2026-07-29T22:30:29.123Z",
+  "generatedAt": "2026-07-30T11:00:38.178Z",
   "viewport": {
     "width": 1995,
     "height": 1179
@@ -43,7 +43,7 @@
       "waitFor": ".settings-page"
     }
   ],
-  "inputHash": "ee211e4ecb4fd74265437c6f12d08bd0eb053e3b4e2e7ba6092c6e4acfbbe347",
+  "inputHash": "8773531af44dc100301b936add7a4fa165950e5991953cc7526c7cab5af05d8c",
   "inputs": [
     {
       "path": "scripts/capture-docs-screenshots.mjs",
@@ -55,7 +55,7 @@
     },
     {
       "path": "src/lib/components/collections/CollectionsPanel.svelte",
-      "sha256": "aa09251284f91f0a4a33a2c4c97ab0d26208507f43f03dc001f80b3918f1f29a"
+      "sha256": "5c1c856f440949bae0ed9d3f71a389c22fe9712e997c8a847f6188ee1ba03d3b"
     },
     {
       "path": "src/lib/components/collections/FolderScriptForm.svelte",
@@ -67,7 +67,7 @@
     },
     {
       "path": "src/lib/components/history/HistoryPanel.svelte",
-      "sha256": "562f0a7d94f96f85f2be3a985fba9b5d756c185d77658d45fa4312dfa05a75c0"
+      "sha256": "af36d8ff0127fc7ac81537e9e5c4e7da039455797d9d33db7e81127f623add80"
     },
     {
       "path": "src/lib/components/icons/FolderGlyph.svelte",
@@ -87,11 +87,11 @@
     },
     {
       "path": "src/lib/components/layout/DialogShell.svelte",
-      "sha256": "e6405ed7b118548e549da59b045691c0525f3e677085ae2cf0a8bcb0c5aef5e0"
+      "sha256": "0baabd5fafec0a4e6b7a03d39330fda61d0d74885b8cc9a6b1c2a4205e1268bf"
     },
     {
       "path": "src/lib/components/layout/NotificationHost.svelte",
-      "sha256": "dceff3074f0bcd9538a496c5ed958d4ec28b961317cb5e1661a4bfeb60684a3d"
+      "sha256": "fe00941d476915b7737717d8c08b149f1db3d43b57028e9a772b442c12b16e69"
     },
     {
       "path": "src/lib/components/layout/SidebarCollections.svelte",
@@ -99,27 +99,27 @@
     },
     {
       "path": "src/lib/components/realtime/RealtimeEditor.svelte",
-      "sha256": "d42823c5a3950d0c64a101abf2aeb1ee386dc0d285a549bfe7ef9ba8f21f9456"
+      "sha256": "a85066e00ce5532fcdcae522e92e2c66f8099ceed99c4b9dfba9c16c8b15041e"
     },
     {
       "path": "src/lib/components/realtime/RealtimeKeyValueEditor.svelte",
-      "sha256": "75ebe3434158f18a280eda02095b56c22ca8e90afbd6e2fa11101b179ee0d7ad"
+      "sha256": "b9274d1bdc10a7f7bc7c58fe092b1d85a1fca5ea8a64184810a2fcb3225a1b69"
     },
     {
       "path": "src/lib/components/realtime/RealtimeTabs.svelte",
-      "sha256": "7a36590f7844ea36080d74c706fb31aced378448827e4a2bda016bbc595814f3"
+      "sha256": "19bd7ce724a4357475f8774244eeefff1ba7dd73282a0dcf61613ed4a375c1dc"
     },
     {
       "path": "src/lib/components/realtime/RealtimeTranscript.svelte",
-      "sha256": "2100649505c51f1dc249cecbba9dedcefe82c59d3470c5fd2f644d9863fb8581"
+      "sha256": "dc78a1141670681991f630542e03a9405a4fe7dc1c454cc664c1bcbc998abfb9"
     },
     {
       "path": "src/lib/components/request/RequestEditor.svelte",
-      "sha256": "9c613c843f054c930da6f0ca7927b2fd51107c03361d176ebebe08b45e718288"
+      "sha256": "448eb5a94c3bd3fddc759a6313e4394025843dce1f7964f078a122e463990f58"
     },
     {
       "path": "src/lib/components/request/RequestTabs.svelte",
-      "sha256": "b024c868682700f93cf7941aef89a1de21cf7ea489a33ae9a92aafc2e8f05c42"
+      "sha256": "954a2ff77bad6335fe026d2ac6234954eba008803826fd444bdb1611a888094e"
     },
     {
       "path": "src/lib/components/request/ScriptEditor.svelte",
@@ -135,7 +135,7 @@
     },
     {
       "path": "src/lib/components/response/ResponseViewer.svelte",
-      "sha256": "95887ee494e864aa9e96bffff613c87587adc3e4a2a86fc995b0902dbe02c624"
+      "sha256": "25d1c566228c50ee60adec273e3d67b78d86a98ae6f1eb20f911300e41634149"
     },
     {
       "path": "src/lib/components/response/VirtualResponseDocument.svelte",
@@ -143,7 +143,7 @@
     },
     {
       "path": "src/lib/styles/app.css",
-      "sha256": "17e49f47f98f30869435bf060051a55a2968dc52c7025bd7f88fbb5d53fef49d"
+      "sha256": "d76b7ff07b89ce9a61125fb4af685972d423f32c41a092be343fceccc847b7e1"
     },
     {
       "path": "src/lib/styles/tokens.css",
@@ -159,7 +159,7 @@
     },
     {
       "path": "src/routes/activity/+page.svelte",
-      "sha256": "5c085d444fce4f1df3c3b53eee2a7bc143c1141f46173c105e236e322d2897cf"
+      "sha256": "364393759a4a671d9f94fdca9c2f8e7ec522dda9b66191fe6542a3697244343e"
     },
     {
       "path": "src/routes/collections/+page.svelte",
@@ -167,15 +167,15 @@
     },
     {
       "path": "src/routes/environments/+page.svelte",
-      "sha256": "b5cd44feb91a645fbcac299c0ea10983a811ecdadb738dd314b9f632ddae5cbb"
+      "sha256": "0eac1591ade875aac7ccb6cce13868ef11b37130db1b912eb760b06fdf88b469"
     },
     {
       "path": "src/routes/playbooks/+page.svelte",
-      "sha256": "65281f6c29c0df3757b8221cc24b8998908d004e70c886d2eb7f77332264248f"
+      "sha256": "6873f745ba01ef6f27d3a11f6a92ebaf18a90db6a95a5a1c598a467d762ffb7e"
     },
     {
       "path": "src/routes/settings/+page.svelte",
-      "sha256": "4dd7da1bdd674c38f789399a16463cc9dab6d407df238f47c2fb318de5d5fb2f"
+      "sha256": "004b23f733a115c0150e7cc087b96534ccd1d6c57cc3117668106e37ee78d3be"
     },
     {
       "path": "src/routes/websockets/+page.svelte",

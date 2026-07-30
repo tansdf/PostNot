@@ -75,7 +75,7 @@
 {#if notifications.activeDetails}
   <DialogShell ariaLabelledby="notification-details-title" onDismiss={() => notifications.closeDetails()}>
     <div class="modal-header">
-      <div>
+      <div class="panel-heading">
         <p class="eyebrow">Details</p>
         <h2 id="notification-details-title">{notifications.activeDetails.title}</h2>
       </div>

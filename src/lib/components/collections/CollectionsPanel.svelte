@@ -123,11 +123,11 @@
 </script>
 
 <div class="workspace-grid">
-  <section class="panel collections-page-panel">
+  <section class="panel panel-inset collections-page-panel">
     <div class="request-section-header">
       <div class="request-section-title">
-        <div class="collections-title-copy">
-          <h1>{collection?.name ?? "Collections"}</h1>
+        <div class="panel-heading collections-title-copy">
+          <h1 class="panel-title">{collection?.name ?? "Collections"}</h1>
           {#if !collection}
             <p>Save and organize reusable requests.</p>
           {/if}
@@ -184,7 +184,7 @@
   </section>
 
   {#if collection}
-  <section class="panel collections-page-panel">
+  <section class="panel panel-inset collections-page-panel">
     <div class="collections-column-header">
       <h2>Saved requests</h2>
       <span class="history-meta">

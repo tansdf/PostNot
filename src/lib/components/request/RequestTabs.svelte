@@ -91,7 +91,7 @@
   }
 </script>
 
-<section class="panel request-tabs-panel" aria-label="Request tabs">
+<section class="panel panel-inset-compact request-tabs-panel" aria-label="Request tabs">
   <div class="request-tabs-strip scrollbar-invisible" role="tablist" aria-label="Open requests" {@attach attachTabsStrip}>
     {#each tabs as tab (tab.id)}
       <div
