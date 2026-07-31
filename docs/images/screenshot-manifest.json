@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "generatedAt": "2026-07-30T13:32:03.351Z",
+  "generatedAt": "2026-07-31T10:02:12.620Z",
   "viewport": {
     "width": 1995,
     "height": 1179
@@ -48,7 +48,7 @@
       "waitFor": ".settings-page"
     }
   ],
-  "inputHash": "9ef22b7f60ab51c49165682a9363c70b9235c234e57c6f0c5b91c3dbfa5c2cb4",
+  "inputHash": "aca9e47f866079212799757d68a50d11dca10ec1d4b55a7e2de4e23e1b5d83c7",
   "inputs": [
     {
       "path": "scripts/capture-docs-screenshots.mjs",
@@ -132,7 +132,7 @@
     },
     {
       "path": "src/lib/components/request/RequestEditor.svelte",
-      "sha256": "538f378aecae9d223a56ff1861221e9ac78bd0ae542af252cf7ee71ffe77df99"
+      "sha256": "0c56489be355fd5fdb8fe9973471dc7df90ec587190a580b081b356c5cd5f9eb"
     },
     {
       "path": "src/lib/components/request/RequestTabs.svelte",
@@ -160,11 +160,11 @@
     },
     {
       "path": "src/lib/styles/app.css",
-      "sha256": "a780e6a4a90407a72b293313daa32327ca76b2c410d1ecce4f6e68293f52934b"
+      "sha256": "e6a72d404f996037c4b322fecec9995e21e2c6f019f01b9a911352884ffb0ee9"
     },
     {
       "path": "src/lib/styles/tokens.css",
-      "sha256": "d6b19c0aaea68724a1b95df99266c169c59f9ba6512fa38c3f6a883c62997984"
+      "sha256": "d65e06605e13a380261bab006b1b326ed19d35e7381d4f6b65b040eecd16e007"
     },
     {
       "path": "src/routes/+layout.svelte",

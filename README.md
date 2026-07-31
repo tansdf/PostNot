@@ -15,7 +15,7 @@ PostNot is built for working with HTTP APIs on your own machine, with local pers
 
 ## What It Does
 
-- Compose and send HTTP requests from a desktop-native UI
+- Compose and send HTTP requests from a desktop-native UI, including body-bearing RFC 10008 `QUERY` requests
 - Work across multiple request tabs with restored local workspace state between launches
 - Save requests into collections and nested folders
 - Browse those folders in the sidebar and collections page with aligned tree guides and folder icons

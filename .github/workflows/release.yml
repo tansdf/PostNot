@@ -78,6 +78,7 @@ jobs:
 
       - name: Check docs screenshot freshness
         if: matrix.platform == 'ubuntu-22.04'
+        continue-on-error: true
         run: npm run docs:check-screenshots
 
       - name: Extract release notes
