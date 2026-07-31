@@ -123,7 +123,7 @@
 
   <div class="realtime-transcript-tools">
     <div class="panel-tabs" role="tablist" aria-label="Transcript filters">
-      {#each filterOptions as option, index}
+      {#each filterOptions as option (option)}
         <button
           id={filterDomId(option)}
           class:active={filter === option}
@@ -134,7 +134,7 @@
           aria-controls="realtime-transcript-log"
           tabindex={filter === option ? 0 : -1}
           onclick={() => (filter = option)}
-          onkeydown={(event) => handleFilterKeydown(event, index)}
+          onkeydown={(event) => handleFilterKeydown(event, filterOptions.indexOf(option))}
         >
           {option.charAt(0).toUpperCase() + option.slice(1)}
         </button>

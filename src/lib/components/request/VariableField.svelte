@@ -617,7 +617,7 @@
         aria-hidden="true"
         spellcheck={false}
         bind:this={highlightOverlayElement}
-      ><code class="variable-highlight-content" bind:this={highlightContentElement}>{#each highlightTokens as token, index (index)}{#if getHighlightTokenClass(token.type)}<span class={getHighlightTokenClass(token.type)}>{token.value}</span>{:else}{token.value}{/if}{/each}</code></pre>
+      ><code class="variable-highlight-content" bind:this={highlightContentElement}>{#each highlightTokens as token}{#if getHighlightTokenClass(token.type)}<span class={getHighlightTokenClass(token.type)}>{token.value}</span>{:else}{token.value}{/if}{/each}</code></pre>
     {/if}
 
     {#if multiline}

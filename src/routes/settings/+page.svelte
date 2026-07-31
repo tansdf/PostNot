@@ -253,7 +253,7 @@
                     <label class={["settings-theme-option", settings.theme === option.value && "settings-theme-option-active"]}>
                       <input type="radio" name="theme" value={option.value} bind:group={settings.theme} />
                       <span class="settings-theme-preview" aria-hidden="true">
-                        {#each option.swatches as swatch, index (`${option.value}-${index}`)}
+                        {#each option.swatches as swatch (swatch)}
                           <span style:background={swatch}></span>
                         {/each}
                       </span>
@@ -449,12 +449,12 @@
                   <details class="settings-update-notes">
                     <summary>Release notes</summary>
                     <div class="history-preview settings-update-markdown">
-                      {#each parsedUpdateNotes as line, lineIndex (lineIndex)}
+                      {#each parsedUpdateNotes as line}
                         <p class="settings-update-markdown-line">
                           {#if line.length === 0}
                             <br />
                           {:else}
-                            {#each line as token, tokenIndex (tokenIndex)}
+                            {#each line as token}
                               {#if token.kind === "text"}
                                 {token.value}
                               {:else}

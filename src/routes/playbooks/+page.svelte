@@ -38,9 +38,11 @@
     type PlaybookStep,
     type PlaybookSummary,
     type RequestDraft,
-    type ScriptTestResult
+    type ScriptTestResult,
+    type UpdatePlaybookStepInput
   } from "$lib/api/types";
   import { runPreRequestScript, runTestScript } from "$lib/request-scripts";
+  import { createStaleGuard } from "$lib/async-stale-guard";
   import { notifications } from "$lib/stores/notifications.svelte";
 
   type LiveStepState = {
@@ -81,6 +83,23 @@
 
   let runTimer: ReturnType<typeof setInterval> | null = null;
   let searchTimer: ReturnType<typeof setTimeout> | null = null;
+  const playbookLoad = createStaleGuard();
+  const playbookSearch = createStaleGuard();
+  const runDetailLoad = createStaleGuard();
+
+  type PendingStepSave = {
+    playbookId: string;
+    input: UpdatePlaybookStepInput;
+  };
+
+  type StepSaveQueue = {
+    confirmed: PlaybookStep;
+    pending: PendingStepSave | null;
+    running: boolean;
+    generation: number;
+  };
+
+  const stepSaveQueues: Record<string, StepSaveQueue | undefined> = {};
 
   let elapsedMs = $derived(runStartedAt ? elapsedNow - runStartedAt : 0);
   let enabledSteps = $derived((selectedPlaybook?.steps ?? []).filter((step) => step.enabled));
@@ -106,31 +125,45 @@
   }
 
   async function loadPlaybooks(preferredId = selectedPlaybookId) {
+    const seq = beginPlaybookLoad();
     try {
       const fetched = await listPlaybooks();
+      if (playbookLoad.isStale(seq)) return;
       playbooks = fetched;
       const nextId = preferredId && fetched.some((item) => item.id === preferredId)
         ? preferredId
         : fetched[0]?.id ?? "";
       selectedPlaybookId = nextId;
       if (nextId) {
-        await loadPlaybook(nextId);
+        await loadPlaybookDetail(nextId, seq);
       } else {
+        if (playbookLoad.isStale(seq)) return;
         selectedPlaybook = null;
         runs = [];
       }
-      errorText = "";
+      if (!playbookLoad.isStale(seq)) {
+        errorText = "";
+      }
     } catch (error) {
-      errorText = normalizeError(error);
+      if (!playbookLoad.isStale(seq)) {
+        errorText = normalizeError(error);
+      }
     }
   }
 
   async function loadPlaybook(playbookId: string) {
+    await loadPlaybookDetail(playbookId, beginPlaybookLoad());
+  }
+
+  async function loadPlaybookDetail(playbookId: string, seq: number) {
     const detail = await getPlaybook(playbookId);
+    if (playbookLoad.isStale(seq)) return;
     selectedPlaybook = detail;
     selectedPlaybookId = detail.id;
     syncEditableFields(detail);
-    runs = await listPlaybookRuns(detail.id, 20);
+    const nextRuns = await listPlaybookRuns(detail.id, 20);
+    if (playbookLoad.isStale(seq)) return;
+    runs = nextRuns;
     selectedRunDetail = null;
   }
 
@@ -211,27 +244,36 @@
   }
 
   function queueSearch() {
-    if (searchTimer) {
-      clearTimeout(searchTimer);
-    }
+    const seq = invalidateSearch();
     searchTimer = setTimeout(() => {
-      void runSearch();
+      searchTimer = null;
+      void runSearch(seq);
     }, 180);
   }
 
-  async function runSearch() {
+  async function runSearch(seq: number) {
     const query = addSearchQuery.trim();
     if (!query) {
-      addSearchResults = [];
+      if (!playbookSearch.isStale(seq)) {
+        addSearchResults = [];
+        isSearching = false;
+      }
       return;
     }
     isSearching = true;
     try {
-      addSearchResults = (await searchCollectionEntities(query, 30)).filter((item) => item.kind === "request");
+      const results = (await searchCollectionEntities(query, 30)).filter((item) => item.kind === "request");
+      if (!playbookSearch.isStale(seq)) {
+        addSearchResults = results;
+      }
     } catch (error) {
-      notifications.error(normalizeError(error), "Search failed");
+      if (!playbookSearch.isStale(seq)) {
+        notifications.error(normalizeError(error), "Search failed");
+      }
     } finally {
-      isSearching = false;
+      if (!playbookSearch.isStale(seq)) {
+        isSearching = false;
+      }
     }
   }
 
@@ -239,19 +281,24 @@
     if (!selectedPlaybook || result.kind !== "request") {
       return;
     }
-    const step = await addPlaybookStep(selectedPlaybook.id, {
+    const playbookId = selectedPlaybook.id;
+    invalidateSearch();
+    const step = await addPlaybookStep(playbookId, {
       savedRequestId: result.id,
       nameOverride: "",
       notes: "",
       enabled: true,
       delayAfterMs: null
     });
+    if (selectedPlaybook?.id !== playbookId) {
+      return;
+    }
     selectedPlaybook = {
       ...selectedPlaybook,
       steps: [...selectedPlaybook.steps, step]
     };
     addSearchQuery = "";
-    addSearchResults = [];
+    invalidateSearch(true);
     notifications.success(step.savedRequestName, "Step added");
     await refreshSelectedPlaybook();
   }
@@ -269,28 +316,108 @@
   }
 
   async function saveStep(original: PlaybookStep, next: PlaybookStep) {
-    if (!selectedPlaybook) {
+    const playbook = selectedPlaybook;
+    if (!playbook || !playbook.steps.some((step) => step.id === original.id)) {
       return;
     }
-    const optimistic = selectedPlaybook.steps.map((step) => step.id === original.id ? next : step);
-    selectedPlaybook = { ...selectedPlaybook, steps: optimistic };
-    try {
-      const saved = await updatePlaybookStep(original.id, {
+    const queue = stepSaveQueues[original.id] ?? {
+      confirmed: { ...original },
+      pending: null,
+      running: false,
+      generation: 0
+    } satisfies StepSaveQueue;
+    stepSaveQueues[original.id] = queue;
+    selectedPlaybook = {
+      ...playbook,
+      steps: playbook.steps.map((step) => step.id === original.id ? next : step)
+    };
+    queue.pending = {
+      playbookId: playbook.id,
+      input: {
         nameOverride: next.nameOverride,
         notes: next.notes,
         enabled: next.enabled,
         delayAfterMs: next.delayAfterMs ?? null
-      });
-      selectedPlaybook = {
-        ...selectedPlaybook,
-        steps: selectedPlaybook.steps.map((step) => step.id === saved.id ? saved : step)
-      };
-    } catch (error) {
-      selectedPlaybook = {
-        ...selectedPlaybook,
-        steps: selectedPlaybook.steps.map((step) => step.id === original.id ? original : step)
-      };
-      notifications.error(normalizeError(error), "Step save failed");
+      }
+    };
+    void flushStepSave(original.id, queue);
+  }
+
+  async function flushStepSave(stepId: string, queue: StepSaveQueue) {
+    if (queue.running) {
+      return;
+    }
+
+    queue.running = true;
+    const generation = queue.generation;
+
+    try {
+      while (generation === queue.generation && queue.pending) {
+        const pending = queue.pending;
+        queue.pending = null;
+
+        try {
+          const saved = await updatePlaybookStep(stepId, pending.input);
+          if (generation !== queue.generation) {
+            return;
+          }
+
+          queue.confirmed = saved;
+          if (queue.pending) {
+            continue;
+          }
+
+          if (
+            selectedPlaybook?.id === pending.playbookId
+          ) {
+            selectedPlaybook = {
+              ...selectedPlaybook,
+              steps: selectedPlaybook.steps.map((step) => step.id === saved.id ? saved : step)
+            };
+          }
+        } catch (error) {
+          if (generation !== queue.generation) {
+            return;
+          }
+
+          if (queue.pending) {
+            continue;
+          }
+
+          if (
+            selectedPlaybook?.id === pending.playbookId
+          ) {
+            selectedPlaybook = {
+              ...selectedPlaybook,
+              steps: selectedPlaybook.steps.map((step) => step.id === stepId ? queue.confirmed : step)
+            };
+            notifications.error(normalizeError(error), "Step save failed");
+          }
+          return;
+        }
+      }
+    } finally {
+      queue.running = false;
+      if (generation !== queue.generation) {
+        if (!queue.pending && stepSaveQueues[stepId] === queue) {
+          delete stepSaveQueues[stepId];
+        }
+      } else if (!queue.pending && stepSaveQueues[stepId] === queue) {
+        delete stepSaveQueues[stepId];
+      }
+    }
+  }
+
+  function invalidateStepSave(stepId: string) {
+    const queue = stepSaveQueues[stepId];
+    if (!queue) {
+      return;
+    }
+
+    queue.generation += 1;
+    queue.pending = null;
+    if (!queue.running) {
+      delete stepSaveQueues[stepId];
     }
   }
 
@@ -319,10 +446,21 @@
   }
 
   async function handleDeleteStep(step: PlaybookStep) {
-    if (!selectedPlaybook || !window.confirm("Remove this step from the playbook?")) {
+    const playbook = selectedPlaybook;
+    if (!playbook || !window.confirm("Remove this step from the playbook?")) {
       return;
     }
-    await deletePlaybookStep(step.id);
+    const playbookId = playbook.id;
+    try {
+      await deletePlaybookStep(step.id);
+    } catch (error) {
+      notifications.error(normalizeError(error), "Step removal failed");
+      return;
+    }
+    invalidateStepSave(step.id);
+    if (selectedPlaybook?.id !== playbookId) {
+      return;
+    }
     selectedPlaybook = {
       ...selectedPlaybook,
       steps: selectedPlaybook.steps.filter((item) => item.id !== step.id)
@@ -335,6 +473,30 @@
     if (selectedPlaybook) {
       await loadPlaybook(selectedPlaybook.id);
     }
+  }
+
+  function invalidateSearch(clearResults = false) {
+    const seq = playbookSearch.next();
+    if (searchTimer) {
+      clearTimeout(searchTimer);
+      searchTimer = null;
+    }
+    isSearching = false;
+    if (clearResults) {
+      addSearchResults = [];
+    }
+    return seq;
+  }
+
+  function invalidateRunDetail() {
+    runDetailLoad.next();
+    selectedRunDetail = null;
+  }
+
+  function beginPlaybookLoad() {
+    invalidateSearch(true);
+    invalidateRunDetail();
+    return playbookLoad.next();
   }
 
   async function handleRunPlaybook() {
@@ -689,11 +851,14 @@
 
   async function toggleRunDetail(run: PlaybookRunSummary) {
     if (selectedRunDetail?.run.id === run.id) {
-      selectedRunDetail = null;
+      invalidateRunDetail();
       return;
     }
 
+    const seq = runDetailLoad.next();
+    selectedRunDetail = null;
     const detail = await getPlaybookRun(run.id);
+    if (runDetailLoad.isStale(seq)) return;
     selectedRunDetail = { run: detail, steps: detail.steps };
   }
 </script>
@@ -723,7 +888,7 @@
       </div>
     {:else}
       <div class="playbook-list">
-        {#each playbooks as playbook}
+        {#each playbooks as playbook (playbook.id)}
           <button
             class={["playbook-list-item", playbook.id === selectedPlaybookId && "playbook-list-item-active"]}
             type="button"
@@ -807,7 +972,7 @@
           <p class="muted-text" role="status" aria-live="polite">Searching saved requests...</p>
         {:else if addSearchResults.length > 0}
           <div class="search-results">
-            {#each addSearchResults as result}
+            {#each addSearchResults as result (result.id)}
               <button type="button" onclick={() => handleAddStep(result)} disabled={isRunning}>
                 <span><strong>{result.method}</strong> {result.name}</span>
                 <small>{result.collectionName}{#if result.ancestorNames.length} / {result.ancestorNames.join(" / ")}{/if}</small>
@@ -824,7 +989,7 @@
             <p>Search for saved requests above and add them to this playbook.</p>
           </div>
         {:else}
-          {#each selectedPlaybook.steps as step, index}
+          {#each selectedPlaybook.steps as step, index (step.id)}
             <article
               class={[
                 "step-row",
@@ -958,7 +1123,7 @@
 
     {#if liveSteps.length > 0}
       <div class="live-steps" aria-live="polite" aria-relevant="additions text" aria-atomic="false">
-        {#each liveSteps as step}
+        {#each liveSteps as step (step.stepId)}
           <div class={["live-step", `live-step-${step.status}`]}>
             <div>
               <strong>{step.label}</strong>
@@ -978,7 +1143,7 @@
       {#if runs.length === 0}
         <p class="muted-text">No grouped playbook runs yet.</p>
       {:else}
-        {#each runs as run}
+        {#each runs as run (run.id)}
           <button
             class={["run-history-item", selectedRunDetail?.run.id === run.id && "run-history-item-active"]}
             type="button"
@@ -991,7 +1156,7 @@
             <div class="run-history-detail">
               <p>{run.stoppedReason || "Completed without a stop reason."}</p>
               <p>{formatDuration(run.totalDurationMs)} total</p>
-              {#each selectedRunDetail.steps as step}
+              {#each selectedRunDetail.steps as step (step.id)}
                 <div class={["run-detail-step", step.errorText && "run-detail-step-error"]}>
                   <p><strong>{statusLabel(step.status)}</strong> {step.method} {step.savedRequestName}{#if step.statusCode} / HTTP {step.statusCode}{/if}</p>
                   {#if step.errorText}

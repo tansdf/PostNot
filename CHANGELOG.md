@@ -6,6 +6,15 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+### Changed
+
+- Improved Svelte list identity across playbooks, realtime transcript filters, settings previews, and generated syntax output.
+
+### Fixed
+
+- Prevented stale Playbooks loads, searches, and run details from replacing newer user selections.
+- Serialized and coalesced rapid edits to the same playbook step so the latest values remain visible and are persisted in the correct order.
+
 ## [0.23.1] - 2026-07-31
 
 ### Added

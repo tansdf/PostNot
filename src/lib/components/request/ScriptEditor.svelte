@@ -871,7 +871,7 @@
     aria-hidden="true"
     spellcheck={false}
     bind:this={highlightOverlayElement}
-  ><code class="variable-highlight-content" bind:this={highlightContentElement}>{#each scriptTokens as token, index (index)}{#if getScriptTokenClass(token.type)}<span class={getScriptTokenClass(token.type)}>{token.value}</span>{:else}{token.value}{/if}{/each}</code></pre>
+  ><code class="variable-highlight-content" bind:this={highlightContentElement}>{#each scriptTokens as token}{#if getScriptTokenClass(token.type)}<span class={getScriptTokenClass(token.type)}>{token.value}</span>{:else}{token.value}{/if}{/each}</code></pre>
 
   <textarea
     bind:this={textareaElement}
