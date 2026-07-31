@@ -1,6 +1,6 @@
 [package]
 name = "postnot"
-version = "0.23.0"
+version = "0.23.1"
 description = "Local-first desktop API client"
 authors = ["PostNot"]
 license = "Apache-2.0"

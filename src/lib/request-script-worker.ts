@@ -15,7 +15,7 @@ import {
 } from "$lib/api/types";
 import type { InheritedRequestScripts } from "$lib/request-scripts";
 
-const VALID_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]);
+const VALID_METHODS = new Set(["GET", "QUERY", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]);
 const VALID_BODY_MODES = new Set(["none", "json", "raw", "form-urlencoded", "multipart"]);
 const VALID_AUTH_TYPES = new Set(["none", "basic", "bearer", "api-key", "oauth2"]);
 const VALID_API_KEY_PLACEMENTS = new Set(["header", "query"]);

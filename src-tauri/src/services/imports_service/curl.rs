@@ -434,6 +434,22 @@ mod tests {
     }
 
     #[test]
+    fn imports_query_method_with_content() {
+        let request = parse_curl_command(
+            "curl --request QUERY -H 'Content-Type: application/sql' --data 'SELECT * FROM items' https://api.example.com/search",
+        )
+        .unwrap();
+
+        assert_eq!(request.method, "QUERY");
+        assert_eq!(request.body.mode, "raw");
+        assert_eq!(request.body.raw, "SELECT * FROM items");
+        assert!(request
+            .headers
+            .iter()
+            .any(|header| { header.key == "Content-Type" && header.value == "application/sql" }));
+    }
+
+    #[test]
     fn parses_multipart_form_fields_and_files() {
         let request = parse_curl_command(
             "curl -F 'description=hello' -F 'upload=@/tmp/report.pdf;type=application/pdf' https://api.example.com/upload",

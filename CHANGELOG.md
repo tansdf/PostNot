@@ -6,6 +6,12 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.23.1] - 2026-07-31
+
+### Added
+
+- Added HTTP QUERY method support per RFC 10008 across request editing and execution, scripts, imports, exports, history, collections, and playbooks.
+
 ## [0.23.0] - 2026-07-30
 
 ### Added

@@ -510,6 +510,7 @@
       onchange={(event) => updateMethod(event.currentTarget.value as RequestDraft["method"])}
     >
       <option value="GET">GET</option>
+      <option value="QUERY">QUERY</option>
       <option value="POST">POST</option>
       <option value="PUT">PUT</option>
       <option value="PATCH">PATCH</option>

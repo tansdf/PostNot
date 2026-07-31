@@ -446,6 +446,53 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn send_request_supports_query_with_content_type_and_body() {
+        let (url, captured_rx) =
+            spawn_test_server("HTTP/1.1 200 OK\r\ncontent-length: 2\r\n\r\nok");
+        let (_cancel_tx, cancel_rx) = watch::channel(false);
+        let store = test_store();
+
+        let response = send_request_with_store(
+            &SendRequestPayload {
+                name: "Query things".to_string(),
+                method: "QUERY".to_string(),
+                url: format!("{url}/search"),
+                query_params: Vec::new(),
+                headers: Vec::new(),
+                body: RequestBody {
+                    mode: "json".to_string(),
+                    raw: "{\"filter\":\"active\"}".to_string(),
+                    form: Vec::new(),
+                    files: Vec::new(),
+                },
+                auth: empty_auth(),
+                pre_request_script: String::new(),
+                test_script: String::new(),
+            },
+            &default_settings(),
+            cancel_rx,
+            None,
+            &store,
+        )
+        .await
+        .expect("QUERY request should succeed");
+
+        let captured = captured_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("server captured QUERY request");
+
+        assert_eq!(response.status_code, Some(200));
+        assert!(captured.head.starts_with("QUERY /search HTTP/1.1"));
+        assert!(captured
+            .head
+            .contains("\r\ncontent-type: application/json\r\n"));
+        assert_eq!(
+            String::from_utf8(captured.body).unwrap(),
+            "{\"filter\":\"active\"}"
+        );
+    }
+
+    #[tokio::test]
     async fn send_request_allows_localhost_without_scheme() {
         let (url, captured_rx) =
             spawn_test_server("HTTP/1.1 200 OK\r\ncontent-length: 2\r\n\r\nok");

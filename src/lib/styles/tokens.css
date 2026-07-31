@@ -60,6 +60,7 @@
   --shadow-soft: 0 10px 24px rgba(16, 28, 27, 0.08);
   --shadow-overlay: 0 14px 30px rgba(7, 13, 13, 0.24);
   --method-get: #2a9d61;
+  --method-query: #267e87;
   --method-post: #c07a2e;
   --method-put: #3b8ac4;
   --method-patch: #9d73b8;
@@ -67,6 +68,7 @@
   --method-head: #2a9d61;
   --method-options: #647371;
   --method-get-inverse: #78d5ab;
+  --method-query-inverse: #72d1dc;
   --method-post-inverse: #f0a45d;
   --method-put-inverse: #72b2e8;
   --method-patch-inverse: #c49cde;
@@ -170,6 +172,7 @@
   --syntax-null: #bf616a;
   --syntax-variable: #d7ba7d;
   --method-get: #4eca8b;
+  --method-query: #62c7d1;
   --method-post: #f0a45d;
   --method-put: #5dadec;
   --method-patch: #c49cde;
@@ -235,6 +238,7 @@
   --danger-hover: var(--danger-bg-hover);
   --surface-success: rgba(124, 207, 155, 0.16);
   --method-get: #7ccf9b;
+  --method-query: #75c7b8;
   --method-post: #d9b56c;
   --method-put: #75b7d8;
   --method-patch: #c7a1db;
@@ -242,6 +246,7 @@
   --method-head: #7ccf9b;
   --method-options: #8da295;
   --method-get-inverse: #91deb0;
+  --method-query-inverse: #93ded0;
   --method-post-inverse: #e4c682;
   --method-put-inverse: #92c9e5;
   --method-patch-inverse: #d0b0e2;

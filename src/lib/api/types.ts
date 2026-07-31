@@ -1,4 +1,4 @@
-export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
+export type HttpMethod = "GET" | "QUERY" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
 export type BodyMode = "none" | "json" | "raw" | "form-urlencoded" | "multipart";
 export type AuthType = "none" | "basic" | "bearer" | "api-key" | "oauth2";
 export type ApiKeyPlacement = "header" | "query";

@@ -4189,6 +4189,7 @@ body.collection-dnd-active {
 }
 
 .method-get { color: var(--method-get); }
+.method-query { color: var(--method-query); }
 .method-post { color: var(--method-post); }
 .method-put { color: var(--method-put); }
 .method-patch { color: var(--method-patch); }
@@ -4197,6 +4198,7 @@ body.collection-dnd-active {
 .method-options { color: var(--method-options); }
 
 .sidebar .method-badge.method-get { color: var(--method-get-inverse); }
+.sidebar .method-badge.method-query { color: var(--method-query-inverse); }
 .sidebar .method-badge.method-post { color: var(--method-post-inverse); }
 .sidebar .method-badge.method-put { color: var(--method-put-inverse); }
 .sidebar .method-badge.method-patch { color: var(--method-patch-inverse); }

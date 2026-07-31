@@ -66,7 +66,7 @@ Always consume semantic tokens. Do not choose a literal color based only on its 
 
 The light palette uses cream surfaces, deep teal text/navigation, and burnt orange action color. The dark palette preserves those relationships with higher-luminance text and accent values. The optional Forest theme uses the same semantic roles with a deeper green workbench palette and a cooler green accent. Never copy a resolved light-theme value into component CSS.
 
-HTTP method colors are a special categorical palette. Use the existing `.method-get`, `.method-post`, `.method-put`, `.method-patch`, `.method-delete`, `.method-head`, and `.method-options` classes. Do not use those colors for semantic success or failure.
+HTTP method colors are a special categorical palette. Use the existing `.method-get`, `.method-query`, `.method-post`, `.method-put`, `.method-patch`, `.method-delete`, `.method-head`, and `.method-options` classes. Do not use those colors for semantic success or failure.
 
 Realtime protocol labels are compact categorical identifiers, not health states. Use the shared `.protocol-badge` with the exact short labels `WS` and `S.IO`; use `.realtime-status-*` only for connection state. A status dot must always be paired with visible or screen-reader text.
 

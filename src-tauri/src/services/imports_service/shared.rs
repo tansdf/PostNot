@@ -23,7 +23,7 @@ pub(super) fn normalized_folder_name(folder_name: &str) -> String {
 pub(super) fn normalize_method(method: &str) -> String {
     let uppercase = method.trim().to_uppercase();
     match uppercase.as_str() {
-        "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS" => uppercase,
+        "GET" | "QUERY" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS" => uppercase,
         _ => "GET".to_string(),
     }
 }
