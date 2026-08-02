@@ -606,10 +606,14 @@
       type="button"
       onclick={handleCreateCollection}
       disabled={collections.isCreatingCollection}
-      aria-label="Create collection"
+      aria-label={collections.isCreatingCollection ? "Creating collection" : "Create collection"}
+      aria-busy={collections.isCreatingCollection}
       title="Create collection"
     >
-      {collections.isCreatingCollection ? "..." : "+"}
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+        <path d="M12 5v14"></path>
+        <path d="M5 12h14"></path>
+      </svg>
     </button>
   </div>
 

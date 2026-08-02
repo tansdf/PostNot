@@ -129,7 +129,7 @@ The shared reduced-motion rule removes decorative transitions and pulse/slide an
 
 ### Application shell
 
-`AppShell.svelte` owns the two-column desktop frame: a `320px` sidebar and a flexible workspace. At widths below `980px`, it becomes a single flowing column. The sidebar has three stable zones: compact workspace switching for Requests, WebSockets, and Playbooks; a Collections section whose heading opens the full Collections workspace and whose tree owns the remaining height; and anchored utilities for Environments, MCP Activity, and Settings. Every destination requires an explicit non-color-only active state and an accessible name, including icon-only utility controls.
+`AppShell.svelte` owns the two-column desktop frame: a `320px` sidebar and a flexible workspace. At widths below `980px`, it becomes a single flowing column. The sidebar has three stable zones: compact workspace switching for Requests, WebSockets, and Playbooks; a Collections section whose heading opens the full Collections workspace and whose tree owns the remaining height; and anchored utilities for Environments, MCP integration, and Settings. Every destination requires an explicit non-color-only active state and an accessible name, including icon-only utility controls.
 
 ### Pages
 

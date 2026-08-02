@@ -43,9 +43,17 @@ test("sidebar reserves its flexible middle region for collections", async ({ pag
 
   const collectionsLink = page.getByRole("link", { name: "Collections" });
   await expect(collectionsLink).toHaveAttribute("href", "/collections");
+  const createCollectionButton = page.getByRole("button", { name: "Create collection" });
+  await expect(createCollectionButton.locator("svg")).toBeVisible();
+  await expect(createCollectionButton).toHaveText("");
+  await expect.poll(() => createCollectionButton.evaluate((button) => {
+    const rect = button.getBoundingClientRect();
+    return { width: rect.width, height: rect.height };
+  })).toEqual({ width: 32, height: 32 });
 
   const utilities = page.getByRole("navigation", { name: "Utilities" });
   await expect(utilities.getByRole("link")).toHaveCount(3);
+  await expect(utilities.getByRole("link", { name: "MCP integration" })).toContainText("MCP");
   const settingsLink = utilities.getByRole("link", { name: "Settings" });
   await expect(settingsLink).toHaveAttribute("title", "Settings");
   await expect(settingsLink).toHaveText("");

@@ -71,6 +71,20 @@ class RealtimeWorkspaceStore {
   newConnection(tabId: string, protocol: "websocket" | "socketio" = "websocket") {
     const draft = createRealtimeConnectionDraft(protocol); this.updateTab(tabId, (tab) => { tab.selectedProfileId = null; tab.profileUpdatedAt = null; tab.connectionExternallyChanged = false; tab.connectionDraft = draft; tab.baselineConnectionDraft = cloneRealtimeConnectionDraft(draft); }); void this.persistNow();
   }
+  newMessage(tabId: string, protocol: "websocket" | "socketio" = "websocket") {
+    const draft = createRealtimeMessageDraft(protocol);
+    this.updateTab(tabId, (tab) => {
+      tab.selectedMessageId = null;
+      tab.collectionId = null;
+      tab.parentId = null;
+      tab.sourceUpdatedAt = null;
+      tab.messageExternallyChanged = false;
+      tab.messageDraft = draft;
+      tab.baselineMessageDraft = cloneRealtimeMessageDraft(draft);
+      tab.errorText = "";
+    });
+    void this.persistNow();
+  }
   unlinkProfile(profileId: string) { this.tabs = this.tabs.map((tab) => tab.selectedProfileId === profileId ? { ...tab, selectedProfileId: null, profileUpdatedAt: null, baselineConnectionDraft: null, connectionExternallyChanged: false } : tab); void this.persistNow(); }
 
   openSavedMessage(saved: SavedRealtimeMessageDetail) {

@@ -142,7 +142,7 @@ async function testReleaseEnhancement(browser, baseUrl) {
   assert.equal(await page.locator("#realtime .workflow__boundary").getByText(/session-only/i).count(), 1);
   assert.equal(await page.locator('#realtime img[src*="websockets-page"]').count(), 1);
   assert.equal(await page.locator(".workflow__number").count(), 6);
-  assert.equal(await page.locator("#agents .workflow__boundary").getByText(/cannot send or delete/i).count(), 1);
+  assert.equal(await page.locator("#agents .workflow__boundary").getByText(/cannot execute requests or scripts/i).count(), 1);
   const setupLink = page.locator(".asset-row", { hasText: "Setup executable" });
   assert.match(await setupLink.getAttribute("href"), /PostNot_9\.8\.7_x64-setup\.exe$/);
   assert.match(await setupLink.locator("[data-asset-meta]").textContent(), /SHA-256/);

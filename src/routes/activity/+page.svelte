@@ -106,7 +106,7 @@
     <div class="panel-heading mcp-page-heading">
       <p class="eyebrow">Local agent bridge</p>
       <h1 class="panel-title">MCP Integration</h1>
-      <p>Let compatible AI agents inspect your workspace and prepare reusable requests while you keep control of execution.</p>
+      <p>Let compatible AI agents inspect your workspace and prepare reusable HTTP and realtime resources while you keep control of execution.</p>
     </div>
     <div class="mcp-page-actions">
       <button class="button-secondary" type="button" onclick={loadActivity} disabled={isLoading}>
@@ -125,7 +125,7 @@
     </div>
     <div>
       <span class="mcp-summary-icon"><McpGlyph name="authoring" /></span>
-      <span><strong>Authoring only</strong>No send or delete tools exposed</span>
+      <span><strong>Authoring only</strong>No network execution tools exposed</span>
     </div>
     <div>
       <span class="mcp-summary-icon"><McpGlyph name="activity" /></span>
@@ -136,20 +136,20 @@
   <section class="mcp-activity-section" aria-labelledby="mcp-activity-title">
     <div class="mcp-section-heading">
       <div class="panel-heading">
-        <h2 id="mcp-activity-title">Recent agent changes</h2>
-        <p>{changeCount === 0 ? "Activity will appear here after an agent changes your workspace." : `${changeCount} recorded ${changeCount === 1 ? "change" : "changes"}`}</p>
+        <h2 id="mcp-activity-title">Recent MCP changes</h2>
+        <p>{changeCount === 0 ? "Changes will appear here after an MCP client updates your workspace." : `${changeCount} recorded ${changeCount === 1 ? "change" : "changes"}`}</p>
       </div>
     </div>
 
     {#if isLoading && groups.length === 0}
-      <div class="empty-state mcp-empty-state" role="status">Loading recent agent changes…</div>
+      <div class="empty-state mcp-empty-state" role="status">Loading recent MCP changes…</div>
     {:else if errorText}
       <div class="feedback feedback-error" role="alert">{errorText}</div>
     {:else if groups.length === 0}
       <div class="empty-state mcp-empty-state">
         <span class="mcp-empty-mark"><McpGlyph name="activity" /></span>
-        <strong>No agent changes yet</strong>
-        <p>Configure an MCP client, then ask it to create or update a saved request.</p>
+        <strong>No MCP changes yet</strong>
+        <p>Configure an MCP client, then ask it to create or update an HTTP request or realtime resource.</p>
         <button class="button-secondary button-compact" type="button" onclick={() => (isSetupOpen = true)}>Configure MCP…</button>
       </div>
     {:else}

@@ -341,7 +341,7 @@
                     type="number"
                     min="0.0625"
                     max="256"
-                    step="1"
+                    step="0.0625"
                     value={settings.realtimeMaxMessageBytes / (1024 * 1024)}
                     oninput={(event) => (settings = { ...settings, realtimeMaxMessageBytes: Math.round(Math.max(0.0625, event.currentTarget.valueAsNumber || 64) * 1024 * 1024) })}
                   />
@@ -357,7 +357,7 @@
                     type="number"
                     min="0.0625"
                     max="512"
-                    step="1"
+                    step="0.0625"
                     value={settings.realtimeTranscriptMaxBytes / (1024 * 1024)}
                     oninput={(event) => (settings = { ...settings, realtimeTranscriptMaxBytes: Math.round(Math.max(0.0625, event.currentTarget.valueAsNumber || 64) * 1024 * 1024) })}
                   />

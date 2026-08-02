@@ -32,7 +32,9 @@ async function resolveCssColor(locator, customProperty) {
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
-    localStorage.clear();
+    if (localStorage.getItem("postnot.settings") !== null) {
+      return;
+    }
     localStorage.setItem(
       "postnot.settings",
       JSON.stringify({
@@ -352,7 +354,53 @@ test("WebSockets navigation preserves the active draft and defers external messa
   await expect(page.getByLabel("Connection URL")).toHaveValue("ws://localhost:8080");
 });
 
-test("settings expose bounded realtime controls and persist the selected presentation", async ({ page }, testInfo) => {
+test("WebSockets deep links load a profile and message independently", async ({ page }) => {
+  await page.goto("/websockets?profileId=mock-websocket-profile&messageId=mock-realtime-websocket-1");
+
+  await expect(page.getByLabel("Connection profile", { exact: true })).toHaveValue("mock-websocket-profile");
+  await expect(page.getByLabel("Connection URL")).toHaveValue("wss://events.example.test/orders");
+  await expect(page.getByLabel("Message name")).toHaveValue("Live order events");
+  await expect(page.getByLabel("Message protocol")).toHaveValue("websocket");
+  await expect(page).toHaveURL(/profileId=mock-websocket-profile/);
+  await expect(page).toHaveURL(/messageId=mock-realtime-websocket-1/);
+});
+
+test("New message keeps the current protocol and live session", async ({ page }) => {
+  await page.goto("/websockets");
+
+  await page.getByRole("button", { name: "Connect" }).click();
+  await expect(page.getByText("Connected", { exact: true }).first()).toBeVisible();
+  const composer = page.locator(".realtime-composer");
+  await composer.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(page.getByRole("log").getByText("Sent", { exact: true })).toBeVisible();
+
+  const sidebar = page.locator("aside.sidebar");
+  await sidebar.getByRole("button", { name: "Expand collection" }).first().click();
+  await sidebar.getByRole("button", { name: /Support presence/ }).click();
+  await expect(page.getByLabel("Message protocol")).toHaveValue("socketio");
+  await expect(composer.getByRole("button", { name: "Update", exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/messageId=mock-realtime-socketio-1/);
+
+  await page.getByLabel("Message name").fill("Unsaved Socket.IO edits");
+  await composer.getByRole("button", { name: "New", exact: true }).click();
+  const newMessageDialog = page.getByRole("dialog", { name: "Start a new message?" });
+  await expect(newMessageDialog).toBeVisible();
+  await expect(newMessageDialog.getByText("The connection and session transcript will be preserved.")).toBeVisible();
+  await newMessageDialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.getByLabel("Message name")).toHaveValue("Unsaved Socket.IO edits");
+
+  await composer.getByRole("button", { name: "New", exact: true }).click();
+  await newMessageDialog.getByRole("button", { name: "Discard and create" }).click();
+  await expect(page.getByLabel("Message name")).toHaveValue("Untitled Socket.IO message");
+  await expect(page.getByLabel("Message protocol")).toHaveValue("socketio");
+  await expect(page.getByLabel("Event")).toHaveValue("message");
+  await expect(composer.getByRole("button", { name: "Save", exact: true })).toBeVisible();
+  await expect(page).not.toHaveURL(/messageId=/);
+  await expect(page.getByText("Connected", { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("log").getByText("Sent", { exact: true })).toBeVisible();
+});
+
+test("settings expose bounded realtime controls and persist saved preferences", async ({ page }, testInfo) => {
   await page.goto("/settings");
 
   await expect(page.getByLabel("Connect timeout (seconds)")).toHaveValue("30");
@@ -364,6 +412,20 @@ test("settings expose bounded realtime controls and persist the selected present
   await expectNoSeriousAccessibilityViolations(page);
   await page.getByRole("heading", { name: "WebSockets" }).scrollIntoViewIfNeeded();
   await capture(page, testInfo, "realtime-settings-light");
+  await expect.poll(() => page.locator("form.settings-form").evaluate((form) => form.checkValidity())).toBe(true);
+
+  await page.getByLabel("Request timeout (ms)").fill("45000");
+  await page.getByLabel("Follow redirects automatically").uncheck();
+  await page.getByRole("button", { name: "Save settings" }).click();
+  await expect(page.getByText("Settings saved", { exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => {
+    const cached = JSON.parse(localStorage.getItem("postnot.settings") ?? "{}");
+    return { requestTimeoutMs: cached.requestTimeoutMs, followRedirects: cached.followRedirects };
+  })).toEqual({ requestTimeoutMs: 45_000, followRedirects: false });
+
+  await page.reload();
+  await expect(page.getByLabel("Request timeout (ms)")).toHaveValue("45000");
+  await expect(page.getByLabel("Follow redirects automatically")).not.toBeChecked();
 });
 
 test("collections explain lossless PostNot portability and Postman realtime omissions", async ({ page }, testInfo) => {

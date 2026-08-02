@@ -63,10 +63,11 @@
           class={["sidebar-utility-link", page.url.pathname.startsWith("/activity") && "sidebar-utility-link-active"]}
           href={resolve("/activity")}
           aria-current={page.url.pathname.startsWith("/activity") ? "page" : undefined}
-          title="MCP Activity"
+          aria-label="MCP integration"
+          title="MCP integration"
         >
           <McpGlyph name="activity" />
-          <span>Activity</span>
+          <span>MCP</span>
         </a>
         <a
           class={["sidebar-utility-link", "sidebar-settings-link", page.url.pathname.startsWith("/settings") && "sidebar-utility-link-active"]}

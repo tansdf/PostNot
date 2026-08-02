@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { readCachedJson, UI_CACHE_KEYS } from "$lib/ui-cache";
+import { readCachedJson, writeCachedJson, UI_CACHE_KEYS } from "$lib/ui-cache";
 import {
   type CollectionItemSummary,
   type CollectionSearchResult,
@@ -682,7 +682,9 @@ export async function getSettings(): Promise<AppSettings> {
     };
   }
 
-  return invoke<AppSettings>("get_settings");
+  const settings = await invoke<AppSettings>("get_settings");
+  writeCachedJson(UI_CACHE_KEYS.settings, settings);
+  return settings;
 }
 
 export async function getMcpSetupInfo(): Promise<McpSetupInfo> {
@@ -785,10 +787,13 @@ export async function listAgentActivity(afterId?: number, limit = 100): Promise<
 
 export async function updateSettings(settings: AppSettings): Promise<AppSettings> {
   if (!hasTauriRuntime()) {
+    writeCachedJson(UI_CACHE_KEYS.settings, settings);
     return settings;
   }
 
-  return invoke<AppSettings>("update_settings", { settings });
+  const updatedSettings = await invoke<AppSettings>("update_settings", { settings });
+  writeCachedJson(UI_CACHE_KEYS.settings, updatedSettings);
+  return updatedSettings;
 }
 
 export async function checkForUpdates(): Promise<UpdateCheckResult> {

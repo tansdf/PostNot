@@ -36,6 +36,7 @@
     onPing = () => {},
     onClose = () => {},
     onSend = () => {},
+    onNewMessage = () => {},
     onSave = () => {},
     onSaveAs = () => {},
     onSelectProfile = () => {},
@@ -64,6 +65,7 @@
     onPing?: () => Promise<void> | void;
     onClose?: (code: number, reason: string) => Promise<void> | void;
     onSend?: () => Promise<void> | void;
+    onNewMessage?: () => Promise<void> | void;
     onSave?: () => Promise<void> | void;
     onSaveAs?: () => Promise<void> | void;
     onSelectProfile?: (profileId: string) => Promise<void> | void;
@@ -500,6 +502,7 @@
       <label class="request-name-block"><span class="field-label">Message name</span><input class="text-input" value={message.name} oninput={(event) => (message = { ...message, name: event.currentTarget.value })} /></label>
       <label><span class="field-label">Message protocol</span><select class="method-select realtime-protocol-select" value={message.protocol} onchange={(event) => switchMessageProtocol(event.currentTarget.value as RealtimeProtocol)}><option value="websocket">WebSocket</option><option value="socketio">Socket.IO</option></select></label>
       <div class="realtime-message-primary-actions">
+        <button class="button-secondary button-large" type="button" onclick={onNewMessage} disabled={isSaving}>New</button>
         <SaveSplitControl
           label={selectedMessageId ? "Update" : "Save"}
           {isSaving}

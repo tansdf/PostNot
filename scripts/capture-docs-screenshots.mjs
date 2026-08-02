@@ -308,7 +308,7 @@ const captures = [
     }
   },
   {
-    path: "/websockets?savedRequestId=mock-realtime-websocket-1",
+    path: "/websockets?profileId=mock-websocket-profile&messageId=mock-realtime-websocket-1",
     file: "websockets-page.webp",
     waitFor: ".realtime-workspace",
     beforeCapture: async (page) => {

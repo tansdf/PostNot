@@ -83,7 +83,11 @@ requirePattern(indexHtml, /href="#realtime">WebSockets</, "docs/index.html: WebS
 requirePattern(indexHtml, /websockets-page\.webp/, "docs/index.html: WebSocket workspace screenshot is missing");
 requirePattern(indexHtml, /Transcript boundary:[^<]*<\/strong>\s*session-only/i, "docs/index.html: session-only transcript boundary is missing");
 requirePattern(indexHtml, /id="agents"/, "docs/index.html: agent MCP section is missing");
-requirePattern(indexHtml, /agents cannot send or delete requests/i, "docs/index.html: MCP authoring boundary is missing");
+requirePattern(
+  indexHtml,
+  /agents cannot execute requests or scripts, open realtime connections, or send traffic/i,
+  "docs/index.html: MCP execution boundary is missing"
+);
 requirePattern(indexHtml, /agent-activity-page\.webp/, "docs/index.html: Agent Activity screenshot is missing");
 requirePattern(indexHtml, /id="download"/, "docs/index.html: download section is missing");
 requirePattern(indexHtml, /data-download-platform=/, "docs/index.html: platform download cards are missing");
@@ -126,7 +130,7 @@ requirePattern(
 );
 requirePattern(
   screenshotCapture,
-  /path:\s*"\/websockets\?savedRequestId=mock-realtime-websocket-1"/,
+  /path:\s*"\/websockets\?profileId=mock-websocket-profile&messageId=mock-realtime-websocket-1"/,
   "scripts/capture-docs-screenshots.mjs: WebSocket workflow capture is missing"
 );
 if (/getByText\("Collection root"\)\.waitFor/.test(screenshotCapture)) {

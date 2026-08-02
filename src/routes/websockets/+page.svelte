@@ -42,6 +42,7 @@
   let saveTargetParentId: string | null = $state(null);
   let pendingCloseTabId = $state("");
   let pendingMessageId = $state("");
+  let isNewMessagePending = $state(false);
   let editorValid = $state(true);
   let lastHandledMessageId = $state("");
   let routeReady = $state(false);
@@ -88,7 +89,7 @@
     try {
       await Promise.all([realtimeWorkspace.ensureInitialized(), collections.ensureLoaded(), loadEnvironment(), refreshProfiles()]);
       if (requestedTabId) realtimeWorkspace.activateTab(requestedTabId);
-      if (requestedProfileId && ["disconnected", "failed"].includes(realtimeWorkspace.activeTab?.status ?? "")) await selectProfile(requestedProfileId);
+      if (requestedProfileId && ["disconnected", "failed"].includes(realtimeWorkspace.activeTab?.status ?? "")) await selectProfile(requestedProfileId, false);
       if (requestedMessageId) await handleRequestedMessage(requestedMessageId);
       routeReady = true;
       if (!pendingMessageId) await syncRoute();
@@ -140,10 +141,10 @@
     pendingMessageId = "";
     await syncRoute();
   }
-  async function selectProfile(id: string) {
+  async function selectProfile(id: string, shouldSyncRoute = true) {
     if (!id || !activeTab || !["disconnected", "failed"].includes(activeTab.status)) return;
     if (realtimeWorkspace.isConnectionDirty(activeTab) && !window.confirm("Discard unsaved connection edits and select this profile?")) return;
-    const profile = await getRealtimeConnectionProfile(id); realtimeWorkspace.selectProfile(activeTab.id, profile); connection = cloneRealtimeConnectionDraft(profile.connection); await syncRoute();
+    const profile = await getRealtimeConnectionProfile(id); realtimeWorkspace.selectProfile(activeTab.id, profile); connection = cloneRealtimeConnectionDraft(profile.connection); if (shouldSyncRoute) await syncRoute();
   }
   function newProfile() { if (!activeTab || !["disconnected", "failed"].includes(activeTab.status)) return; if (realtimeWorkspace.isConnectionDirty(activeTab) && !window.confirm("Discard unsaved connection edits?")) return; realtimeWorkspace.newConnection(activeTab.id, connection.protocol); connection = cloneRealtimeConnectionDraft(realtimeWorkspace.activeTab!.connectionDraft); }
   async function saveProfile(saveAs = false) {
@@ -180,6 +181,25 @@
     if (!collections.collections.length) { realtimeWorkspace.setError(activeTab.id, "Create a collection first."); return; }
     saveAsMessage = saveAs; saveDialogTabId = activeTab.id; saveTargetCollectionId = activeTab.collectionId || collections.selectedCollectionId || collections.collections[0].id; saveTargetParentId = activeTab.parentId ?? null; await collections.loadCollectionItems(saveTargetCollectionId); isSaveDialogOpen = true;
   }
+  async function newMessage() {
+    if (!activeTab) return;
+    if (realtimeWorkspace.isMessageDirty(activeTab)) {
+      isNewMessagePending = true;
+      return;
+    }
+    await replaceWithNewMessage();
+  }
+  async function replaceWithNewMessage() {
+    const tab = realtimeWorkspace.activeTab;
+    isNewMessagePending = false;
+    if (!tab) return;
+    const protocol = message.protocol;
+    realtimeWorkspace.newMessage(tab.id, protocol);
+    draftOwnerTabId = tab.id;
+    message = cloneRealtimeMessageDraft(realtimeWorkspace.activeTab!.messageDraft);
+    await syncRoute();
+    lastHandledMessageId = "";
+  }
   async function confirmSave() { const tab = realtimeWorkspace.tabs.find((item) => item.id === saveDialogTabId); if (!tab) return; const saved = await collections.saveNewRealtimeMessage(saveTargetCollectionId, cloneRealtimeMessageDraft(tab.messageDraft), saveTargetParentId); if (!saved) return; if (!saveAsMessage) realtimeWorkspace.setMessageSaved(tab.id, saved, tab.messageDraft); isSaveDialogOpen = false; await syncRoute(); }
   async function reloadMessage() { if (!activeTab?.selectedMessageId) return; const saved = await getSavedRealtimeMessage(activeTab.selectedMessageId); realtimeWorkspace.replaceSavedMessage(activeTab.id, saved); message = cloneRealtimeMessageDraft(saved.message); }
   async function reloadProfile() { if (activeTab?.selectedProfileId && ["disconnected", "failed"].includes(activeTab.status)) await selectProfile(activeTab.selectedProfileId); }
@@ -212,6 +232,7 @@
         onPing={() => realtimeWorkspace.ping(activeTab.id)}
         onClose={(code, reason) => realtimeWorkspace.closeGracefully(activeTab.id, code, reason)}
         onSend={send}
+        onNewMessage={newMessage}
         onSave={() => saveMessage()}
         onSaveAs={() => saveMessage(true)}
         onSelectProfile={selectProfile}
@@ -232,5 +253,6 @@
 </div>
 <svelte:window onkeydown={handleWindowKeydown} />
 {#if isSaveDialogOpen}<CollectionSaveDialog title="Save realtime message" titleId="save-realtime-message-title" confirmLabel="Save message" collections={collections.collections} folders={collections.folderTargets(saveTargetCollectionId)} selectedCollectionId={saveTargetCollectionId} selectedParentId={saveTargetParentId} isSaving={collections.isSavingRequest} onSelectCollection={async (id) => { saveTargetCollectionId = id; saveTargetParentId = null; await collections.loadCollectionItems(id); }} onSelectFolder={(id) => (saveTargetParentId = id)} onConfirm={confirmSave} onDismiss={() => (isSaveDialogOpen = false)} />{/if}
+{#if isNewMessagePending}<DialogShell ariaLabelledby="new-realtime-message-title" onDismiss={() => (isNewMessagePending = false)} sizeClass="save-dialog"><div class="editor-header"><h2 id="new-realtime-message-title">Start a new message?</h2></div><div class="editor-block"><p>The active message has unsaved changes. Discard them and start with an empty {message.protocol === "socketio" ? "Socket.IO" : "WebSocket"} message?</p><p class="feedback feedback-warning">The connection and session transcript will be preserved.</p><div class="collections-page-actions"><button class="button-danger" type="button" onclick={replaceWithNewMessage}>Discard and create</button><button class="button-secondary" type="button" onclick={() => (isNewMessagePending = false)}>Cancel</button></div></div></DialogShell>{/if}
 {#if pendingMessageId}<DialogShell ariaLabelledby="replace-realtime-message-title" onDismiss={cancelPendingMessage} sizeClass="save-dialog"><div class="editor-header"><h2 id="replace-realtime-message-title">Replace message draft?</h2></div><div class="editor-block"><p>The active tab has unsaved message changes. Discard them and open the selected collection message?</p><p class="feedback feedback-warning">The connection and session transcript will be preserved.</p><div class="collections-page-actions"><button class="button-danger" type="button" onclick={confirmPendingMessage}>Discard and open</button><button class="button-secondary" type="button" onclick={cancelPendingMessage}>Cancel</button></div></div></DialogShell>{/if}
 {#if pendingCloseTabId}{@const closingTab = realtimeWorkspace.tabs.find((tab) => tab.id === pendingCloseTabId)}<DialogShell ariaLabelledby="close-realtime-tab-title" onDismiss={() => (pendingCloseTabId = "")} sizeClass="save-dialog"><div class="editor-header"><h2 id="close-realtime-tab-title">Close connection tab?</h2></div><div class="editor-block"><p>Close <strong>{closingTab?.connectionDraft.name ?? "this connection"}</strong>? Active sessions will be disconnected.</p>{#if closingTab && realtimeWorkspace.isDirty(closingTab)}<p class="feedback feedback-warning">Unsaved connection or message changes will be discarded.</p>{/if}<div class="collections-page-actions"><button class="button-danger" type="button" onclick={confirmCloseTab}>Close tab</button><button class="button-secondary" type="button" onclick={() => (pendingCloseTabId = "")}>Cancel</button></div></div></DialogShell>{/if}

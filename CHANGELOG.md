@@ -6,14 +6,18 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-08-02
+
 ### Added
 
+- Added a message-composer New action that replaces the current draft with an empty message of the same protocol while preserving the selected connection, live session, and transcript.
 - Added standalone WebSocket and Socket.IO connection profiles with inline create, save, duplicate, delete, import, and redacted-by-default export controls.
-- Added separate optimistic MCP tools and Agent Activity records for realtime connection profiles and collection messages.
+- Added separate optimistic MCP tools and persistent MCP audit records for realtime connection profiles and collection messages.
 
 ### Changed
 
-- Reorganized the application sidebar into compact workspace controls, a height-filling Collections tree, and anchored utility navigation so saved requests retain substantially more working space.
+- Reorganized the application sidebar into compact workspace controls, a height-filling Collections tree, and anchored Environment, MCP, and Settings utilities so saved requests retain substantially more working space.
+- Renamed the integration utility and mutation feed around MCP terminology and clarified that its authoring boundary prohibits network execution rather than all deletion.
 - Split realtime persistence and workspace editing into independently selected connection profiles and message-only collection items. A tab now keeps one live WebSocket or Socket.IO session while messages are selected, edited, and sent without reconnecting or clearing its transcript.
 - Renamed live runtime connection identifiers to session identifiers, locked connection editing while a session is active, and rejected protocol-incompatible messages before they reach the transport.
 - Bumped PostNot collection portability to version 2 for message-only realtime entries while continuing to import version 1 combined entries by splitting them into profiles and messages.
@@ -22,8 +26,10 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ### Fixed
 
+- Corrected invalid WebSocket storage-limit input steps that prevented the Settings form from submitting, and kept the shared settings cache synchronized after successful reads and saves.
 - Added an atomic, idempotent upgrader for the direct `realtime_request_json` to `realtime_message_json` schema rename, legacy combined records, and persisted workspace drafts.
 - Prevented opening the WebSockets workspace from replacing the current message or showing a discard prompt; opening a saved realtime message now activates the workspace before asking about dirty message edits.
+- Preserved both profile and message selection when opening a realtime deep link containing `profileId` and `messageId`.
 - Prevented stale Playbooks loads, searches, and run details from replacing newer user selections.
 - Serialized and coalesced rapid edits to the same playbook step so the latest values remain visible and are persisted in the correct order.
 

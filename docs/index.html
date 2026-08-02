@@ -43,7 +43,7 @@
         "operatingSystem": "Windows, macOS, Linux",
         "url": "https://post-not.com/",
         "downloadUrl": "https://github.com/tansdf/PostNot/releases/latest",
-        "softwareVersion": "0.23.0",
+        "softwareVersion": "0.24.0",
         "license": "https://www.apache.org/licenses/LICENSE-2.0",
         "isAccessibleForFree": true,
         "description": "A private, local-first desktop API client with no account or cloud workspace.",
@@ -197,13 +197,14 @@
               <p class="workflow__number">Workflow 02</p>
               <h3>Open live API connections</h3>
               <p>
-                Keep raw WebSocket and Socket.IO connections in reusable tabs, send structured or binary
-                messages, and inspect live traffic without mixing it into HTTP request history.
+                Select a standalone WebSocket or Socket.IO connection profile, then compose and switch
+                collection messages while one live tab session and its transcript stay intact.
               </p>
               <ul class="check-list">
                 <li>Headers, cookies, auth, query parameters, subprotocols, and namespaces</li>
                 <li>Text, tokenized JSON, binary payloads, events, acknowledgements, ping, and pong</li>
-                <li>Saved connection definitions, environment resolution, and opt-in reconnection</li>
+                <li>Reusable connection profiles selected independently from saved collection messages</li>
+                <li>One continuous session while messages are selected, edited, and sent</li>
               </ul>
               <p class="workflow__boundary"><strong>Transcript boundary:</strong> session-only and cleared when the app closes.</p>
             </div>
@@ -213,7 +214,7 @@
                 type="button"
                 data-screenshot-src="images/websockets-page.webp"
                 data-screenshot-title="WebSocket workspace"
-                data-screenshot-alt="PostNot WebSocket workspace with a connected saved definition, JSON message composer, and live session transcript"
+                data-screenshot-alt="PostNot WebSocket workspace with a selected connection profile, separate collection message, and live session transcript"
               >
                 <img
                   src="images/websockets-page-960.webp"
@@ -221,12 +222,12 @@
                   sizes="(min-width: 860px) 52vw, 100vw"
                   width="1995"
                   height="1179"
-                  alt="PostNot WebSocket workspace with a connected saved definition, JSON message composer, and live session transcript"
+                  alt="PostNot WebSocket workspace with a selected connection profile, separate collection message, and live session transcript"
                   loading="lazy"
                 />
                 <span class="screenshot-trigger__label">Open full screenshot</span>
               </button>
-              <figcaption>Connect, send JSON, and inspect both directions of the session transcript in one workspace.</figcaption>
+              <figcaption>Reuse one connection and transcript while composing or selecting multiple compatible messages.</figcaption>
             </figure>
           </article>
 
@@ -271,25 +272,26 @@
           <article id="agents" class="workflow">
             <div class="workflow__copy">
               <p class="workflow__number">Workflow 04</p>
-              <h3>Author requests with local AI agents</h3>
+              <h3>Author API resources with local AI agents</h3>
               <p>
-                Connect a compatible MCP client to inspect your workspace and prepare reusable
-                collections, folders, and saved requests while PostNot keeps execution in your hands.
+                Connect a compatible MCP client to inspect your workspace and prepare reusable HTTP
+                requests, realtime connection profiles, and collection messages while PostNot keeps execution in your hands.
               </p>
               <ul class="check-list">
                 <li>Read masked request details and resolved previews</li>
-                <li>Create hierarchies and atomically create or update requests</li>
-                <li>Review every mutation in persistent Agent Activity</li>
+                <li>Create hierarchies and atomically create or update HTTP requests</li>
+                <li>Manage standalone realtime profiles and messages with revision checks</li>
+                <li>Review every mutation in the persistent MCP Integration feed</li>
               </ul>
-              <p class="workflow__boundary"><strong>First-release boundary:</strong> agents cannot send or delete requests.</p>
+              <p class="workflow__boundary"><strong>Execution boundary:</strong> agents cannot execute requests or scripts, open realtime connections, or send traffic.</p>
             </div>
             <figure class="product-shot">
               <button
                 class="screenshot-trigger"
                 type="button"
                 data-screenshot-src="images/agent-activity-page.webp"
-                data-screenshot-title="MCP Integration and Agent Activity"
-                data-screenshot-alt="PostNot MCP Integration workspace showing local authoring safeguards and recorded agent changes"
+                data-screenshot-title="MCP Integration"
+                data-screenshot-alt="PostNot MCP Integration workspace showing local authoring safeguards and recorded MCP changes"
               >
                 <img
                   src="images/agent-activity-page-960.webp"
@@ -297,12 +299,12 @@
                   sizes="(min-width: 860px) 52vw, 100vw"
                   width="1995"
                   height="1179"
-                  alt="PostNot MCP Integration workspace showing local authoring safeguards and recorded agent changes"
+                  alt="PostNot MCP Integration workspace showing local authoring safeguards and recorded MCP changes"
                   loading="lazy"
                 />
                 <span class="screenshot-trigger__label">Open full screenshot</span>
               </button>
-              <figcaption>Connect over local stdio, keep send and delete unavailable, and review recorded changes.</figcaption>
+              <figcaption>Connect over local stdio, keep network execution unavailable, and review recorded changes.</figcaption>
             </figure>
           </article>
 
@@ -420,7 +422,7 @@
         <ol class="data-flow">
           <li>
             <span class="data-flow__number">1</span>
-            <div><h3>Workspace</h3><p>Requests, saved connections, collections, environments, settings, and HTTP history live under the Tauri app data directory in SQLite. Live transcripts remain session-only.</p></div>
+            <div><h3>Workspace</h3><p>Requests, standalone connection profiles, collection messages, environments, settings, and HTTP history live under the Tauri app data directory in SQLite. Live transcripts remain session-only.</p></div>
           </li>
           <li>
             <span class="data-flow__number">2</span>
@@ -428,7 +430,7 @@
           </li>
           <li>
             <span class="data-flow__number">3</span>
-            <div><h3>Agents</h3><p>MCP discovery omits secret values, masks credential-looking literals, and records changed field names without retaining request values in activity logs.</p></div>
+            <div><h3>Agents</h3><p>MCP discovery omits secret values, masks credential-looking literals, and records mutation metadata without retaining request or realtime values in its integration log.</p></div>
           </li>
           <li>
             <span class="data-flow__number">4</span>

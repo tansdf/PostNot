@@ -1961,6 +1961,7 @@ select option {
   text-decoration: none;
   font-size: var(--font-label);
   font-weight: 600;
+  line-height: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2042,17 +2043,22 @@ select option {
 
 .sidebar-plus-button {
   border: 1px solid var(--sidebar-card-border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--sidebar-link-bg);
   color: var(--text-inverse);
-  width: var(--control-height-md);
-  height: var(--control-height-md);
-  font-size: 1.2rem;
-  line-height: 1;
+  width: var(--control-height-sm);
+  height: var(--control-height-sm);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0;
+}
+
+.sidebar-plus-button svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 2;
+  stroke-linecap: round;
 }
 
 .sidebar-plus-button:hover:not(:disabled) {
