@@ -17,7 +17,9 @@ use url::Url;
 
 use crate::{
     domain::{
-        realtime::{RealtimeRequestDraft, SocketIoComposer, SocketIoTransport},
+        realtime::{
+            RealtimeConnectionDraft, RealtimeMessageDraft, SocketIoComposer, SocketIoTransport,
+        },
         requests::RequestAuth,
     },
     error::{AppError, AppResult},
@@ -25,7 +27,7 @@ use crate::{
         realtime_payload_service::RealtimePayload,
         realtime_resolution_service::sanitize_error,
         realtime_service::{
-            ensure_message_size, read_binary_source, RealtimeConnectionStatus, RealtimeSendMessage,
+            ensure_message_size, read_binary_source, RealtimeConnectionStatus,
             RealtimeTranscriptDirection, RealtimeTranscriptKind, RuntimeSession, SessionCommand,
         },
     },
@@ -33,10 +35,10 @@ use crate::{
 
 pub(crate) async fn run_socketio(
     session: Arc<RuntimeSession>,
-    request: RealtimeRequestDraft,
+    request: RealtimeConnectionDraft,
     mut commands: tokio::sync::mpsc::Receiver<SessionCommand>,
 ) {
-    let RealtimeRequestDraft::Socketio {
+    let RealtimeConnectionDraft::Socketio {
         common,
         path,
         namespace,
@@ -490,7 +492,7 @@ async fn handle_socketio_command(
 ) -> AppResult<SocketIoCommandOutcome> {
     match command {
         SessionCommand::Send {
-            message: RealtimeSendMessage::Socketio { composer },
+            message: RealtimeMessageDraft::Socketio { composer, .. },
             secret_values,
             used_secret,
         } => {
@@ -498,7 +500,7 @@ async fn handle_socketio_command(
             Ok(SocketIoCommandOutcome::Continue)
         }
         SessionCommand::Send {
-            message: RealtimeSendMessage::Websocket { .. },
+            message: RealtimeMessageDraft::Websocket { .. },
             ..
         } => Err(AppError::Message(
             "A raw WebSocket message cannot be sent through a Socket.IO connection.".to_string(),
@@ -851,8 +853,8 @@ mod tests {
 
     use crate::domain::{
         realtime::{
-            BinaryPayloadSource, RealtimeRequestCommon, RealtimeRequestDraft, ReconnectPolicy,
-            SocketIoComposer,
+            BinaryPayloadSource, RealtimeConnectionCommon, RealtimeConnectionDraft,
+            RealtimeMessageDraft, ReconnectPolicy, SocketIoComposer,
         },
         requests::RequestAuth,
     };
@@ -860,7 +862,7 @@ mod tests {
         realtime_payload_service::{RealtimePayload, RealtimePayloadStore},
         realtime_service::{
             RealtimeConnectInput, RealtimeConnectionManager, RealtimeConnectionStatus,
-            RealtimeRuntimeLimits, RealtimeSendMessage, RealtimeTranscriptKind,
+            RealtimeRuntimeLimits, RealtimeTranscriptKind,
         },
     };
 
@@ -868,7 +870,7 @@ mod tests {
 
     #[test]
     fn rejects_reserved_transport_query_keys() {
-        let request = RealtimeRequestCommon {
+        let request = RealtimeConnectionCommon {
             name: "Socket".to_string(),
             url: "http://localhost:3000".to_string(),
             query_params: vec![crate::domain::requests::KeyValueRow {
@@ -961,7 +963,7 @@ mod tests {
         let payloads = RealtimePayloadStore::new(root.clone());
         payloads.reset().await.expect("reset");
         let manager = RealtimeConnectionManager::new(payloads);
-        let connection_id = "reconnect";
+        let session_id = "reconnect";
         let request = socketio_fixture_request(
             fixture.port,
             SocketIoTransport::Auto,
@@ -975,8 +977,8 @@ mod tests {
         manager
             .connect(
                 RealtimeConnectInput {
-                    connection_id: connection_id.to_string(),
-                    request: request.clone(),
+                    session_id: session_id.to_string(),
+                    connection: request.clone(),
                 },
                 request,
                 Vec::new(),
@@ -985,11 +987,12 @@ mod tests {
             )
             .await
             .expect("connect fixture");
-        wait_for_status(&manager, connection_id, RealtimeConnectionStatus::Connected).await;
+        wait_for_status(&manager, session_id, RealtimeConnectionStatus::Connected).await;
         manager
             .send(
-                connection_id,
-                RealtimeSendMessage::Socketio {
+                session_id,
+                RealtimeMessageDraft::Socketio {
+                    name: "Drop transport".to_string(),
                     composer: SocketIoComposer {
                         event: "drop-transport".to_string(),
                         arguments: serde_json::json!([]),
@@ -1005,7 +1008,7 @@ mod tests {
             .expect("force transport loss");
 
         for _ in 0..500 {
-            let snapshot = manager.snapshot(connection_id).expect("snapshot");
+            let snapshot = manager.snapshot(session_id).expect("snapshot");
             let connection_meta_events = snapshot
                 .transcript
                 .iter()
@@ -1018,7 +1021,7 @@ mod tests {
                 && saw_reconnect
                 && snapshot.status == RealtimeConnectionStatus::Connected
             {
-                manager.release(connection_id).await.expect("release");
+                manager.release(session_id).await.expect("release");
                 fixture.stop();
                 let _ = tokio::fs::remove_dir_all(root).await;
                 return;
@@ -1026,7 +1029,7 @@ mod tests {
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
 
-        let snapshot = manager.snapshot(connection_id).expect("final snapshot");
+        let snapshot = manager.snapshot(session_id).expect("final snapshot");
         panic!(
             "Socket.IO fixture did not reconnect after transport loss: {}",
             serde_json::to_string(&snapshot).expect("snapshot JSON")
@@ -1041,7 +1044,7 @@ mod tests {
         let payloads = RealtimePayloadStore::new(root.clone());
         payloads.reset().await.expect("reset");
         let manager = RealtimeConnectionManager::new(payloads);
-        let connection_id = "reconnect-exhaustion";
+        let session_id = "reconnect-exhaustion";
         let request = socketio_fixture_request(
             fixture.port,
             SocketIoTransport::Auto,
@@ -1055,8 +1058,8 @@ mod tests {
         manager
             .connect(
                 RealtimeConnectInput {
-                    connection_id: connection_id.to_string(),
-                    request: request.clone(),
+                    session_id: session_id.to_string(),
+                    connection: request.clone(),
                 },
                 request,
                 Vec::new(),
@@ -1065,11 +1068,12 @@ mod tests {
             )
             .await
             .expect("connect fixture");
-        wait_for_status(&manager, connection_id, RealtimeConnectionStatus::Connected).await;
+        wait_for_status(&manager, session_id, RealtimeConnectionStatus::Connected).await;
         manager
             .send(
-                connection_id,
-                RealtimeSendMessage::Socketio {
+                session_id,
+                RealtimeMessageDraft::Socketio {
+                    name: "Drop server".to_string(),
                     composer: SocketIoComposer {
                         event: "drop-server".to_string(),
                         arguments: serde_json::json!([]),
@@ -1085,13 +1089,13 @@ mod tests {
             .expect("stop fixture transport");
 
         for _ in 0..500 {
-            let snapshot = manager.snapshot(connection_id).expect("snapshot");
+            let snapshot = manager.snapshot(session_id).expect("snapshot");
             if snapshot.status == RealtimeConnectionStatus::Failed {
                 assert!(snapshot
                     .transcript
                     .iter()
                     .any(|entry| entry.label.contains("attempts exhausted")));
-                manager.release(connection_id).await.expect("release");
+                manager.release(session_id).await.expect("release");
                 fixture.stop();
                 let _ = tokio::fs::remove_dir_all(root).await;
                 return;
@@ -1099,7 +1103,7 @@ mod tests {
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
 
-        let snapshot = manager.snapshot(connection_id).expect("final snapshot");
+        let snapshot = manager.snapshot(session_id).expect("final snapshot");
         panic!(
             "Socket.IO reconnect exhaustion did not terminate the session: {}",
             serde_json::to_string(&snapshot).expect("snapshot JSON")
@@ -1114,7 +1118,7 @@ mod tests {
         let payloads = RealtimePayloadStore::new(root.clone());
         payloads.reset().await.expect("reset");
         let manager = RealtimeConnectionManager::new(payloads);
-        let connection_id = "no-reconnect";
+        let session_id = "no-reconnect";
         let request = socketio_fixture_request(
             fixture.port,
             SocketIoTransport::Auto,
@@ -1123,8 +1127,8 @@ mod tests {
         manager
             .connect(
                 RealtimeConnectInput {
-                    connection_id: connection_id.to_string(),
-                    request: request.clone(),
+                    session_id: session_id.to_string(),
+                    connection: request.clone(),
                 },
                 request,
                 Vec::new(),
@@ -1133,11 +1137,12 @@ mod tests {
             )
             .await
             .expect("connect fixture");
-        wait_for_status(&manager, connection_id, RealtimeConnectionStatus::Connected).await;
+        wait_for_status(&manager, session_id, RealtimeConnectionStatus::Connected).await;
         manager
             .send(
-                connection_id,
-                RealtimeSendMessage::Socketio {
+                session_id,
+                RealtimeMessageDraft::Socketio {
+                    name: "Drop server".to_string(),
                     composer: SocketIoComposer {
                         event: "drop-server".to_string(),
                         arguments: serde_json::json!([]),
@@ -1154,16 +1159,16 @@ mod tests {
 
         wait_for_status(
             &manager,
-            connection_id,
+            session_id,
             RealtimeConnectionStatus::Disconnected,
         )
         .await;
-        let snapshot = manager.snapshot(connection_id).expect("snapshot");
+        let snapshot = manager.snapshot(session_id).expect("snapshot");
         assert!(snapshot
             .transcript
             .iter()
             .any(|entry| entry.label == "Socket.IO connection closed"));
-        manager.release(connection_id).await.expect("release");
+        manager.release(session_id).await.expect("release");
         fixture.stop();
         let _ = tokio::fs::remove_dir_all(root).await;
     }
@@ -1171,15 +1176,15 @@ mod tests {
     async fn exercise_transport(
         manager: &RealtimeConnectionManager,
         port: u16,
-        connection_id: &str,
+        session_id: &str,
         transport: SocketIoTransport,
     ) {
         let request = socketio_fixture_request(port, transport, ReconnectPolicy::default());
         manager
             .connect(
                 RealtimeConnectInput {
-                    connection_id: connection_id.to_string(),
-                    request: request.clone(),
+                    session_id: session_id.to_string(),
+                    connection: request.clone(),
                 },
                 request,
                 Vec::new(),
@@ -1188,11 +1193,12 @@ mod tests {
             )
             .await
             .expect("connect fixture");
-        wait_for_status(manager, connection_id, RealtimeConnectionStatus::Connected).await;
+        wait_for_status(manager, session_id, RealtimeConnectionStatus::Connected).await;
         manager
             .send(
-                connection_id,
-                RealtimeSendMessage::Socketio {
+                session_id,
+                RealtimeMessageDraft::Socketio {
+                    name: "Echo".to_string(),
                     composer: SocketIoComposer {
                         event: "echo".to_string(),
                         arguments: serde_json::json!([{"hello": "world"}]),
@@ -1208,8 +1214,9 @@ mod tests {
             .expect("send fixture event");
         manager
             .send(
-                connection_id,
-                RealtimeSendMessage::Socketio {
+                session_id,
+                RealtimeMessageDraft::Socketio {
+                    name: "Binary echo".to_string(),
                     composer: SocketIoComposer {
                         event: "binary-echo".to_string(),
                         arguments: serde_json::json!([]),
@@ -1227,7 +1234,7 @@ mod tests {
             .expect("send fixture binary event");
 
         for _ in 0..300 {
-            let snapshot = manager.snapshot(connection_id).expect("snapshot");
+            let snapshot = manager.snapshot(session_id).expect("snapshot");
             let has_json_ack = snapshot.transcript.iter().any(|entry| {
                 entry.kind == RealtimeTranscriptKind::Ack
                     && entry.event_name.as_deref() == Some("echo")
@@ -1251,12 +1258,12 @@ mod tests {
                 .iter()
                 .find(|entry| entry.event_name.as_deref() == Some("connection-meta"));
             if has_json_ack && has_binary_ack && meta.is_some_and(meta_contains_fixture_values) {
-                manager.release(connection_id).await.expect("release");
+                manager.release(session_id).await.expect("release");
                 return;
             }
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
-        let snapshot = manager.snapshot(connection_id).expect("final snapshot");
+        let snapshot = manager.snapshot(session_id).expect("final snapshot");
         panic!(
             "Socket.IO fixture did not produce metadata and acknowledgement: {}",
             serde_json::to_string(&snapshot).expect("snapshot JSON")
@@ -1267,9 +1274,9 @@ mod tests {
         port: u16,
         transport: SocketIoTransport,
         reconnect: ReconnectPolicy,
-    ) -> RealtimeRequestDraft {
-        RealtimeRequestDraft::Socketio {
-            common: RealtimeRequestCommon {
+    ) -> RealtimeConnectionDraft {
+        RealtimeConnectionDraft::Socketio {
+            common: RealtimeConnectionCommon {
                 name: "Socket.IO fixture".to_string(),
                 url: format!("http://127.0.0.1:{port}"),
                 query_params: vec![crate::domain::requests::KeyValueRow {
@@ -1291,7 +1298,6 @@ mod tests {
             namespace: "/admin".to_string(),
             auth_payload: serde_json::json!({"token": "auth-ok"}),
             transport,
-            composer: SocketIoComposer::default(),
         }
     }
 
@@ -1317,11 +1323,11 @@ mod tests {
 
     async fn wait_for_status(
         manager: &RealtimeConnectionManager,
-        connection_id: &str,
+        session_id: &str,
         expected: RealtimeConnectionStatus,
     ) {
         for _ in 0..300 {
-            let snapshot = manager.snapshot(connection_id).expect("snapshot");
+            let snapshot = manager.snapshot(session_id).expect("snapshot");
             if snapshot.status == expected {
                 return;
             }

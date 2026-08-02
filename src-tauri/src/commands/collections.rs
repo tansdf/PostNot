@@ -6,11 +6,11 @@ use crate::{
         collections::{
             CollectionItemSummary, CollectionSearchResult, CollectionSidebarState,
             CollectionSummary, CreateCollectionFolderInput, CreateCollectionInput,
-            MoveCollectionItemInput, SavedRealtimeRequestDetail, SavedRealtimeRequestSummary,
+            MoveCollectionItemInput, SavedRealtimeMessageDetail, SavedRealtimeMessageSummary,
             SavedRequestDetail, SavedRequestSummary, UpdateCollectionFolderInput,
         },
         exports::CollectionExportResult,
-        realtime::RealtimeRequestDraft,
+        realtime::RealtimeMessageDraft,
         requests::SendRequestPayload,
     },
     error::AppResult,
@@ -148,51 +148,51 @@ pub async fn get_saved_request(
 }
 
 #[tauri::command]
-pub async fn list_saved_realtime_requests(
+pub async fn list_saved_realtime_messages(
     state: State<'_, AppState>,
     collection_id: String,
-) -> AppResult<Vec<SavedRealtimeRequestSummary>> {
-    collections_service::list_saved_realtime_requests(state.db(), &collection_id).await
+) -> AppResult<Vec<SavedRealtimeMessageSummary>> {
+    collections_service::list_saved_realtime_messages(state.db(), &collection_id).await
 }
 
 #[tauri::command]
-pub async fn save_realtime_request_to_collection(
+pub async fn save_realtime_message_to_collection(
     state: State<'_, AppState>,
     collection_id: String,
     parent_id: Option<String>,
-    request: RealtimeRequestDraft,
-) -> AppResult<SavedRealtimeRequestSummary> {
-    collections_service::save_realtime_request(
+    message: RealtimeMessageDraft,
+) -> AppResult<SavedRealtimeMessageSummary> {
+    collections_service::save_realtime_message(
         state.db(),
         &collection_id,
         parent_id.as_deref(),
-        &request,
+        &message,
     )
     .await
 }
 
 #[tauri::command]
-pub async fn update_saved_realtime_request(
+pub async fn update_saved_realtime_message(
     state: State<'_, AppState>,
     item_id: String,
-    request: RealtimeRequestDraft,
+    message: RealtimeMessageDraft,
     expected_updated_at: Option<String>,
-) -> AppResult<SavedRealtimeRequestSummary> {
-    collections_service::update_saved_realtime_request_with_revision(
+) -> AppResult<SavedRealtimeMessageSummary> {
+    collections_service::update_saved_realtime_message_with_revision(
         state.db(),
         &item_id,
-        &request,
+        &message,
         expected_updated_at.as_deref(),
     )
     .await
 }
 
 #[tauri::command]
-pub async fn get_saved_realtime_request(
+pub async fn get_saved_realtime_message(
     state: State<'_, AppState>,
     item_id: String,
-) -> AppResult<SavedRealtimeRequestDetail> {
-    collections_service::get_saved_realtime_request(state.db(), &item_id).await
+) -> AppResult<SavedRealtimeMessageDetail> {
+    collections_service::get_saved_realtime_message(state.db(), &item_id).await
 }
 
 #[tauri::command]
@@ -206,11 +206,11 @@ pub async fn delete_saved_request(state: State<'_, AppState>, item_id: String) -
 }
 
 #[tauri::command]
-pub async fn delete_saved_realtime_request(
+pub async fn delete_saved_realtime_message(
     state: State<'_, AppState>,
     item_id: String,
 ) -> AppResult<()> {
-    collections_service::delete_saved_realtime_request(state.db(), &item_id).await
+    collections_service::delete_saved_realtime_message(state.db(), &item_id).await
 }
 
 #[tauri::command]

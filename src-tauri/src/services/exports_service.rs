@@ -5,14 +5,14 @@ use sqlx::SqlitePool;
 
 use crate::{
     domain::{
-        collections::{CollectionItemSummary, SavedRealtimeRequestDetail, SavedRequestDetail},
+        collections::{CollectionItemSummary, SavedRealtimeMessageDetail, SavedRequestDetail},
         environments::EnvironmentVariable,
         exports::{CollectionExportResult, ExportResult},
         portability::{
             PostNotCollectionDocument, PostNotCollectionItem, PostNotCollectionMetadata,
             POSTNOT_COLLECTION_SCHEMA, POSTNOT_COLLECTION_VERSION,
         },
-        realtime::VersionedRealtimeRequest,
+        realtime::VersionedRealtimeMessage,
         requests::{FileRow, KeyValueRow, RequestAuth, RequestBody},
     },
     error::{AppError, AppResult},
@@ -69,7 +69,7 @@ pub async fn export_collection_with_format(
         Vec::new()
     } else {
         vec![format!(
-            "{omitted_count} realtime request{} omitted because Postman collection export supports HTTP requests only.",
+            "{omitted_count} realtime message{} omitted because Postman collection export supports HTTP requests only.",
             if omitted_count == 1 { " was" } else { "s were" }
         )]
     };
@@ -124,10 +124,10 @@ pub(crate) async fn serialize_postnot_collection(
             .into_iter()
             .map(|request| (request.id.clone(), request))
             .collect();
-    let mut realtime_requests = HashMap::new();
-    for summary in collections_service::list_saved_realtime_requests(pool, collection_id).await? {
-        let detail = collections_service::get_saved_realtime_request(pool, &summary.id).await?;
-        realtime_requests.insert(summary.id, detail);
+    let mut realtime_messages = HashMap::new();
+    for summary in collections_service::list_saved_realtime_messages(pool, collection_id).await? {
+        let detail = collections_service::get_saved_realtime_message(pool, &summary.id).await?;
+        realtime_messages.insert(summary.id, detail);
     }
     let document = PostNotCollectionDocument {
         schema: POSTNOT_COLLECTION_SCHEMA.to_string(),
@@ -138,7 +138,7 @@ pub(crate) async fn serialize_postnot_collection(
             pre_request_script: collection.pre_request_script,
             test_script: collection.test_script,
         },
-        items: map_postnot_collection_items(&items, &http_requests, &realtime_requests)?,
+        items: map_postnot_collection_items(&items, &http_requests, &realtime_messages)?,
     };
     Ok((serde_json::to_string_pretty(&document)?, collection.name))
 }
@@ -279,7 +279,7 @@ fn map_collection_items(
 fn map_postnot_collection_items(
     items: &[CollectionItemSummary],
     http_requests: &HashMap<String, SavedRequestDetail>,
-    realtime_requests: &HashMap<String, SavedRealtimeRequestDetail>,
+    realtime_messages: &HashMap<String, SavedRealtimeMessageDetail>,
 ) -> AppResult<Vec<PostNotCollectionItem>> {
     items
         .iter()
@@ -291,7 +291,7 @@ fn map_postnot_collection_items(
                 items: map_postnot_collection_items(
                     &item.children,
                     http_requests,
-                    realtime_requests,
+                    realtime_messages,
                 )?,
             }),
             "request" if item.request_type.as_deref() == Some("http") => {
@@ -306,14 +306,14 @@ fn map_postnot_collection_items(
                 })
             }
             "request" if matches!(item.request_type.as_deref(), Some("websocket" | "socketio")) => {
-                let request = realtime_requests.get(&item.id).ok_or_else(|| {
+                let message = realtime_messages.get(&item.id).ok_or_else(|| {
                     AppError::Message(format!(
-                        "Saved realtime request details were missing for collection item {}.",
+                        "Saved realtime message details were missing for collection item {}.",
                         item.id
                     ))
                 })?;
-                Ok(PostNotCollectionItem::Realtime {
-                    request: VersionedRealtimeRequest::new(request.request.clone()),
+                Ok(PostNotCollectionItem::Message {
+                    message: VersionedRealtimeMessage::new(message.message.clone()),
                 })
             }
             "request" => Err(AppError::Message(format!(

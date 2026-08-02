@@ -45,15 +45,20 @@ fn headless_mode_negotiates_and_lists_authoring_tools() {
         .iter()
         .filter_map(|tool| tool["name"].as_str())
         .collect();
-    assert_eq!(names.len(), 16);
+    assert_eq!(names.len(), 21);
     assert!(names.contains(&"create_requests"));
     assert!(names.contains(&"preview_saved_request"));
     for realtime_tool in [
-        "list_realtime_requests",
-        "get_realtime_request",
-        "create_realtime_request",
-        "update_realtime_request",
-        "delete_realtime_request",
+        "list_realtime_connections",
+        "get_realtime_connection",
+        "create_realtime_connection",
+        "update_realtime_connection",
+        "delete_realtime_connection",
+        "list_realtime_messages",
+        "get_realtime_message",
+        "create_realtime_message",
+        "update_realtime_message",
+        "delete_realtime_message",
     ] {
         assert!(names.contains(&realtime_tool));
     }

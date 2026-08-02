@@ -231,6 +231,7 @@ PostNot/
       0008_environment_integrity.sql
       0009_agent_activity.sql
       0010_realtime_requests.sql
+      0011_realtime_connections_and_messages.sql
     src/
       main.rs
       lib.rs
@@ -283,6 +284,7 @@ PostNot/
         request_plan_service.rs
         request_preview_service.rs
         realtime_payload_service.rs
+        realtime_connections_service.rs
         realtime_resolution_service.rs
         realtime_service.rs
         realtime_socketio_service.rs
@@ -340,11 +342,11 @@ Fields:
 - error text
 - executed at timestamp
 
-### Realtime Request Definition
+### Realtime Connections and Messages
 
-Saved realtime definitions use a versioned discriminated model. `requestType` is either `websocket` or `socketio`; HTTP remains a separate `SendRequestPayload`.
+Realtime persistence is split into two independently selected resources. Global connection profiles use a versioned `RealtimeConnectionDraft`; collection items use a distinct versioned `RealtimeMessageDraft`. Both carry a `protocol` discriminator of `websocket` or `socketio`, but messages never store a profile reference.
 
-Shared fields:
+Connection profile fields:
 
 - name and connection URL
 - enabled query parameters and handshake headers
@@ -354,13 +356,17 @@ Shared fields:
 Raw WebSocket fields:
 
 - requested subprotocols
-- one saved composer in text, JSON, or binary mode
+- requested subprotocols
+
+Raw WebSocket message fields:
+
+- message name and one composer in text, JSON, or binary mode
 - binary source as a local file, hexadecimal text, or base64 text
 
 Socket.IO fields:
 
-- Engine.IO path, namespace, auth JSON object, and transport selection
-- one saved event composer with a JSON argument array or one binary payload
+- connection profiles store the Engine.IO path, namespace, auth JSON object, and transport selection
+- messages store an event composer with a JSON argument array or one binary payload
 - optional client-requested ACK and timeout
 
 The serialized object carries `version: 1`, allowing later readers to reject unsupported schema revisions rather than guessing how to interpret them.
@@ -405,7 +411,7 @@ Fields:
 
 ## 6. SQLite Storage Design
 
-The schema is created by forward-only migrations in `src-tauri/migrations/`. Migrations `0001` through `0003` define the original tables, collection scripts, and playbooks; `0005` adds response-body metadata. Migration `0006` removes the superseded collection FTS shadow table and adds sibling-ordering support, `0007` adds the folder-chain index used by playbooks, `0008` repairs competing active environments before enforcing the one-active-environment invariant, and `0009` adds MCP Agent Activity. Migration `0010` adds the collection request discriminator and versioned realtime definition storage. Released migrations, including the now-superseded `0004` FTS migration, remain unchanged so existing databases upgrade safely.
+The schema is created by forward-only migrations in `src-tauri/migrations/`. Migrations `0001` through `0003` define the original tables, collection scripts, and playbooks; `0005` adds response-body metadata. Migration `0006` removes the superseded collection FTS shadow table and adds sibling-ordering support, `0007` adds the folder-chain index used by playbooks, `0008` repairs competing active environments before enforcing the one-active-environment invariant, and `0009` adds MCP Agent Activity. Migration `0010` added the original combined realtime definition. Migration `0011` creates standalone connection profiles and directly renames `realtime_request_json` to `realtime_message_json`. A transactional, shape-based Rust upgrader then splits legacy JSON and can safely run again until no combined records remain. Released migrations remain unchanged so existing databases upgrade safely.
 
 ### Database Location
 
@@ -450,7 +456,7 @@ Keys written by the app:
 
 Settings reads load the stored rows once and merge them over Rust defaults without rewriting defaults on the read path. A full settings save upserts all normalized values in one transaction, while history pruning reads only the `history_limit` key.
 
-`realtime_workspace_state` stores editable tabs and active-tab selection, not a durable session. The native save boundary normalizes status to disconnected, clears generation and sequence state, and removes transcript and error content. This guarantees that application restart never reconnects implicitly or resurrects received data.
+`realtime_workspace_state` stores each tab's independent selected profile/message IDs, connection/message drafts and baselines, plus active-tab selection. It does not store a durable session. The native save boundary normalizes status to disconnected, clears generation and sequence state, and removes transcript and error content. This guarantees that application restart never reconnects implicitly or resurrects received data.
 
 #### `history_entries`
 
@@ -496,12 +502,16 @@ Implementation notes:
 
 - `kind` distinguishes folders from saved requests
 - `request_type` distinguishes `http`, `websocket`, and `socketio` while preserving the existing `folder`/`request` tree shape
-- HTTP rows keep using the normalized HTTP columns; realtime rows keep a `version: 1` discriminated definition in `realtime_request_json` and retain URL/name columns for tree and search projection
+- HTTP rows keep using the normalized HTTP columns; realtime message rows keep a versioned message-only wrapper in `realtime_message_json`, leave HTTP URL/method/body fields empty, and retain the item name for tree/search projection
 - HTTP service queries explicitly filter `request_type = 'http'`, while realtime CRUD accepts only the two realtime discriminators and uses revision-checked updates
 - `parent_id` allows nested folders and request placement inside folders
 - `prerequest_script` and `test_script` are persisted per collection, folder, and saved request; the UI runs inherited collection scripts first, then ancestor folder scripts from root to leaf, then saved-request scripts in the frontend (`request-scripts.ts`) before invoking Rust for send (pre-request) and after the response returns (tests), not inside the native HTTP layer
 - collection search loads current collection and item rows directly, builds ancestor paths from that snapshot, classifies and ranks matches in memory, and applies the result limit; committed renames and moves therefore require no shadow-index rebuild
 - collection trees and search results project protocol badges and route HTTP items to `/`, but route WebSocket and Socket.IO items to `/websockets`
+
+#### `realtime_connections`
+
+Stores global connection profiles with `id`, display `name`, `protocol`, versioned `config_json`, and timestamps. Profiles are selected independently from collection messages. Exact legacy connection matches reuse a single profile; deleting a profile never mutates collection messages.
 
 #### `environments`
 
@@ -630,7 +640,7 @@ Reconnect is opt-in and defaults to five attempts with a 500 ms initial delay an
 
 The native transcript is an ordered, bounded `VecDeque`, not SQLite history. When an entry or byte bound is crossed, old entries and their payload handles are released and a visible trim marker is inserted. Text and binary payloads at or below 256 KiB remain inline; larger payloads are written under the process-scoped realtime payload directory and represented over IPC by an opaque handle, a 4 KiB preview, size, encoding, and truncation flag. The UI can copy bounded payloads, save a complete file-backed payload, clear the transcript, or export a session transcript. Restart clears the temporary directory.
 
-All `Channel` status and transcript events carry a connection generation and monotonic sequence. A transcript trim or clear emits a reset event; the frontend requests a complete session snapshot if it observes an event gap.
+All `Channel` status and transcript events carry a `sessionId`, connection generation, and monotonic sequence. One native transport task belongs to each workspace tab. Only explicit Connect/Reconnect replaces it and advances its generation; selecting or editing messages does not reconnect or clear its transcript. The runtime records the connected protocol and rejects incompatible messages before enqueueing them. A transcript trim or clear emits a reset event; the frontend requests a complete session snapshot if it observes an event gap.
 
 ### Realtime v1 Boundaries
 
@@ -673,6 +683,13 @@ Commands exposed to the frontend:
 - `read_realtime_payload`
 - `save_realtime_payload`
 - `export_realtime_transcript`
+- `list_realtime_connection_profiles`
+- `get_realtime_connection_profile`
+- `create_realtime_connection_profile`
+- `update_realtime_connection_profile`
+- `delete_realtime_connection_profile`
+- `import_realtime_connection_profiles`
+- `export_realtime_connection_profiles`
 - `check_for_updates`
 - `install_update`
 - `list_history`
@@ -693,13 +710,13 @@ Commands exposed to the frontend:
 - `save_request_to_collection`
 - `update_saved_request`
 - `get_saved_request`
-- `list_saved_realtime_requests`
-- `save_realtime_request_to_collection`
-- `update_saved_realtime_request`
-- `get_saved_realtime_request`
+- `list_saved_realtime_messages`
+- `save_realtime_message_to_collection`
+- `update_saved_realtime_message`
+- `get_saved_realtime_message`
 - `delete_collection_item`
 - `delete_saved_request`
-- `delete_saved_realtime_request`
+- `delete_saved_realtime_message`
 - `export_collection`
 - `list_playbooks`
 - `create_playbook`
@@ -772,13 +789,13 @@ Commands exposed to the frontend:
 - `save_request_to_collection`: stores the current request draft in a collection
 - `update_saved_request`: updates an existing saved request in place
 - `get_saved_request`: loads one saved request back into the editor
-- `list_saved_realtime_requests`: lists raw WebSocket and Socket.IO definitions within one collection
-- `save_realtime_request_to_collection`: validates and stores a versioned realtime definition in a collection or folder
-- `update_saved_realtime_request`: revision-checks and replaces a realtime definition in place
-- `get_saved_realtime_request`: loads one realtime definition into the WebSockets editor
+- `list_saved_realtime_messages`: lists WebSocket and Socket.IO messages within one collection
+- `save_realtime_message_to_collection`: validates and stores a versioned message-only definition in a collection or folder
+- `update_saved_realtime_message`: revision-checks and replaces a realtime message in place
+- `get_saved_realtime_message`: loads one message into the WebSockets message block without changing the connection/session
 - `delete_collection_item`: removes a folder or saved request item from a collection tree
 - `delete_saved_request`: removes one saved request from a collection
-- `delete_saved_realtime_request`: removes one realtime definition from a collection
+- `delete_saved_realtime_message`: removes one realtime message from a collection
 - `export_collection`: exports a lossless mixed PostNot collection or an HTTP-only Postman Collection v2.1 file through a native save dialog; Postman results report omitted realtime definitions
 - `list_playbooks`: returns Playbook summaries
 - `create_playbook`: creates a Playbook
@@ -927,16 +944,16 @@ Screenshot workflow note:
 - if an environment update or delete fails after partially changing the credential store, rollback of secrets is attempted; failure to roll back is logged with `log::warn` for diagnostics (the primary error still returns to the UI)
 - the installed executable can run as a windowless stdio MCP server with `--mcp`; it resolves the same `data_dir/com.postnot.app` database, runs migrations, and uses the existing native collection and preview services
 - MCP environment context includes non-secret values but omits secret values; saved credential literals are returned as `***` with explicit preservation paths for revision-checked updates
-- MCP exposes authoring-only list/get/create/update tools for raw WebSocket and Socket.IO definitions. Reads redact credential-looking literals and preserve-path updates use optimistic revisions; MCP never connects, sends, runs scripts, or reads session transcripts
+- MCP exposes separate authoring-only list/get/create/update/delete tools for standalone realtime connections and collection messages. Reads redact credential-looking literals and preserve-path updates use optimistic revisions; MCP never connects, sends, runs scripts, or reads session transcripts
 - `agent_activity` retains the latest 1,000 MCP operation records with actor, target, outcome, and changed field names, never request values
 
 Environment-backed secrets are protected in storage and history, while single-request export uses local pattern-based redaction for credential-looking values before users copy cURL or PostNot JSON.
 
 ### Collection Portability
 
-PostNot collection JSON is the lossless mixed format. Its versioned document preserves collection/folder hierarchy and scripts, HTTP definitions and their scripts, and versioned WebSocket/Socket.IO definitions. Import validates the top-level schema and version, validates each realtime definition version, and creates the mixed collection atomically.
+PostNot collection JSON v2 is the lossless mixed format. Its versioned document preserves collection/folder hierarchy and scripts, HTTP definitions and their scripts, and message-only WebSocket/Socket.IO entries. Version 1 combined entries remain importable and are split into standalone profiles plus collection messages. Connection profiles also have a separate versioned PostNot document; exports redact literal credentials by default.
 
-Postman Collection v2.1 export remains an HTTP interoperability format. Realtime definitions are omitted rather than misrepresented; the export result returns a warning and exact omission count, and the Collections dialog explains the limitation before export.
+Postman Collection v2.1 export remains an HTTP interoperability format. Realtime messages are omitted rather than misrepresented; the export result returns a warning and exact omission count, and the Collections dialog explains the limitation before export.
 
 ## 11. Design Trade-Offs
 

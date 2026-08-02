@@ -334,6 +334,7 @@ pub(super) async fn import_postman_collection(
         collection_name: created_collection.name,
         imported_request_count,
         created_collection: true,
+        created_realtime_connection_profile_count: 0,
         details: Some(ImportDetails {
             format: "postman".to_string(),
             summary: format!(

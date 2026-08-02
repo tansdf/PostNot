@@ -38,6 +38,7 @@ When onboarding into a fresh task, read these first:
 - [src-tauri/src/lib.rs](src-tauri/src/lib.rs): Tauri startup and command registration
 - [src-tauri/src/services/http_client.rs](src-tauri/src/services/http_client.rs): native request execution
 - [src-tauri/src/services/realtime_service.rs](src-tauri/src/services/realtime_service.rs): app-wide raw WebSocket session manager
+- [src-tauri/src/services/realtime_connections_service.rs](src-tauri/src/services/realtime_connections_service.rs): standalone profile CRUD, portability, and legacy data upgrade
 - [src-tauri/src/services/realtime_socketio_service.rs](src-tauri/src/services/realtime_socketio_service.rs): Socket.IO transport adapter
 - [src-tauri/src/services/settings_service.rs](src-tauri/src/services/settings_service.rs): persisted settings
 - [src-tauri/src/services/history_service.rs](src-tauri/src/services/history_service.rs): request history
@@ -55,7 +56,7 @@ Implemented now:
 - native HTTP execution in Rust
 - native raw WebSocket and Socket.IO 3.x/4.x execution with application-wide session ownership
 - persistent disconnected WebSockets tab workspace, bounded session-only transcripts, file-backed large payloads, and opt-in reconnect
-- saved HTTP, WebSocket, and Socket.IO definitions in shared collection trees with protocol-aware routing
+- standalone WebSocket/Socket.IO connection profiles plus message-only realtime items in shared collection trees with protocol-aware routing
 - lossless mixed PostNot collection import/export and explicit realtime omissions from Postman export
 - persisted settings
 - persisted history with detail inspection
@@ -158,7 +159,7 @@ This approach is mainly for native Windows verification such as drag-and-drop, w
 - Secret environment values are stored in the OS credential store, not SQLite.
 - History persists requests that use secret environment variables, but stores unresolved `{{variable}}` text instead of resolved secret values.
 - Single-request exports redact credential-looking values by default, including bearer tokens, OAuth2 access tokens, client secrets, API keys, cookies, and basic-auth passwords; the export dialog can include active non-secret environment variables while keeping secrets redacted.
-- Realtime connection definitions and open tabs are managed on `/websockets`; navigation preserves live native sessions, while app restart restores drafts disconnected and clears transcripts.
+- Standalone realtime connection profiles and collection messages are selected independently on `/websockets`; each tab owns one live native session, message changes preserve it, and app restart restores drafts disconnected with empty transcripts.
 - Realtime transcripts are bounded, process-scoped, and never written to SQLite history. Payloads over 256 KiB use temporary opaque handles that are cleared on release or startup.
 - Realtime v1 does not run collection/folder/request scripts or Playbook steps and does not support durable history, legacy Socket.IO 2.x, custom CA/mTLS/proxy settings, `permessage-deflate`, server-requested ACK replies, or mixed binary placeholder arrays.
 - Collections are managed on `/collections`.

@@ -1,33 +1,15 @@
 import { render } from "svelte/server";
 import { describe, expect, it } from "vitest";
 
-import { createRealtimeRequestDraft, type RealtimeWorkspaceTab } from "$lib/api/types";
+import { createRealtimeConnectionDraft, createRealtimeMessageDraft } from "$lib/api/types";
+import { createRealtimeWorkspaceTab } from "$lib/realtime-workspace";
 import RealtimeTabs from "$lib/components/realtime/RealtimeTabs.svelte";
 
 describe("RealtimeTabs", () => {
   it("renders protocol, status, selection, and dirty state without relying on color", () => {
-    const tab: RealtimeWorkspaceTab = {
-      id: "tab-1",
-      source: "saved",
-      savedRequestId: "request-1",
-      collectionId: "collection-1",
-      parentId: null,
-      sourceUpdatedAt: "2026-07-30T00:00:00.000Z",
-      externallyChanged: false,
-      draft: {
-        ...createRealtimeRequestDraft("socketio"),
-        name: "Live order events"
-      },
-      baselineDraft: createRealtimeRequestDraft("socketio"),
-      status: "reconnecting",
-      generation: 2,
-      lastSequence: 10,
-      statusMessage: "Reconnecting in 1 second",
-      reconnectRequired: false,
-      transcript: [],
-      transcriptSizeBytes: 0,
-      errorText: ""
-    };
+    const connection = createRealtimeConnectionDraft("socketio"); connection.name = "Live order events";
+    const tab = createRealtimeWorkspaceTab(connection, createRealtimeMessageDraft("socketio"), { selectedMessageId: "request-1", collectionId: "collection-1" });
+    Object.assign(tab, { id: "tab-1", status: "reconnecting", generation: 2, lastSequence: 10, statusMessage: "Reconnecting in 1 second" });
 
     const { body } = render(RealtimeTabs, {
       props: {

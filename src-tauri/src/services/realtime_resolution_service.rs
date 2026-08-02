@@ -2,8 +2,8 @@ use crate::{
     domain::{
         environments::EnvironmentDetail,
         realtime::{
-            BinaryPayloadSource, RawWebSocketComposer, RealtimeRequestCommon, RealtimeRequestDraft,
-            SocketIoComposer,
+            BinaryPayloadSource, RawWebSocketComposer, RealtimeConnectionCommon,
+            RealtimeConnectionDraft, SocketIoComposer,
         },
         requests::{KeyValueRow, RequestAuth},
     },
@@ -11,47 +11,43 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
-pub struct ResolvedRealtimeRequest {
-    pub request: RealtimeRequestDraft,
+pub struct ResolvedRealtimeConnection {
+    pub connection: RealtimeConnectionDraft,
     pub secret_values: Vec<String>,
 }
 
-pub fn resolve_request(
-    request: &RealtimeRequestDraft,
+pub fn resolve_connection(
+    connection: &RealtimeConnectionDraft,
     active_environment: Option<&EnvironmentDetail>,
-) -> ResolvedRealtimeRequest {
-    let request = match request {
-        RealtimeRequestDraft::Websocket {
+) -> ResolvedRealtimeConnection {
+    let connection = match connection {
+        RealtimeConnectionDraft::Websocket {
             common,
             subprotocols,
-            composer,
-        } => RealtimeRequestDraft::Websocket {
+        } => RealtimeConnectionDraft::Websocket {
             common: resolve_common(common, active_environment),
             subprotocols: subprotocols
                 .iter()
                 .map(|value| resolve(value, active_environment))
                 .collect(),
-            composer: resolve_raw_composer(composer, active_environment),
         },
-        RealtimeRequestDraft::Socketio {
+        RealtimeConnectionDraft::Socketio {
             common,
             path,
             namespace,
             auth_payload,
             transport,
-            composer,
-        } => RealtimeRequestDraft::Socketio {
+        } => RealtimeConnectionDraft::Socketio {
             common: resolve_common(common, active_environment),
             path: resolve(path, active_environment),
             namespace: resolve(namespace, active_environment),
             auth_payload: resolve_json(auth_payload, active_environment),
             transport: *transport,
-            composer: resolve_socketio_composer(composer, active_environment),
         },
     };
 
-    ResolvedRealtimeRequest {
-        request,
+    ResolvedRealtimeConnection {
+        connection,
         secret_values: environments_service::active_environment_secret_values(active_environment),
     }
 }
@@ -127,10 +123,10 @@ pub fn sanitize_error(message: &str, secret_values: &[String]) -> String {
 }
 
 fn resolve_common(
-    common: &RealtimeRequestCommon,
+    common: &RealtimeConnectionCommon,
     active_environment: Option<&EnvironmentDetail>,
-) -> RealtimeRequestCommon {
-    RealtimeRequestCommon {
+) -> RealtimeConnectionCommon {
+    RealtimeConnectionCommon {
         name: resolve(&common.name, active_environment),
         url: resolve(&common.url, active_environment),
         query_params: common

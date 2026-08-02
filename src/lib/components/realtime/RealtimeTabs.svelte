@@ -20,7 +20,7 @@
   } = $props();
 
   function label(tab: RealtimeWorkspaceTab) {
-    return tab.draft.name.trim() || (tab.draft.requestType === "socketio" ? "Untitled Socket.IO" : "Untitled WebSocket");
+    return tab.connectionDraft.name.trim() || (tab.connectionDraft.protocol === "socketio" ? "Untitled Socket.IO" : "Untitled WebSocket");
   }
 
   function tabDomId(tabId: string) {
@@ -90,7 +90,7 @@
             <span class={["realtime-status-dot", `realtime-status-${tab.status}`]} aria-hidden="true"></span>
             <span class="sr-only">{tab.statusMessage}.</span>
             <span class="request-tab-chip-label">{label(tab)}</span>
-            <span class="protocol-badge">{tab.draft.requestType === "socketio" ? "S.IO" : "WS"}</span>
+            <span class="protocol-badge">{tab.connectionDraft.protocol === "socketio" ? "S.IO" : "WS"}</span>
             {#if onIsDirty(tab)}
               <span class="request-tab-chip-dirty" aria-label="Unsaved changes" title="Unsaved changes"></span>
             {/if}

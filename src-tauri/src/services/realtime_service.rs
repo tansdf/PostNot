@@ -29,8 +29,8 @@ use uuid::Uuid;
 use crate::{
     domain::{
         realtime::{
-            BinaryPayloadSource, RawMessageMode, RawWebSocketComposer, RealtimeRequestDraft,
-            ReconnectPolicy,
+            BinaryPayloadSource, RawMessageMode, RawWebSocketComposer, RealtimeConnectionDraft,
+            RealtimeMessageDraft, ReconnectPolicy, RequestType,
         },
         requests::RequestAuth,
     },
@@ -64,19 +64,8 @@ pub struct RealtimeRuntimeLimits {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RealtimeConnectInput {
-    pub connection_id: String,
-    pub request: RealtimeRequestDraft,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "requestType", rename_all = "lowercase")]
-pub enum RealtimeSendMessage {
-    Websocket {
-        composer: RawWebSocketComposer,
-    },
-    Socketio {
-        composer: crate::domain::realtime::SocketIoComposer,
-    },
+    pub session_id: String,
+    pub connection: RealtimeConnectionDraft,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -117,7 +106,7 @@ pub enum RealtimeTranscriptKind {
 #[serde(rename_all = "camelCase")]
 pub struct RealtimeTranscriptEntry {
     pub id: String,
-    pub connection_id: String,
+    pub session_id: String,
     pub generation: u64,
     pub sequence: u64,
     pub occurred_at: String,
@@ -132,23 +121,23 @@ pub struct RealtimeTranscriptEntry {
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum RealtimeRuntimeEvent {
     Status {
-        #[serde(rename = "connectionId")]
-        connection_id: String,
+        #[serde(rename = "sessionId")]
+        session_id: String,
         generation: u64,
         sequence: u64,
         status: RealtimeConnectionStatus,
         message: String,
     },
     Transcript {
-        #[serde(rename = "connectionId")]
-        connection_id: String,
+        #[serde(rename = "sessionId")]
+        session_id: String,
         generation: u64,
         sequence: u64,
         entry: RealtimeTranscriptEntry,
     },
     TranscriptReset {
-        #[serde(rename = "connectionId")]
-        connection_id: String,
+        #[serde(rename = "sessionId")]
+        session_id: String,
         generation: u64,
         sequence: u64,
         entries: Vec<RealtimeTranscriptEntry>,
@@ -158,7 +147,7 @@ pub enum RealtimeRuntimeEvent {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RealtimeSessionSnapshot {
-    pub connection_id: String,
+    pub session_id: String,
     pub generation: u64,
     pub last_sequence: u64,
     pub status: RealtimeConnectionStatus,
@@ -178,7 +167,8 @@ struct ManagerInner {
 }
 
 pub(crate) struct RuntimeSession {
-    connection_id: String,
+    session_id: String,
+    protocol: RequestType,
     generation: u64,
     event_channel: Channel<RealtimeRuntimeEvent>,
     state: Mutex<SessionState>,
@@ -199,7 +189,7 @@ struct SessionState {
 
 pub(crate) enum SessionCommand {
     Send {
-        message: RealtimeSendMessage,
+        message: RealtimeMessageDraft,
         secret_values: Vec<String>,
         used_secret: bool,
     },
@@ -228,14 +218,14 @@ impl RealtimeConnectionManager {
     pub async fn connect(
         &self,
         input: RealtimeConnectInput,
-        request: RealtimeRequestDraft,
+        connection: RealtimeConnectionDraft,
         secret_values: Vec<String>,
         limits: RealtimeRuntimeLimits,
         event_channel: Channel<RealtimeRuntimeEvent>,
     ) -> AppResult<RealtimeSessionSnapshot> {
-        if input.connection_id.trim().is_empty() {
+        if input.session_id.trim().is_empty() {
             return Err(AppError::Message(
-                "Realtime connection ID is required.".to_string(),
+                "Realtime session ID is required.".to_string(),
             ));
         }
 
@@ -245,7 +235,7 @@ impl RealtimeConnectionManager {
                 .values()
                 .filter(|session| session.is_live())
                 .count();
-            let previous = sessions.get(&input.connection_id).cloned();
+            let previous = sessions.get(&input.session_id).cloned();
             if previous.as_ref().is_none_or(|session| !session.is_live())
                 && active >= limits.max_concurrent_sessions
             {
@@ -268,8 +258,10 @@ impl RealtimeConnectionManager {
         }
 
         let (command_tx, command_rx) = mpsc::channel(32);
+        let protocol = connection.protocol();
         let session = Arc::new(RuntimeSession {
-            connection_id: input.connection_id.clone(),
+            session_id: input.session_id.clone(),
+            protocol,
             generation,
             event_channel,
             state: Mutex::new(SessionState {
@@ -290,19 +282,19 @@ impl RealtimeConnectionManager {
             .sessions
             .lock()
             .map_err(|_| manager_error())?
-            .insert(input.connection_id, Arc::clone(&session));
+            .insert(input.session_id, Arc::clone(&session));
 
         session.emit_status(RealtimeConnectionStatus::Connecting, "Connecting");
         let session_for_task = Arc::clone(&session);
         tauri::async_runtime::spawn(async move {
-            match request {
-                RealtimeRequestDraft::Websocket { .. } => {
-                    run_raw_websocket(session_for_task, request, command_rx).await
+            match connection {
+                RealtimeConnectionDraft::Websocket { .. } => {
+                    run_raw_websocket(session_for_task, connection, command_rx).await
                 }
-                RealtimeRequestDraft::Socketio { .. } => {
+                RealtimeConnectionDraft::Socketio { .. } => {
                     crate::services::realtime_socketio_service::run_socketio(
                         session_for_task,
-                        request,
+                        connection,
                         command_rx,
                     )
                     .await
@@ -313,8 +305,8 @@ impl RealtimeConnectionManager {
         session.snapshot()
     }
 
-    pub async fn disconnect(&self, connection_id: &str) -> AppResult<()> {
-        self.session(connection_id)?
+    pub async fn disconnect(&self, session_id: &str) -> AppResult<()> {
+        self.session(session_id)?
             .command_tx
             .send(SessionCommand::Disconnect)
             .await
@@ -323,15 +315,20 @@ impl RealtimeConnectionManager {
 
     pub async fn send(
         &self,
-        connection_id: &str,
-        message: RealtimeSendMessage,
+        session_id: &str,
+        message: RealtimeMessageDraft,
         secret_values: Vec<String>,
         used_secret: bool,
     ) -> AppResult<()> {
-        let session = self.session(connection_id)?;
+        let session = self.session(session_id)?;
         if session.status() != RealtimeConnectionStatus::Connected {
             return Err(AppError::Message(
                 "Messages can only be sent while the connection is connected.".to_string(),
+            ));
+        }
+        if session.protocol != message.protocol() {
+            return Err(AppError::Message(
+                "The selected message protocol does not match the live connection.".to_string(),
             ));
         }
         session
@@ -345,8 +342,8 @@ impl RealtimeConnectionManager {
             .map_err(|_| AppError::Message("Realtime connection is no longer active.".to_string()))
     }
 
-    pub async fn ping(&self, connection_id: &str, payload: Option<String>) -> AppResult<()> {
-        let session = self.session(connection_id)?;
+    pub async fn ping(&self, session_id: &str, payload: Option<String>) -> AppResult<()> {
+        let session = self.session(session_id)?;
         if session.status() != RealtimeConnectionStatus::Connected {
             return Err(AppError::Message(
                 "Ping is only available while the connection is connected.".to_string(),
@@ -359,37 +356,37 @@ impl RealtimeConnectionManager {
             .map_err(|_| AppError::Message("Realtime connection is no longer active.".to_string()))
     }
 
-    pub async fn close(&self, connection_id: &str, code: u16, reason: String) -> AppResult<()> {
+    pub async fn close(&self, session_id: &str, code: u16, reason: String) -> AppResult<()> {
         validate_close(code, &reason)?;
-        self.session(connection_id)?
+        self.session(session_id)?
             .command_tx
             .send(SessionCommand::Close { code, reason })
             .await
             .map_err(|_| AppError::Message("Realtime connection is no longer active.".to_string()))
     }
 
-    pub fn snapshot(&self, connection_id: &str) -> AppResult<RealtimeSessionSnapshot> {
-        self.session(connection_id)?.snapshot()
+    pub fn snapshot(&self, session_id: &str) -> AppResult<RealtimeSessionSnapshot> {
+        self.session(session_id)?.snapshot()
     }
 
     pub fn snapshot_for_export(
         &self,
-        connection_id: &str,
+        session_id: &str,
     ) -> AppResult<(RealtimeSessionSnapshot, Vec<String>)> {
-        self.session(connection_id)?.snapshot_for_export()
+        self.session(session_id)?.snapshot_for_export()
     }
 
-    pub async fn clear_transcript(&self, connection_id: &str) -> AppResult<()> {
-        self.session(connection_id)?.clear_transcript().await
+    pub async fn clear_transcript(&self, session_id: &str) -> AppResult<()> {
+        self.session(session_id)?.clear_transcript().await
     }
 
-    pub async fn release(&self, connection_id: &str) -> AppResult<()> {
+    pub async fn release(&self, session_id: &str) -> AppResult<()> {
         let session = self
             .inner
             .sessions
             .lock()
             .map_err(|_| manager_error())?
-            .remove(connection_id);
+            .remove(session_id);
         if let Some(session) = session {
             let _ = session.command_tx.send(SessionCommand::Disconnect).await;
             session.clear_transcript().await?;
@@ -397,12 +394,12 @@ impl RealtimeConnectionManager {
         Ok(())
     }
 
-    fn session(&self, connection_id: &str) -> AppResult<Arc<RuntimeSession>> {
+    fn session(&self, session_id: &str) -> AppResult<Arc<RuntimeSession>> {
         self.inner
             .sessions
             .lock()
             .map_err(|_| manager_error())?
-            .get(connection_id)
+            .get(session_id)
             .cloned()
             .ok_or_else(|| AppError::Message("Realtime connection not found.".to_string()))
     }
@@ -448,7 +445,7 @@ impl RuntimeSession {
             state.status = status;
             state.status_message.clone_from(&message);
             RealtimeRuntimeEvent::Status {
-                connection_id: self.connection_id.clone(),
+                session_id: self.session_id.clone(),
                 generation: self.generation,
                 sequence: state.sequence,
                 status,
@@ -494,7 +491,7 @@ impl RuntimeSession {
             state.sequence = state.sequence.saturating_add(1);
             let entry = RealtimeTranscriptEntry {
                 id: Uuid::new_v4().to_string(),
-                connection_id: self.connection_id.clone(),
+                session_id: self.session_id.clone(),
                 generation: self.generation,
                 sequence: state.sequence,
                 occurred_at: Utc::now().to_rfc3339(),
@@ -538,7 +535,7 @@ impl RuntimeSession {
                     state.sequence = state.sequence.saturating_add(1);
                     let marker = RealtimeTranscriptEntry {
                         id: Uuid::new_v4().to_string(),
-                        connection_id: self.connection_id.clone(),
+                        session_id: self.session_id.clone(),
                         generation: self.generation,
                         sequence: state.sequence,
                         occurred_at: Utc::now().to_rfc3339(),
@@ -571,14 +568,14 @@ impl RuntimeSession {
                 }
                 state.sequence = state.sequence.saturating_add(1);
                 RealtimeRuntimeEvent::TranscriptReset {
-                    connection_id: self.connection_id.clone(),
+                    session_id: self.session_id.clone(),
                     generation: self.generation,
                     sequence: state.sequence,
                     entries: state.transcript.iter().cloned().collect(),
                 }
             } else {
                 RealtimeRuntimeEvent::Transcript {
-                    connection_id: self.connection_id.clone(),
+                    session_id: self.session_id.clone(),
                     generation: self.generation,
                     sequence: state.sequence,
                     entry,
@@ -595,7 +592,7 @@ impl RuntimeSession {
     fn snapshot(&self) -> AppResult<RealtimeSessionSnapshot> {
         let state = self.state.lock().map_err(|_| session_error())?;
         Ok(RealtimeSessionSnapshot {
-            connection_id: self.connection_id.clone(),
+            session_id: self.session_id.clone(),
             generation: self.generation,
             last_sequence: state.sequence,
             status: state.status,
@@ -617,7 +614,7 @@ impl RuntimeSession {
         }
         Ok((
             RealtimeSessionSnapshot {
-                connection_id: self.connection_id.clone(),
+                session_id: self.session_id.clone(),
                 generation: self.generation,
                 last_sequence: state.sequence,
                 status: state.status,
@@ -644,7 +641,7 @@ impl RuntimeSession {
             (
                 handles,
                 RealtimeRuntimeEvent::TranscriptReset {
-                    connection_id: self.connection_id.clone(),
+                    session_id: self.session_id.clone(),
                     generation: self.generation,
                     sequence: state.sequence,
                     entries: Vec::new(),
@@ -661,10 +658,10 @@ impl RuntimeSession {
 
 async fn run_raw_websocket(
     session: Arc<RuntimeSession>,
-    request: RealtimeRequestDraft,
+    request: RealtimeConnectionDraft,
     mut commands: mpsc::Receiver<SessionCommand>,
 ) {
-    let RealtimeRequestDraft::Websocket {
+    let RealtimeConnectionDraft::Websocket {
         common,
         subprotocols,
         ..
@@ -960,7 +957,7 @@ where
 {
     match command {
         SessionCommand::Send {
-            message: RealtimeSendMessage::Websocket { composer },
+            message: RealtimeMessageDraft::Websocket { composer, .. },
             secret_values,
             used_secret,
         } => {
@@ -993,7 +990,7 @@ where
             Ok(CommandOutcome::Continue)
         }
         SessionCommand::Send {
-            message: RealtimeSendMessage::Socketio { .. },
+            message: RealtimeMessageDraft::Socketio { .. },
             ..
         } => Err(RawCommandError::Validation(AppError::Message(
             "A Socket.IO message cannot be sent through a raw WebSocket connection.".to_string(),
@@ -1380,7 +1377,7 @@ fn session_error() -> AppError {
 #[cfg(test)]
 mod tests {
     use crate::domain::{
-        realtime::{RawWebSocketComposer, RealtimeRequestCommon},
+        realtime::{RawWebSocketComposer, RealtimeConnectionCommon},
         requests::RequestAuth,
     };
 
@@ -1502,7 +1499,8 @@ mod tests {
         store.reset().await.expect("reset");
         let (command_tx, _command_rx) = mpsc::channel(1);
         let session = RuntimeSession {
-            connection_id: "cap".to_string(),
+            session_id: "cap".to_string(),
+            protocol: RequestType::Websocket,
             generation: 1,
             event_channel: Channel::new(|_| Ok(())),
             state: Mutex::new(SessionState {
@@ -1565,8 +1563,8 @@ mod tests {
         let payloads = RealtimePayloadStore::new(root);
         payloads.reset().await.expect("reset");
         let manager = RealtimeConnectionManager::new(payloads);
-        let request = RealtimeRequestDraft::Websocket {
-            common: RealtimeRequestCommon {
+        let request = RealtimeConnectionDraft::Websocket {
+            common: RealtimeConnectionCommon {
                 name: "Echo".to_string(),
                 url: format!("ws://{address}"),
                 query_params: Vec::new(),
@@ -1575,14 +1573,13 @@ mod tests {
                 reconnect: ReconnectPolicy::default(),
             },
             subprotocols: Vec::new(),
-            composer: RawWebSocketComposer::default(),
         };
         let channel = Channel::new(|_| Ok(()));
         manager
             .connect(
                 RealtimeConnectInput {
-                    connection_id: "echo".to_string(),
-                    request: request.clone(),
+                    session_id: "echo".to_string(),
+                    connection: request.clone(),
                 },
                 request,
                 Vec::new(),
@@ -1596,7 +1593,8 @@ mod tests {
         manager
             .send(
                 "echo",
-                RealtimeSendMessage::Websocket {
+                RealtimeMessageDraft::Websocket {
+                    name: "Invalid JSON".to_string(),
                     composer: RawWebSocketComposer {
                         mode: RawMessageMode::Json,
                         content: "{".to_string(),
@@ -1617,7 +1615,8 @@ mod tests {
         manager
             .send(
                 "echo",
-                RealtimeSendMessage::Websocket {
+                RealtimeMessageDraft::Websocket {
+                    name: "Hello".to_string(),
                     composer: RawWebSocketComposer {
                         mode: RawMessageMode::Text,
                         content: "hello".to_string(),
@@ -1647,11 +1646,11 @@ mod tests {
 
     async fn wait_for_status(
         manager: &RealtimeConnectionManager,
-        connection_id: &str,
+        session_id: &str,
         expected: RealtimeConnectionStatus,
     ) {
         for _ in 0..100 {
-            let snapshot = manager.snapshot(connection_id).expect("snapshot");
+            let snapshot = manager.snapshot(session_id).expect("snapshot");
             if snapshot.status == expected {
                 return;
             }

@@ -13,8 +13,8 @@ import {
   updateSavedRequest as updateSavedRequestCommand
 } from "$lib/api/commands";
 import {
-  saveRealtimeRequestToCollection,
-  updateSavedRealtimeRequest
+  saveRealtimeMessageToCollection,
+  updateSavedRealtimeMessage
 } from "$lib/api/realtime";
 import type {
   CollectionItemSummary,
@@ -22,7 +22,7 @@ import type {
   CreateCollectionInput,
   MoveCollectionItemInput,
   RequestDraft,
-  RealtimeRequestDraft,
+  RealtimeMessageDraft,
   UpdateCollectionFolderInput
 } from "$lib/api/types";
 import { notifications } from "$lib/stores/notifications.svelte";
@@ -301,16 +301,16 @@ class CollectionsStore {
     }
   }
 
-  async saveNewRealtimeRequest(
+  async saveNewRealtimeMessage(
     collectionId: string,
-    request: RealtimeRequestDraft,
+    message: RealtimeMessageDraft,
     parentId?: string | null
   ) {
     this.isSavingRequest = true;
     try {
-      const savedRequest = await saveRealtimeRequestToCollection(collectionId, request, parentId);
+      const savedRequest = await saveRealtimeMessageToCollection(collectionId, message, parentId);
       await Promise.all([this.loadCollections(collectionId), this.loadCollectionItems(collectionId)]);
-      notifications.success(savedRequest.name, "Connection saved");
+      notifications.success(savedRequest.name, "Message saved");
       return savedRequest;
     } catch (error) {
       this.errorText = error instanceof Error ? error.message : String(error);
@@ -320,17 +320,17 @@ class CollectionsStore {
     }
   }
 
-  async updateExistingRealtimeRequest(
+  async updateExistingRealtimeMessage(
     itemId: string,
     collectionId: string,
-    request: RealtimeRequestDraft,
+    message: RealtimeMessageDraft,
     expectedUpdatedAt?: string | null
   ) {
     this.isSavingRequest = true;
     try {
-      const savedRequest = await updateSavedRealtimeRequest(itemId, request, expectedUpdatedAt);
+      const savedRequest = await updateSavedRealtimeMessage(itemId, message, expectedUpdatedAt);
       await Promise.all([this.loadCollections(collectionId), this.loadCollectionItems(collectionId)]);
-      notifications.success(savedRequest.name, "Connection updated");
+      notifications.success(savedRequest.name, "Message updated");
       return savedRequest;
     } catch (error) {
       this.errorText = error instanceof Error ? error.message : String(error);

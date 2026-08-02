@@ -153,7 +153,7 @@
     onscroll={syncFollow}
     role="log"
     aria-live="off"
-    aria-label="WebSocket session messages"
+    aria-label="Realtime session messages"
   >
     {#if !filteredEntries.length}
       <div class="empty-state">

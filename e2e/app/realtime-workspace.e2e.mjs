@@ -107,6 +107,8 @@ test("Requests and realtime share query and header editing standards", async ({ 
   const realtimeHeaders = page.locator("#realtime-settings-panel .key-value-editor");
   const realtimeHeaderName = realtimeHeaders.locator('input[placeholder="Header"]').first();
   await expect(realtimeHeaders.getByRole("heading", { name: "Headers" })).toBeVisible();
+  await expect(realtimeHeaders.locator(".editor-header")).toHaveCSS("align-items", "center");
+  await expect(realtimeHeaders.getByRole("button", { name: "Add Cookie header" })).toHaveCount(0);
   await expect(realtimeHeaderName).toHaveAttribute("list", /key-value-name-suggestions-/);
   const realtimeNameListId = await realtimeHeaderName.getAttribute("list");
   const realtimeHeaderNames = await page.locator(`#${realtimeNameListId} option`).evaluateAll((options) =>
@@ -122,8 +124,9 @@ test("Requests and realtime share query and header editing standards", async ({ 
   );
   expect(realtimeHeaderValues).toEqual(requestHeaderValues);
 
-  await realtimeHeaders.getByRole("button", { name: "Add Cookie header" }).click();
+  await realtimeHeaders.getByRole("button", { name: "Add row" }).click();
   await expect(realtimeHeaders.locator('input[placeholder="Header"]')).toHaveCount(2);
+  await realtimeHeaders.locator('input[placeholder="Header"]').nth(1).fill("Cookie");
   await expect(realtimeHeaders.locator('input[placeholder="Header"]').nth(1)).toHaveValue("Cookie");
   await capture(page, testInfo, "realtime-shared-header-editor");
 
@@ -143,6 +146,16 @@ test("WebSocket workspace supports tabs, protocol editing, mock sessions, transc
   await expect(page.getByText("Disconnected", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Connect" })).toBeEnabled();
 
+  await page.getByRole("button", { name: "Connect" }).click();
+  await expect(page.getByText("Connected", { exact: true }).first()).toBeVisible();
+  const closeOptionsButton = page.getByRole("button", { name: "Close options" });
+  await closeOptionsButton.click();
+  await expect(closeOptionsButton).toHaveAttribute("aria-expanded", "true");
+  await expect(page.locator("#realtime-close-options")).toBeVisible();
+  await page.getByRole("button", { name: "Disconnect" }).click();
+  await expect(page.getByText("Disconnected", { exact: true }).first()).toBeVisible();
+  await expect(page.locator("#realtime-close-options")).toHaveCount(0);
+
   const settingsPanel = page.locator("#realtime-settings-panel");
   const queryEditor = settingsPanel.locator(".editor-block");
   await expect(queryEditor.getByRole("heading", { name: "Query Parameters" })).toBeVisible();
@@ -154,6 +167,8 @@ test("WebSocket workspace supports tabs, protocol editing, mock sessions, transc
   await expect(queryEditor.locator(".kv-row")).toHaveCount(1);
 
   const realtimeComposer = page.locator(".realtime-composer");
+  await expect(realtimeComposer.locator(".request-save-split")).toBeVisible();
+  await expect(realtimeComposer.locator(".request-send-actions")).toBeVisible();
   await realtimeComposer.getByLabel("Payload type").selectOption("json");
   const jsonMessageEditor = realtimeComposer.getByLabel("JSON message");
   await jsonMessageEditor.fill('{"message":"{{api_token}}","attempt":1}');
@@ -196,28 +211,35 @@ test("WebSocket workspace supports tabs, protocol editing, mock sessions, transc
   await expect(settingsTabs.getByRole("tab", { name: "Reconnect" })).toHaveCSS("background-color", selectedControlBackground);
   await capture(page, testInfo, "realtime-styled-reconnect-toggle");
 
-  await page.getByLabel("Name").fill("Billing events");
+  await page.getByLabel("Name", { exact: true }).fill("Billing events");
+  await expect(page.getByText("Unsaved connection changes", { exact: true })).toBeVisible();
   await page.getByLabel("Connection URL").fill("wss://events.example.test/billing");
+  await page.locator(".realtime-profile-manager").getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByLabel("Connection profile", { exact: true })).not.toHaveValue("");
+  await expect(page.getByLabel("Connection profile", { exact: true }).locator('option[value=""]')).toHaveAttribute("disabled", "");
   await page.getByRole("button", { name: "Open a new WebSocket tab" }).click();
   const connectionTabs = page.getByRole("tablist", { name: "Open realtime connections" }).getByRole("tab");
   await expect(connectionTabs).toHaveCount(2);
-  await expect(page.locator(".request-tab-chip").nth(1).locator('[title="Close Untitled WebSocket request"]')).toBeVisible();
+  await expect(page.locator(".request-tab-chip").nth(1).locator('[title="Close Untitled WebSocket connection"]')).toBeVisible();
   await expect(page.locator(".request-tabs-strip > .request-tab-create")).toBeVisible();
   await connectionTabs.first().focus();
   await page.keyboard.press("ArrowRight");
   await expect(connectionTabs.nth(1)).toHaveAttribute("aria-selected", "true");
   await expectNoSeriousAccessibilityViolations(page);
 
-  await page.getByLabel("Name").fill("Uncommitted realtime draft");
+  await page.getByLabel("Name", { exact: true }).fill("Uncommitted realtime draft");
   await page.locator('[title="Close Uncommitted realtime draft"]').click();
   const closeDialog = page.getByRole("dialog", { name: "Close connection tab?" });
   await expect(closeDialog).toBeVisible();
   expect(await closeDialog.evaluate((node) => node.contains(document.activeElement))).toBe(true);
-  await expect(page.getByText("Unsaved changes in this draft will be discarded.")).toBeVisible();
+  await expect(page.getByText("Unsaved connection or message changes will be discarded.")).toBeVisible();
   await page.getByRole("button", { name: "Cancel" }).click();
 
-  await page.getByLabel("Mode").selectOption("socketio");
+  await page.getByLabel("Connection protocol").selectOption("socketio");
   await expect(page.getByRole("heading", { name: "Socket.IO connection" })).toBeVisible();
+  await expect(page.getByLabel("Message protocol")).toHaveValue("websocket");
+  await expect(page.getByText(/message is incompatible with the selected Socket.IO connection/)).toBeVisible();
+  await page.getByLabel("Message protocol").selectOption("socketio");
   await settingsTabs.getByRole("tab", { name: "Query" }).focus();
   await page.keyboard.press("ArrowRight");
   await expect(settingsTabs.getByRole("tab", { name: "Headers & cookies" })).toHaveAttribute("aria-selected", "true");
@@ -244,6 +266,13 @@ test("WebSocket workspace supports tabs, protocol editing, mock sessions, transc
   await page.getByRole("button", { name: "Connect" }).click();
   await expect(page.getByRole("region", { name: "Socket.IO connection" }).getByText("Connected", { exact: true })).toBeVisible();
   await expect(page.getByRole("log").getByText("Connected", { exact: true })).toBeVisible();
+  await expect(page.getByRole("log")).toHaveAttribute("aria-label", "Realtime session messages");
+  await expect(page.getByText(/Connection settings are locked while this session is active/)).toBeVisible();
+  await expect(page.getByLabel("Connection profile", { exact: true })).toBeDisabled();
+  await expect(page.getByLabel("Name", { exact: true })).toBeDisabled();
+  await expect(page.getByLabel("Connection protocol")).toBeDisabled();
+  await expect(page.getByLabel("Connection URL")).toBeDisabled();
+  await expect(page.getByLabel("Message name")).toBeEnabled();
   await expect(page.getByRole("button", { name: "Send" })).toBeEnabled();
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page.getByRole("log").getByText("Sent", { exact: true })).toBeVisible();
@@ -275,16 +304,52 @@ test("WebSocket workspace supports tabs, protocol editing, mock sessions, transc
   await page.getByRole("button", { name: "Clear" }).click();
   await expect(page.getByText("No session messages yet")).toBeVisible();
 
-  await page.getByRole("button", { name: "Save as…" }).click();
-  const saveDialog = page.getByRole("dialog", { name: "Save connection as" });
+  await realtimeComposer.getByRole("button", { name: "More save actions" }).click();
+  await realtimeComposer.getByRole("menuitem", { name: "Save as" }).click();
+  const saveDialog = page.getByRole("dialog", { name: "Save realtime message" });
   await expect(saveDialog).toBeVisible();
   await expect(saveDialog).toHaveClass(/panel-custom-inset/);
   await expect(saveDialog).toHaveCSS("padding", "20px");
-  await expect(saveDialog.getByRole("heading", { name: "Save connection as" })).toHaveCSS("margin", "0px");
+  await expect(saveDialog.getByRole("heading", { name: "Save realtime message" })).toHaveCSS("margin", "0px");
   await expect(page.getByRole("listbox", { name: "Choose a collection" })).toBeVisible();
   await page.getByRole("button", { name: "Cancel" }).click();
 
   await capture(page, testInfo, "realtime-workspace-desktop-light");
+});
+
+test("WebSockets navigation preserves the active draft and defers external message replacement", async ({ page }) => {
+  await page.goto("/websockets");
+
+  const sidebar = page.locator("aside.sidebar");
+  await sidebar.getByRole("button", { name: "Expand collection" }).first().click();
+  await sidebar.getByRole("button", { name: /Live order events/ }).click();
+  await expect(page.getByLabel("Message name")).toHaveValue("Live order events");
+
+  await page.getByLabel("Message name").fill("Unsaved local message");
+  await expect(page.getByText("Unsaved message changes", { exact: true })).toBeVisible();
+
+  await page.getByRole("link", { name: "Requests", exact: true }).click();
+  await page.getByRole("link", { name: "WebSockets", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "WebSocket connection" })).toBeVisible();
+  await expect(page.getByLabel("Message name")).toHaveValue("Unsaved local message");
+  await expect(page.getByRole("dialog", { name: "Replace message draft?" })).toHaveCount(0);
+
+  await page.getByRole("link", { name: "Requests", exact: true }).click();
+  await sidebar.getByRole("button", { name: /Support presence/ }).click();
+  await expect(page.getByRole("heading", { name: "WebSocket connection" })).toBeVisible();
+  const replaceDialog = page.getByRole("dialog", { name: "Replace message draft?" });
+  await expect(replaceDialog).toBeVisible();
+  await expect(replaceDialog.getByText("The connection and session transcript will be preserved.")).toBeVisible();
+  await replaceDialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.getByLabel("Message name")).toHaveValue("Unsaved local message");
+  await expect(page).toHaveURL(/messageId=mock-realtime-websocket-1/);
+
+  await page.getByRole("link", { name: "Requests", exact: true }).click();
+  await sidebar.getByRole("button", { name: /Support presence/ }).click();
+  await expect(replaceDialog).toBeVisible();
+  await replaceDialog.getByRole("button", { name: "Discard and open" }).click();
+  await expect(page.getByLabel("Message name")).toHaveValue("Support presence");
+  await expect(page.getByLabel("Connection URL")).toHaveValue("ws://localhost:8080");
 });
 
 test("settings expose bounded realtime controls and persist the selected presentation", async ({ page }, testInfo) => {
@@ -323,8 +388,10 @@ test("collections explain lossless PostNot portability and Postman realtime omis
   await expect(sidebar.getByText("WS", { exact: true })).toBeVisible();
   await expect(sidebar.getByText("S.IO", { exact: true })).toBeVisible();
   await sidebar.getByRole("button", { name: /Live order events/ }).click();
-  await expect(page).toHaveURL(/\/websockets\?savedRequestId=mock-realtime-websocket-1/);
-  await expect(page.getByLabel("Connection URL")).toHaveValue("wss://events.example.test/orders");
+  await expect(page).toHaveURL(/\/websockets\?.*messageId=mock-realtime-websocket-1/);
+  await expect(page.getByLabel("Message name")).toHaveValue("Live order events");
+  await expect(page.getByLabel("Connection URL")).toHaveValue("ws:\/\/localhost:8080");
+  await expect(page.locator(".realtime-composer").getByRole("button", { name: "Update", exact: true })).toBeVisible();
   await capture(page, testInfo, "collection-realtime-routing");
 });
 

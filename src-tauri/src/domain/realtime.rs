@@ -3,7 +3,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::requests::{KeyValueRow, RequestAuth};
 
-pub const REALTIME_REQUEST_SCHEMA_VERSION: u32 = 1;
+pub const REALTIME_CONNECTION_SCHEMA_VERSION: u32 = 1;
+pub const REALTIME_MESSAGE_SCHEMA_VERSION: u32 = 1;
+pub const LEGACY_REALTIME_REQUEST_SCHEMA_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
@@ -49,7 +51,7 @@ impl Default for ReconnectPolicy {
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct RealtimeRequestCommon {
+pub struct RealtimeConnectionCommon {
     pub name: String,
     pub url: String,
     #[serde(default)]
@@ -133,11 +135,134 @@ impl Default for SocketIoComposer {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(tag = "requestType", rename_all = "lowercase")]
-pub enum RealtimeRequestDraft {
+#[serde(tag = "protocol", rename_all = "lowercase")]
+pub enum RealtimeConnectionDraft {
     Websocket {
         #[serde(flatten)]
-        common: RealtimeRequestCommon,
+        common: RealtimeConnectionCommon,
+        #[serde(default)]
+        subprotocols: Vec<String>,
+    },
+    Socketio {
+        #[serde(flatten)]
+        common: RealtimeConnectionCommon,
+        #[serde(default = "default_socketio_path")]
+        path: String,
+        #[serde(default = "default_socketio_namespace")]
+        namespace: String,
+        #[serde(default = "default_socketio_auth_payload")]
+        auth_payload: serde_json::Value,
+        #[serde(default)]
+        transport: SocketIoTransport,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RealtimeConnectionProfileSummary {
+    pub id: String,
+    pub name: String,
+    pub protocol: RequestType,
+    pub url: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RealtimeConnectionProfileDetail {
+    pub id: String,
+    pub name: String,
+    pub protocol: RequestType,
+    pub url: String,
+    pub updated_at: String,
+    pub connection: RealtimeConnectionDraft,
+}
+
+impl RealtimeConnectionDraft {
+    pub const fn protocol(&self) -> RequestType {
+        match self {
+            Self::Websocket { .. } => RequestType::Websocket,
+            Self::Socketio { .. } => RequestType::Socketio,
+        }
+    }
+
+    pub const fn common(&self) -> &RealtimeConnectionCommon {
+        match self {
+            Self::Websocket { common, .. } | Self::Socketio { common, .. } => common,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "protocol", rename_all = "lowercase")]
+pub enum RealtimeMessageDraft {
+    Websocket {
+        name: String,
+        #[serde(default)]
+        composer: RawWebSocketComposer,
+    },
+    Socketio {
+        name: String,
+        #[serde(default)]
+        composer: SocketIoComposer,
+    },
+}
+
+impl RealtimeMessageDraft {
+    pub const fn protocol(&self) -> RequestType {
+        match self {
+            Self::Websocket { .. } => RequestType::Websocket,
+            Self::Socketio { .. } => RequestType::Socketio,
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Websocket { name, .. } | Self::Socketio { name, .. } => name,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct VersionedRealtimeConnection {
+    pub version: u32,
+    pub connection: RealtimeConnectionDraft,
+}
+
+impl VersionedRealtimeConnection {
+    pub const fn new(connection: RealtimeConnectionDraft) -> Self {
+        Self {
+            version: REALTIME_CONNECTION_SCHEMA_VERSION,
+            connection,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct VersionedRealtimeMessage {
+    pub version: u32,
+    pub message: RealtimeMessageDraft,
+}
+
+impl VersionedRealtimeMessage {
+    pub const fn new(message: RealtimeMessageDraft) -> Self {
+        Self {
+            version: REALTIME_MESSAGE_SCHEMA_VERSION,
+            message,
+        }
+    }
+}
+
+/// Version 1 persisted a connection and one composer as one collection item.
+/// It is retained only for database and PostNot v1 import compatibility.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "requestType", rename_all = "lowercase")]
+pub enum LegacyRealtimeRequestDraft {
+    Websocket {
+        #[serde(flatten)]
+        common: RealtimeConnectionCommon,
         #[serde(default)]
         subprotocols: Vec<String>,
         #[serde(default)]
@@ -145,7 +270,7 @@ pub enum RealtimeRequestDraft {
     },
     Socketio {
         #[serde(flatten)]
-        common: RealtimeRequestCommon,
+        common: RealtimeConnectionCommon,
         #[serde(default = "default_socketio_path")]
         path: String,
         #[serde(default = "default_socketio_namespace")]
@@ -159,36 +284,63 @@ pub enum RealtimeRequestDraft {
     },
 }
 
-impl RealtimeRequestDraft {
-    pub const fn request_type(&self) -> RequestType {
+impl LegacyRealtimeRequestDraft {
+    pub fn split(self) -> (RealtimeConnectionDraft, RealtimeMessageDraft) {
         match self {
-            Self::Websocket { .. } => RequestType::Websocket,
-            Self::Socketio { .. } => RequestType::Socketio,
-        }
-    }
-
-    pub const fn common(&self) -> &RealtimeRequestCommon {
-        match self {
-            Self::Websocket { common, .. } | Self::Socketio { common, .. } => common,
+            Self::Websocket {
+                common,
+                subprotocols,
+                composer,
+            } => {
+                let message_name = format!("{} message", common.name.trim());
+                (
+                    RealtimeConnectionDraft::Websocket {
+                        common,
+                        subprotocols,
+                    },
+                    RealtimeMessageDraft::Websocket {
+                        name: message_name,
+                        composer,
+                    },
+                )
+            }
+            Self::Socketio {
+                common,
+                path,
+                namespace,
+                auth_payload,
+                transport,
+                composer,
+            } => {
+                let message_name = if composer.event.trim().is_empty() {
+                    format!("{} message", common.name.trim())
+                } else {
+                    composer.event.trim().to_string()
+                };
+                (
+                    RealtimeConnectionDraft::Socketio {
+                        common,
+                        path,
+                        namespace,
+                        auth_payload,
+                        transport,
+                    },
+                    RealtimeMessageDraft::Socketio {
+                        name: message_name,
+                        composer,
+                    },
+                )
+            }
         }
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct VersionedRealtimeRequest {
+pub struct VersionedLegacyRealtimeRequest {
     pub version: u32,
     #[serde(flatten)]
-    pub request: RealtimeRequestDraft,
-}
-
-impl VersionedRealtimeRequest {
-    pub const fn new(request: RealtimeRequestDraft) -> Self {
-        Self {
-            version: REALTIME_REQUEST_SCHEMA_VERSION,
-            request,
-        }
-    }
+    pub request: LegacyRealtimeRequestDraft,
 }
 
 fn default_reconnect_attempts() -> u32 {
@@ -232,9 +384,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn realtime_draft_round_trips_with_version_and_discriminator() {
-        let request = RealtimeRequestDraft::Websocket {
-            common: RealtimeRequestCommon {
+    fn legacy_request_splits_into_connection_and_message() {
+        let request = LegacyRealtimeRequestDraft::Websocket {
+            common: RealtimeConnectionCommon {
                 name: "Events".to_string(),
                 url: "wss://example.test/events".to_string(),
                 query_params: Vec::new(),
@@ -246,15 +398,8 @@ mod tests {
             composer: RawWebSocketComposer::default(),
         };
 
-        let json = serde_json::to_value(VersionedRealtimeRequest::new(request.clone()))
-            .expect("serialize");
-        assert_eq!(json["version"], REALTIME_REQUEST_SCHEMA_VERSION);
-        assert_eq!(json["requestType"], "websocket");
-
-        let restored: VersionedRealtimeRequest = serde_json::from_value(json).expect("deserialize");
-        assert_eq!(
-            serde_json::to_value(restored.request).expect("serialize restored"),
-            serde_json::to_value(request).expect("serialize original")
-        );
+        let (connection, message) = request.split();
+        assert_eq!(connection.protocol(), RequestType::Websocket);
+        assert_eq!(message.name(), "Events message");
     }
 }

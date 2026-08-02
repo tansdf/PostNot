@@ -51,8 +51,8 @@
         if (changedCollections.size > 0) {
           await collections.loadCollections(collections.selectedCollectionId);
           await Promise.all(Array.from(changedCollections).map((id) => collections.loadCollectionItems(id)));
-          window.dispatchEvent(new CustomEvent("postnot-agent-activity", { detail: activity.entries }));
         }
+        window.dispatchEvent(new CustomEvent("postnot-agent-activity", { detail: activity.entries }));
         const count = activity.entries.filter((entry) => entry.outcome === "succeeded").length;
         if (count > 0) {
           notifications.success(`${count} saved ${count === 1 ? "change is" : "changes are"} now visible.`, "PostNot MCP updated collections", {

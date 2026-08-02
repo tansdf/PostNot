@@ -10,19 +10,119 @@ use tauri::{ipc::Channel, State};
 
 use crate::{
     app_state::AppState,
-    domain::exports::ExportResult,
+    domain::{
+        exports::ExportResult,
+        realtime::{
+            RealtimeConnectionDraft, RealtimeConnectionProfileDetail,
+            RealtimeConnectionProfileSummary, RealtimeMessageDraft,
+        },
+    },
     error::AppResult,
     services::{
         environments_service,
+        realtime_connections_service,
         realtime_payload_service::RealtimePayload,
         realtime_resolution_service,
         realtime_service::{
-            RealtimeConnectInput, RealtimeRuntimeEvent, RealtimeRuntimeLimits, RealtimeSendMessage,
+            RealtimeConnectInput, RealtimeRuntimeEvent, RealtimeRuntimeLimits,
             RealtimeSessionSnapshot,
         },
         settings_service,
     },
 };
+
+#[tauri::command]
+pub async fn list_realtime_connection_profiles(
+    state: State<'_, AppState>,
+) -> AppResult<Vec<RealtimeConnectionProfileSummary>> {
+    realtime_connections_service::list_profiles(state.db()).await
+}
+
+#[tauri::command]
+pub async fn create_realtime_connection_profile(
+    state: State<'_, AppState>,
+    connection: RealtimeConnectionDraft,
+) -> AppResult<RealtimeConnectionProfileDetail> {
+    realtime_connections_service::create_profile(state.db(), &connection).await
+}
+
+#[tauri::command]
+pub async fn get_realtime_connection_profile(
+    state: State<'_, AppState>,
+    profile_id: String,
+) -> AppResult<RealtimeConnectionProfileDetail> {
+    realtime_connections_service::get_profile(state.db(), &profile_id).await
+}
+
+#[tauri::command]
+pub async fn update_realtime_connection_profile(
+    state: State<'_, AppState>,
+    profile_id: String,
+    connection: RealtimeConnectionDraft,
+    expected_updated_at: Option<String>,
+) -> AppResult<RealtimeConnectionProfileDetail> {
+    realtime_connections_service::update_profile(
+        state.db(),
+        &profile_id,
+        &connection,
+        expected_updated_at.as_deref(),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn delete_realtime_connection_profile(
+    state: State<'_, AppState>,
+    profile_id: String,
+    expected_updated_at: Option<String>,
+) -> AppResult<()> {
+    realtime_connections_service::delete_profile(
+        state.db(),
+        &profile_id,
+        expected_updated_at.as_deref(),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn export_realtime_connection_profiles(
+    state: State<'_, AppState>,
+    profile_ids: Vec<String>,
+    include_sensitive: bool,
+) -> AppResult<Option<ExportResult>> {
+    let json = realtime_connections_service::export_profiles(
+        state.db(),
+        &profile_ids,
+        include_sensitive,
+    )
+    .await?;
+    tauri::async_runtime::spawn_blocking(move || -> AppResult<Option<ExportResult>> {
+        let Some(path) = rfd::FileDialog::new()
+            .set_title("Export realtime connection profiles")
+            .set_file_name("postnot-realtime-connections.json")
+            .add_filter("JSON", &["json"])
+            .save_file()
+        else { return Ok(None); };
+        std::fs::write(&path, json)?;
+        Ok(Some(ExportResult { file_path: path.to_string_lossy().to_string() }))
+    }).await?
+}
+
+#[tauri::command]
+pub async fn import_realtime_connection_profiles(
+    state: State<'_, AppState>,
+) -> AppResult<Vec<RealtimeConnectionProfileDetail>> {
+    let source = tauri::async_runtime::spawn_blocking(move || -> AppResult<Option<String>> {
+        let Some(path) = rfd::FileDialog::new()
+            .set_title("Import realtime connection profiles")
+            .add_filter("JSON", &["json"])
+            .pick_file()
+        else { return Ok(None); };
+        Ok(Some(std::fs::read_to_string(path)?))
+    }).await??;
+    let Some(source) = source else { return Ok(Vec::new()); };
+    realtime_connections_service::import_profiles(state.db(), &source).await
+}
 
 #[tauri::command]
 pub async fn get_realtime_workspace_state(
@@ -47,8 +147,10 @@ pub async fn connect_realtime_connection(
 ) -> AppResult<RealtimeSessionSnapshot> {
     let active_environment =
         environments_service::get_active_environment(state.db(), state.secret_store()).await?;
-    let resolved =
-        realtime_resolution_service::resolve_request(&input.request, active_environment.as_ref());
+    let resolved = realtime_resolution_service::resolve_connection(
+        &input.connection,
+        active_environment.as_ref(),
+    );
     let settings = settings_service::get_settings(state.db()).await?;
     let limits = RealtimeRuntimeLimits {
         connect_timeout: Duration::from_millis(settings.realtime_connect_timeout_ms),
@@ -63,7 +165,7 @@ pub async fn connect_realtime_connection(
         .realtime_connections()
         .connect(
             input,
-            resolved.request,
+            resolved.connection,
             resolved.secret_values,
             limits,
             on_event,
@@ -74,97 +176,97 @@ pub async fn connect_realtime_connection(
 #[tauri::command]
 pub async fn disconnect_realtime_connection(
     state: State<'_, AppState>,
-    connection_id: String,
+    session_id: String,
 ) -> AppResult<()> {
     state
         .realtime_connections()
-        .disconnect(&connection_id)
+        .disconnect(&session_id)
         .await
 }
 
 #[tauri::command]
 pub async fn release_realtime_connection(
     state: State<'_, AppState>,
-    connection_id: String,
+    session_id: String,
 ) -> AppResult<()> {
-    state.realtime_connections().release(&connection_id).await
+    state.realtime_connections().release(&session_id).await
 }
 
 #[tauri::command]
 pub async fn send_realtime_message(
     state: State<'_, AppState>,
-    connection_id: String,
-    message: RealtimeSendMessage,
+    session_id: String,
+    message: RealtimeMessageDraft,
 ) -> AppResult<()> {
     let active_environment =
         environments_service::get_active_environment(state.db(), state.secret_store()).await?;
     let secret_values =
         environments_service::active_environment_secret_values(active_environment.as_ref());
     let (message, used_secret) = match message {
-        RealtimeSendMessage::Websocket { composer } => {
+        RealtimeMessageDraft::Websocket { name, composer } => {
             let (composer, used_secret) =
                 realtime_resolution_service::resolve_raw_composer_with_usage(
                     &composer,
                     active_environment.as_ref(),
                 );
-            (RealtimeSendMessage::Websocket { composer }, used_secret)
+            (RealtimeMessageDraft::Websocket { name, composer }, used_secret)
         }
-        RealtimeSendMessage::Socketio { composer } => {
+        RealtimeMessageDraft::Socketio { name, composer } => {
             let (composer, used_secret) =
                 realtime_resolution_service::resolve_socketio_composer_with_usage(
                     &composer,
                     active_environment.as_ref(),
                 );
-            (RealtimeSendMessage::Socketio { composer }, used_secret)
+            (RealtimeMessageDraft::Socketio { name, composer }, used_secret)
         }
     };
     state
         .realtime_connections()
-        .send(&connection_id, message, secret_values, used_secret)
+        .send(&session_id, message, secret_values, used_secret)
         .await
 }
 
 #[tauri::command]
 pub async fn ping_realtime_connection(
     state: State<'_, AppState>,
-    connection_id: String,
+    session_id: String,
     payload: Option<String>,
 ) -> AppResult<()> {
     state
         .realtime_connections()
-        .ping(&connection_id, payload)
+        .ping(&session_id, payload)
         .await
 }
 
 #[tauri::command]
 pub async fn close_realtime_connection(
     state: State<'_, AppState>,
-    connection_id: String,
+    session_id: String,
     code: u16,
     reason: String,
 ) -> AppResult<()> {
     state
         .realtime_connections()
-        .close(&connection_id, code, reason)
+        .close(&session_id, code, reason)
         .await
 }
 
 #[tauri::command]
 pub fn get_realtime_session_snapshot(
     state: State<'_, AppState>,
-    connection_id: String,
+    session_id: String,
 ) -> AppResult<RealtimeSessionSnapshot> {
-    state.realtime_connections().snapshot(&connection_id)
+    state.realtime_connections().snapshot(&session_id)
 }
 
 #[tauri::command]
 pub async fn clear_realtime_transcript(
     state: State<'_, AppState>,
-    connection_id: String,
+    session_id: String,
 ) -> AppResult<()> {
     state
         .realtime_connections()
-        .clear_transcript(&connection_id)
+        .clear_transcript(&session_id)
         .await
 }
 
@@ -211,14 +313,14 @@ pub async fn save_realtime_payload(
 #[tauri::command]
 pub async fn export_realtime_transcript(
     state: State<'_, AppState>,
-    connection_id: String,
+    session_id: String,
 ) -> AppResult<Option<ExportResult>> {
     let (snapshot, retained_handles) = state
         .realtime_connections()
-        .snapshot_for_export(&connection_id)?;
+        .snapshot_for_export(&session_id)?;
     let suggested_name = format!(
         "{}-transcript.json",
-        sanitize_file_stem(&connection_id, "realtime")
+        sanitize_file_stem(&session_id, "realtime")
     );
     let path = match choose_transcript_path(suggested_name).await {
         Ok(path) => path,
@@ -322,8 +424,8 @@ fn write_transcript_export(
     payloads: &crate::services::realtime_payload_service::RealtimePayloadStore,
 ) -> AppResult<()> {
     let mut writer = BufWriter::new(File::create(path)?);
-    write!(writer, "{{\"connectionId\":")?;
-    serde_json::to_writer(&mut writer, &snapshot.connection_id)?;
+    write!(writer, "{{\"sessionId\":")?;
+    serde_json::to_writer(&mut writer, &snapshot.session_id)?;
     write!(
         writer,
         ",\"generation\":{},\"lastSequence\":{},\"status\":",
@@ -384,8 +486,8 @@ fn write_export_entry_prefix(
 ) -> AppResult<()> {
     writer.write_all(b"{\"id\":")?;
     serde_json::to_writer(&mut *writer, &entry.id)?;
-    writer.write_all(b",\"connectionId\":")?;
-    serde_json::to_writer(&mut *writer, &entry.connection_id)?;
+    writer.write_all(b",\"sessionId\":")?;
+    serde_json::to_writer(&mut *writer, &entry.session_id)?;
     write!(
         writer,
         ",\"generation\":{},\"sequence\":{},\"occurredAt\":",
@@ -453,7 +555,7 @@ mod tests {
         let payload = store.store_binary(&bytes).await.expect("store");
         assert!(matches!(payload, RealtimePayload::File { .. }));
         let snapshot = RealtimeSessionSnapshot {
-            connection_id: "large-export".to_string(),
+            session_id: "large-export".to_string(),
             generation: 2,
             last_sequence: 4,
             status: RealtimeConnectionStatus::Disconnected,
@@ -461,7 +563,7 @@ mod tests {
             transcript_size_bytes: bytes.len() as u64,
             transcript: vec![RealtimeTranscriptEntry {
                 id: "entry".to_string(),
-                connection_id: "large-export".to_string(),
+                session_id: "large-export".to_string(),
                 generation: 2,
                 sequence: 4,
                 occurred_at: "2026-01-01T00:00:00Z".to_string(),

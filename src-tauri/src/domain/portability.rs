@@ -1,9 +1,12 @@
 use serde::{Deserialize, Serialize};
 
-use crate::domain::{realtime::VersionedRealtimeRequest, requests::SendRequestPayload};
+use crate::domain::{
+    realtime::{VersionedLegacyRealtimeRequest, VersionedRealtimeMessage},
+    requests::SendRequestPayload,
+};
 
 pub const POSTNOT_COLLECTION_SCHEMA: &str = "https://post-not.com/schemas/collection.json";
-pub const POSTNOT_COLLECTION_VERSION: u32 = 1;
+pub const POSTNOT_COLLECTION_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -41,8 +44,12 @@ pub enum PostNotCollectionItem {
     Http {
         request: SendRequestPayload,
     },
+    Message {
+        message: VersionedRealtimeMessage,
+    },
+    /// PostNot collection v1 compatibility.
     Realtime {
         #[serde(flatten)]
-        request: VersionedRealtimeRequest,
+        request: VersionedLegacyRealtimeRequest,
     },
 }

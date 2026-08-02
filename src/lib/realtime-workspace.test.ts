@@ -1,11 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import { createRealtimeConnectionDraft, createRealtimeMessageDraft, type RealtimeTranscriptEntry } from "$lib/api/types";
 import {
-  createRealtimeRequestDraft,
-  type RealtimeTranscriptEntry,
-  type RealtimeWorkspaceTab
-} from "$lib/api/types";
-import {
+  createRealtimeWorkspaceTab,
   normalizeRealtimeWorkspaceState,
   serializeRealtimeWorkspaceState,
   trimRealtimeTranscript
@@ -14,7 +11,7 @@ import {
 function transcriptEntry(sequence: number, sizeBytes: number): RealtimeTranscriptEntry {
   return {
     id: `entry-${sequence}`,
-    connectionId: "tab-1",
+    sessionId: "tab-1",
     generation: 2,
     sequence,
     occurredAt: "2026-07-30T00:00:00.000Z",
@@ -34,25 +31,8 @@ function transcriptEntry(sequence: number, sizeBytes: number): RealtimeTranscrip
 
 describe("realtime workspace persistence", () => {
   it("restores drafts but always resets live state and transcript", () => {
-    const dirtyTab: RealtimeWorkspaceTab = {
-      id: "tab-1",
-      source: "saved",
-      savedRequestId: "request-1",
-      collectionId: "collection-1",
-      parentId: null,
-      sourceUpdatedAt: "2026-07-30T00:00:00.000Z",
-      externallyChanged: false,
-      draft: createRealtimeRequestDraft("socketio"),
-      baselineDraft: createRealtimeRequestDraft("socketio"),
-      status: "connected",
-      generation: 9,
-      lastSequence: 42,
-      statusMessage: "Connected",
-      reconnectRequired: true,
-      transcript: [transcriptEntry(42, 100)],
-      transcriptSizeBytes: 100,
-      errorText: "runtime-only"
-    };
+    const dirtyTab = createRealtimeWorkspaceTab(createRealtimeConnectionDraft("socketio"), createRealtimeMessageDraft("socketio"), { selectedMessageId: "request-1", collectionId: "collection-1" });
+    Object.assign(dirtyTab, { id: "tab-1", status: "connected", generation: 9, lastSequence: 42, statusMessage: "Connected", reconnectRequired: true, transcript: [transcriptEntry(42, 100)], transcriptSizeBytes: 100, errorText: "runtime-only" });
 
     const restored = normalizeRealtimeWorkspaceState({
       tabs: [dirtyTab],
@@ -61,7 +41,7 @@ describe("realtime workspace persistence", () => {
 
     expect(restored.tabs[0]).toMatchObject({
       id: "tab-1",
-      savedRequestId: "request-1",
+      selectedMessageId: "request-1",
       status: "disconnected",
       generation: 0,
       lastSequence: 0,
@@ -71,33 +51,16 @@ describe("realtime workspace persistence", () => {
       transcriptSizeBytes: 0,
       errorText: ""
     });
-    expect(restored.tabs[0].draft.requestType).toBe("socketio");
+    expect(restored.tabs[0].connectionDraft.protocol).toBe("socketio");
   });
 
   it("serializes disconnected workspace state only", () => {
-    const draft = createRealtimeRequestDraft();
+    const tab = createRealtimeWorkspaceTab();
+    Object.assign(tab, { id: "tab-1", status: "reconnecting", generation: 3, lastSequence: 4, statusMessage: "Retrying", transcript: [transcriptEntry(4, 10)], transcriptSizeBytes: 10 });
     const serialized = serializeRealtimeWorkspaceState({
       activeTabId: "tab-1",
       tabs: [
-        {
-          id: "tab-1",
-          source: "blank",
-          savedRequestId: null,
-          collectionId: null,
-          parentId: null,
-          sourceUpdatedAt: null,
-          externallyChanged: false,
-          draft,
-          baselineDraft: draft,
-          status: "reconnecting",
-          generation: 3,
-          lastSequence: 4,
-          statusMessage: "Retrying",
-          reconnectRequired: false,
-          transcript: [transcriptEntry(4, 10)],
-          transcriptSizeBytes: 10,
-          errorText: ""
-        }
+        tab
       ]
     });
 

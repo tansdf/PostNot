@@ -7,6 +7,7 @@ pub mod http_client;
 pub mod imports_service;
 pub mod playbooks_service;
 pub mod realtime_payload_service;
+pub mod realtime_connections_service;
 pub mod realtime_resolution_service;
 pub mod realtime_service;
 pub mod realtime_socketio_service;

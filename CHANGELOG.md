@@ -6,14 +6,29 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+### Added
+
+- Added standalone WebSocket and Socket.IO connection profiles with inline create, save, duplicate, delete, import, and redacted-by-default export controls.
+- Added separate optimistic MCP tools and Agent Activity records for realtime connection profiles and collection messages.
+
 ### Changed
 
+- Split realtime persistence and workspace editing into independently selected connection profiles and message-only collection items. A tab now keeps one live WebSocket or Socket.IO session while messages are selected, edited, and sent without reconnecting or clearing its transcript.
+- Renamed live runtime connection identifiers to session identifiers, locked connection editing while a session is active, and rejected protocol-incompatible messages before they reach the transport.
+- Bumped PostNot collection portability to version 2 for message-only realtime entries while continuing to import version 1 combined entries by splitting them into profiles and messages.
+- Aligned realtime profile, message Save/Update, and Send controls with the Requests workspace and made connection and message dirty state independent.
 - Improved Svelte list identity across playbooks, realtime transcript filters, settings previews, and generated syntax output.
 
 ### Fixed
 
+- Added an atomic, idempotent upgrader for the direct `realtime_request_json` to `realtime_message_json` schema rename, legacy combined records, and persisted workspace drafts.
+- Prevented opening the WebSockets workspace from replacing the current message or showing a discard prompt; opening a saved realtime message now activates the workspace before asking about dirty message edits.
 - Prevented stale Playbooks loads, searches, and run details from replacing newer user selections.
 - Serialized and coalesced rapid edits to the same playbook step so the latest values remain visible and are persisted in the correct order.
+
+### Security
+
+- Kept literal connection credentials redacted in profile exports unless sensitive-value inclusion is explicitly confirmed.
 
 ## [0.23.1] - 2026-07-31
 

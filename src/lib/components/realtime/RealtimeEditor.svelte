@@ -1,22 +1,31 @@
 <script lang="ts">
   import { pickMultipartFiles } from "$lib/api/commands";
   import {
-    cloneRealtimeRequestDraft,
-    createKeyValueRow,
-    createRealtimeRequestDraft,
+    createRealtimeConnectionDraft,
+    createRealtimeMessageDraft,
     type EnvironmentVariable,
     type RealtimeBinaryPayload,
+    type RealtimeConnectionDraft,
+    type RealtimeConnectionProfileSummary,
+    type RealtimeMessageDraft,
     type RealtimeProtocol,
-    type RealtimeRequestDraft
   } from "$lib/api/types";
   import AuthEditor from "$lib/components/request/AuthEditor.svelte";
   import JsonEditor from "$lib/components/request/JsonEditor.svelte";
   import KeyValueEditor from "$lib/components/request/KeyValueEditor.svelte";
+  import SaveSplitControl from "$lib/components/request/SaveSplitControl.svelte";
+  import SendControl from "$lib/components/request/SendControl.svelte";
   import VariableField from "$lib/components/request/VariableField.svelte";
   import { getHeaderNameSuggestions, getHeaderValueSuggestions } from "$lib/header-suggestions";
 
   let {
-    draft = $bindable(),
+    connection = $bindable(),
+    message = $bindable(),
+    profiles = [],
+    selectedProfileId = null,
+    selectedMessageId = null,
+    connectionDirty = false,
+    messageDirty = false,
     variables = [],
     status = "disconnected",
     statusMessage = "Disconnected",
@@ -29,9 +38,22 @@
     onSend = () => {},
     onSave = () => {},
     onSaveAs = () => {},
+    onSelectProfile = () => {},
+    onNewProfile = () => {},
+    onSaveProfile = () => {},
+    onSaveProfileAs = () => {},
+    onDeleteProfile = () => {},
+    onImportProfiles = () => {},
+    onExportProfile = () => {},
     onValidityChange = () => {}
   }: {
-    draft: RealtimeRequestDraft;
+    connection: RealtimeConnectionDraft;
+    message: RealtimeMessageDraft;
+    profiles?: RealtimeConnectionProfileSummary[];
+    selectedProfileId?: string | null;
+    selectedMessageId?: string | null;
+    connectionDirty?: boolean;
+    messageDirty?: boolean;
     variables?: EnvironmentVariable[];
     status?: "disconnected" | "connecting" | "connected" | "reconnecting" | "disconnecting" | "failed";
     statusMessage?: string;
@@ -44,6 +66,13 @@
     onSend?: () => Promise<void> | void;
     onSave?: () => Promise<void> | void;
     onSaveAs?: () => Promise<void> | void;
+    onSelectProfile?: (profileId: string) => Promise<void> | void;
+    onNewProfile?: () => Promise<void> | void;
+    onSaveProfile?: () => Promise<void> | void;
+    onSaveProfileAs?: () => Promise<void> | void;
+    onDeleteProfile?: () => Promise<void> | void;
+    onImportProfiles?: () => Promise<void> | void;
+    onExportProfile?: () => Promise<void> | void;
     onValidityChange?: (valid: boolean) => void;
   } = $props();
 
@@ -69,12 +98,31 @@
   ] as const;
 
   let isConnected = $derived(status === "connected");
-  let hasLiveSession = $derived(status === "connected" || status === "reconnecting");
+  let hasLiveSession = $derived(status !== "disconnected" && status !== "failed");
   let isBusy = $derived(status === "connecting" || status === "disconnecting");
   let structuredJsonValid = $derived(!authPayloadError && !argumentsError);
+  let protocolCompatible = $derived(connection.protocol === message.protocol);
+  let connectionStateHelp = $derived(
+    hasLiveSession
+      ? "Connection settings are locked while this session is active. Disconnect to edit them."
+      : "Choose a saved profile or edit the connection details, then connect."
+  );
+  let sendAvailabilityText = $derived(
+    !protocolCompatible
+      ? "Match the message protocol to this connection before sending."
+      : reconnectRequired
+        ? "Reconnect to apply the latest environment values before sending."
+        : !isConnected
+          ? "Connect this tab to send the message."
+          : "Ready to send on the current session."
+  );
+  type CombinedDraft =
+    | (Extract<RealtimeConnectionDraft, { protocol: "websocket" }> & { requestType: "websocket"; composer: Extract<RealtimeMessageDraft, { protocol: "websocket" }>["composer"] })
+    | (Extract<RealtimeConnectionDraft, { protocol: "socketio" }> & { requestType: "socketio"; composer: Extract<RealtimeMessageDraft, { protocol: "socketio" }>["composer"] });
+  let draft = $derived({ ...connection, requestType: connection.protocol, composer: message.protocol === connection.protocol ? message.composer : createRealtimeMessageDraft(connection.protocol).composer } as CombinedDraft);
   let headerNameSuggestions = $derived(getHeaderNameSuggestions(draft.headers));
-  type WebSocketDraft = Extract<RealtimeRequestDraft, { requestType: "websocket" }>;
-  type SocketIoDraft = Extract<RealtimeRequestDraft, { requestType: "socketio" }>;
+  type WebSocketDraft = Extract<CombinedDraft, { requestType: "websocket" }>;
+  type SocketIoDraft = Extract<CombinedDraft, { requestType: "socketio" }>;
 
   function panelDomId(panelId: (typeof panels)[number]["id"]) {
     return `realtime-settings-tab-${panelId}`;
@@ -93,18 +141,21 @@
   }
 
   $effect(() => {
-    if (draft.requestType !== "socketio") return;
-    const nextAuthFingerprint = JSON.stringify(draft.authPayload);
-    const nextArgumentsFingerprint = JSON.stringify(draft.composer.arguments);
-    if (nextAuthFingerprint !== authPayloadFingerprint) {
-      authPayloadFingerprint = nextAuthFingerprint;
-      authPayloadText = JSON.stringify(draft.authPayload, null, 2);
-      authPayloadError = "";
+    if (connection.protocol === "socketio") {
+      const nextAuthFingerprint = JSON.stringify(connection.authPayload);
+      if (nextAuthFingerprint !== authPayloadFingerprint) {
+        authPayloadFingerprint = nextAuthFingerprint;
+        authPayloadText = JSON.stringify(connection.authPayload, null, 2);
+        authPayloadError = "";
+      }
     }
-    if (nextArgumentsFingerprint !== argumentsFingerprint) {
-      argumentsFingerprint = nextArgumentsFingerprint;
-      argumentsText = JSON.stringify(draft.composer.arguments, null, 2);
-      argumentsError = "";
+    if (message.protocol === "socketio") {
+      const nextArgumentsFingerprint = JSON.stringify(message.composer.arguments);
+      if (nextArgumentsFingerprint !== argumentsFingerprint) {
+        argumentsFingerprint = nextArgumentsFingerprint;
+        argumentsText = JSON.stringify(message.composer.arguments, null, 2);
+        argumentsError = "";
+      }
     }
   });
 
@@ -112,45 +163,51 @@
     onValidityChange(structuredJsonValid);
   });
 
-  function patchCommon(patch: Partial<Pick<RealtimeRequestDraft, "name" | "url" | "queryParams" | "headers" | "auth" | "reconnect">>) {
-    draft = { ...draft, ...patch } as RealtimeRequestDraft;
+  $effect(() => {
+    if (!isConnected) showCloseOptions = false;
+  });
+
+  function patchCommon(patch: Partial<Pick<RealtimeConnectionDraft, "name" | "url" | "queryParams" | "headers" | "auth" | "reconnect">>) {
+    connection = { ...connection, ...patch } as RealtimeConnectionDraft;
   }
 
   function switchProtocol(protocol: RealtimeProtocol) {
-    if (draft.requestType === protocol) return;
-    const next = createRealtimeRequestDraft(protocol);
-    draft = {
+    if (connection.protocol === protocol) return;
+    const next = createRealtimeConnectionDraft(protocol);
+    connection = {
       ...next,
-      name: draft.name,
-      url: draft.url,
-      queryParams: draft.queryParams,
-      headers: draft.headers,
-      auth: draft.auth,
-      reconnect: draft.reconnect
-    } as RealtimeRequestDraft;
+      name: connection.name,
+      url: connection.url,
+      queryParams: connection.queryParams,
+      headers: connection.headers,
+      auth: connection.auth,
+      reconnect: connection.reconnect
+    } as RealtimeConnectionDraft;
+    composerError = "";
+  }
+
+  function switchMessageProtocol(protocol: RealtimeProtocol) {
+    if (message.protocol === protocol) return;
+    const next = createRealtimeMessageDraft(protocol);
+    next.name = message.name;
+    message = next;
     composerError = "";
   }
 
   function patchWebSocket(patch: Partial<WebSocketDraft>) {
-    if (draft.requestType === "websocket") draft = { ...draft, ...patch };
+    if (connection.protocol === "websocket") connection = { ...connection, ...patch };
   }
 
   function patchSocketIo(patch: Partial<SocketIoDraft>) {
-    if (draft.requestType === "socketio") draft = { ...draft, ...patch };
+    if (connection.protocol === "socketio") connection = { ...connection, ...patch };
   }
 
   function patchRawComposer(patch: Partial<WebSocketDraft["composer"]>) {
-    if (draft.requestType === "websocket") draft = { ...draft, composer: { ...draft.composer, ...patch } };
+    if (message.protocol === "websocket") message = { ...message, composer: { ...message.composer, ...patch } };
   }
 
   function patchSocketIoComposer(patch: Partial<SocketIoDraft["composer"]>) {
-    if (draft.requestType === "socketio") draft = { ...draft, composer: { ...draft.composer, ...patch } };
-  }
-
-  function addCookieHeader() {
-    patchCommon({
-      headers: [...draft.headers, { ...createKeyValueRow(), key: "Cookie" }]
-    });
+    if (message.protocol === "socketio") message = { ...message, composer: { ...message.composer, ...patch } };
   }
 
   function binarySource(binary: RealtimeBinaryPayload | null | undefined) {
@@ -171,19 +228,19 @@
     else argumentsText = value;
     try {
       const parsed = JSON.parse(value);
-      if (field === "authPayload" && draft.requestType === "socketio") {
+      if (field === "authPayload" && connection.protocol === "socketio") {
         if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
           throw new Error("Auth payload must be a JSON object.");
         }
         authPayloadFingerprint = JSON.stringify(parsed);
-        draft = { ...draft, authPayload: parsed };
+        connection = { ...connection, authPayload: parsed };
         authPayloadError = "";
-      } else if (draft.requestType === "socketio") {
+      } else if (message.protocol === "socketio") {
         if (!Array.isArray(parsed)) {
           throw new Error("Event arguments must be a JSON array.");
         }
         argumentsFingerprint = JSON.stringify(parsed);
-        draft = { ...draft, composer: { ...draft.composer, arguments: parsed } };
+        message = { ...message, composer: { ...message.composer, arguments: parsed } };
         argumentsError = "";
       }
     } catch (error) {
@@ -198,11 +255,8 @@
     try {
       const [path] = await pickMultipartFiles();
       if (!path) return;
-      if (draft.requestType === "websocket") {
-        draft = { ...draft, composer: { ...draft.composer, binary: { source: "file", path } } };
-      } else {
-        draft = { ...draft, composer: { ...draft.composer, binary: { source: "file", path } } };
-      }
+      if (message.protocol === "websocket") message = { ...message, composer: { ...message.composer, binary: { source: "file", path } } };
+      else message = { ...message, composer: { ...message.composer, binary: { source: "file", path } } };
       composerError = "";
     } catch (error) {
       composerError = error instanceof Error ? error.message : String(error);
@@ -213,19 +267,19 @@
 
   function validateComposer() {
     composerError = "";
-    if (draft.requestType === "websocket") {
-      if (draft.composer.mode === "json") {
+    if (message.protocol === "websocket") {
+      if (message.composer.mode === "json") {
         try {
-          JSON.parse(draft.composer.content);
+          JSON.parse(message.composer.content);
         } catch {
           composerError = "Message body must be valid JSON.";
         }
-      } else if (draft.composer.mode === "binary" && !binaryValue(draft.composer.binary).trim()) {
+      } else if (message.composer.mode === "binary" && !binaryValue(message.composer.binary).trim()) {
         composerError = "Choose a file or enter binary data before sending.";
       }
-    } else if (!draft.composer.event.trim()) {
+    } else if (!message.composer.event.trim()) {
       composerError = "Enter a Socket.IO event name.";
-    } else if (draft.composer.binary && !binaryValue(draft.composer.binary).trim()) {
+    } else if (message.composer.binary && !binaryValue(message.composer.binary).trim()) {
       composerError = "Choose a file or enter binary data before sending.";
     }
     return !composerError && structuredJsonValid;
@@ -236,12 +290,9 @@
   }
 
   function formatJson() {
-    if (draft.requestType !== "websocket") return;
+    if (message.protocol !== "websocket") return;
     try {
-      draft = {
-        ...draft,
-        composer: { ...draft.composer, content: JSON.stringify(JSON.parse(draft.composer.content), null, 2) }
-      };
+      if (message.protocol === "websocket") message = { ...message, composer: { ...message.composer, content: JSON.stringify(JSON.parse(message.composer.content), null, 2) } };
       composerError = "";
     } catch {
       composerError = "Message body must be valid JSON.";
@@ -250,27 +301,46 @@
 </script>
 
 <section class="panel panel-inset realtime-editor" aria-labelledby="realtime-editor-title">
-  <div class="editor-header">
-    <div class="panel-heading">
-      <p class="eyebrow">Realtime request</p>
+  <div class="realtime-resource-header">
+    <div class="panel-heading realtime-resource-heading">
+      <p class="eyebrow">Connection profile</p>
       <h1 class="panel-title" id="realtime-editor-title">{draft.requestType === "socketio" ? "Socket.IO connection" : "WebSocket connection"}</h1>
+      <p class="field-help">The connection belongs to this tab. Messages can change without interrupting the session.</p>
+      {#if connectionDirty}<span class="status-pill status-unsaved">Unsaved connection changes</span>{/if}
     </div>
-    <div class="request-actions">
-      <button class="button-secondary" type="button" onclick={onSaveAs} disabled={isSaving || !structuredJsonValid}>Save as…</button>
-      <button class="button-secondary" type="button" onclick={onSave} disabled={isSaving || !structuredJsonValid}>
-        {isSaving ? "Saving…" : "Save"}
-      </button>
+    <div class="realtime-profile-manager" aria-label="Connection profile management">
+      <label class="realtime-profile-picker">
+        <span class="field-label">Profile</span>
+        <select class="text-input" aria-label="Connection profile" value={selectedProfileId ?? ""} disabled={hasLiveSession} onchange={(event) => onSelectProfile(event.currentTarget.value)}>
+          <option value="" disabled={Boolean(selectedProfileId)}>Unsaved connection</option>
+          {#each profiles as profile (profile.id)}<option value={profile.id}>{profile.name}</option>{/each}
+        </select>
+      </label>
+      <div class="realtime-profile-actions">
+        <button class="button-secondary" type="button" onclick={onNewProfile} disabled={hasLiveSession}>New</button>
+        <button class="button-secondary" type="button" onclick={onSaveProfile} disabled={hasLiveSession || isSaving}>{isSaving ? "Saving…" : "Save"}</button>
+        <details class="request-actions-menu">
+          <summary class="button-secondary">More</summary>
+          <div class="request-actions-menu-popover">
+            <button class="button-ghost" type="button" onclick={onSaveProfileAs} disabled={hasLiveSession || isSaving}>Save as…</button>
+            <button class="button-ghost" type="button" onclick={onImportProfiles} disabled={hasLiveSession}>Import…</button>
+            <button class="button-ghost" type="button" onclick={onExportProfile} disabled={!selectedProfileId}>Export…</button>
+            <span class="menu-separator" aria-hidden="true"></span>
+            <button class="button-ghost menu-danger" type="button" onclick={onDeleteProfile} disabled={hasLiveSession || !selectedProfileId}>Delete…</button>
+          </div>
+        </details>
+      </div>
     </div>
   </div>
 
   <div class="realtime-connection-header">
     <label class="request-name-block">
       <span class="field-label">Name</span>
-      <input class="text-input" value={draft.name} oninput={(event) => patchCommon({ name: event.currentTarget.value })} />
+      <input class="text-input" value={draft.name} disabled={hasLiveSession} oninput={(event) => patchCommon({ name: event.currentTarget.value })} />
     </label>
     <label>
-      <span class="field-label">Mode</span>
-      <select class="method-select realtime-protocol-select" value={draft.requestType} onchange={(event) => switchProtocol(event.currentTarget.value as RealtimeProtocol)}>
+      <span class="field-label">Connection protocol</span>
+      <select class="method-select realtime-protocol-select" value={draft.requestType} disabled={hasLiveSession} onchange={(event) => switchProtocol(event.currentTarget.value as RealtimeProtocol)}>
         <option value="websocket">WebSocket</option>
         <option value="socketio">Socket.IO</option>
       </select>
@@ -281,6 +351,7 @@
         value={draft.url}
         {variables}
         className="text-input url-input"
+        disabled={hasLiveSession}
         placeholder={draft.requestType === "websocket" ? "wss://api.example.com/socket" : "https://api.example.com"}
         onValueInput={(value) => patchCommon({ url: value })}
       />
@@ -300,6 +371,7 @@
     <span class={["realtime-status-dot", `realtime-status-${status}`]} aria-hidden="true"></span>
     <strong>{statusMessage}</strong>
     {#if reconnectRequired}<span class="status-pill status-warning">Reconnect required</span>{/if}
+    <span class="realtime-status-help">{connectionStateHelp}</span>
   </div>
 
   <div class="panel-tabs" role="tablist" aria-label="Connection settings">
@@ -324,9 +396,11 @@
   <div
     id="realtime-settings-panel"
     class="realtime-settings-panel"
+    class:realtime-settings-locked={hasLiveSession}
     role="tabpanel"
     aria-labelledby={panelDomId(activePanel)}
     tabindex="0"
+    inert={hasLiveSession ? true : undefined}
   >
     {#if activePanel === "query"}
       <KeyValueEditor
@@ -345,11 +419,9 @@
         description="Handshake headers are resolved when you connect. Add cookies using a standard Cookie header."
         keyLabel="Header"
         valueLabel="Value"
-        auxiliaryActionLabel="Add Cookie header"
         keySuggestions={headerNameSuggestions}
         getValueSuggestions={(key) => getHeaderValueSuggestions(key, draft.headers)}
         onRowsChange={(headers) => patchCommon({ headers })}
-        onAuxiliaryAction={addCookieHeader}
       />
     {:else if activePanel === "auth"}
       <AuthEditor
@@ -405,37 +477,64 @@
 
   <section class="realtime-composer" aria-labelledby="realtime-composer-title">
     <div class="request-section-header">
-      <div class="panel-heading"><h2 id="realtime-composer-title">Message composer</h2><p class="field-help">Composer values resolve against the active environment when sent.</p></div>
-      <div class="request-actions">
-        {#if isConnected && draft.requestType === "websocket"}
+      <div class="panel-heading">
+        <p class="eyebrow">Collection message</p>
+        <h2 id="realtime-composer-title">Message composer</h2>
+        <p class="field-help">Choose or edit a message without reconnecting. Values resolve against the active environment when sent.</p>
+        {#if messageDirty}<span class="status-pill status-unsaved">Unsaved message changes</span>{/if}
+      </div>
+      {#if isConnected && draft.requestType === "websocket"}
+        <div class="request-actions">
           <button class="button-secondary button-compact" type="button" onclick={onPing}>Ping</button>
-          <button class="button-ghost button-compact" type="button" onclick={() => (showCloseOptions = !showCloseOptions)}>Close options</button>
-        {/if}
-        <button class="button-primary" type="button" onclick={send} disabled={!isConnected || !structuredJsonValid}>Send</button>
+          <button
+            class="button-ghost button-compact"
+            type="button"
+            aria-expanded={showCloseOptions}
+            aria-controls="realtime-close-options"
+            onclick={() => (showCloseOptions = !showCloseOptions)}
+          >Close options</button>
+        </div>
+      {/if}
+    </div>
+    <div class="realtime-message-header">
+      <label class="request-name-block"><span class="field-label">Message name</span><input class="text-input" value={message.name} oninput={(event) => (message = { ...message, name: event.currentTarget.value })} /></label>
+      <label><span class="field-label">Message protocol</span><select class="method-select realtime-protocol-select" value={message.protocol} onchange={(event) => switchMessageProtocol(event.currentTarget.value as RealtimeProtocol)}><option value="websocket">WebSocket</option><option value="socketio">Socket.IO</option></select></label>
+      <div class="realtime-message-primary-actions">
+        <SaveSplitControl
+          label={selectedMessageId ? "Update" : "Save"}
+          {isSaving}
+          disabled={!structuredJsonValid}
+          showMenu={true}
+          onSave={onSave}
+          onSaveAs={onSaveAs}
+        />
+        <SendControl onSend={send} disabled={!isConnected || reconnectRequired || !structuredJsonValid || !protocolCompatible} />
       </div>
     </div>
+    {#if !protocolCompatible}<p class="feedback feedback-error" role="alert">This {message.protocol === "socketio" ? "Socket.IO" : "WebSocket"} message is incompatible with the selected {connection.protocol === "socketio" ? "Socket.IO" : "WebSocket"} connection.</p>{/if}
+    <p class="realtime-send-hint" class:realtime-send-hint-ready={isConnected && !reconnectRequired && protocolCompatible}>{sendAvailabilityText}</p>
 
     {#if showCloseOptions && draft.requestType === "websocket"}
-      <div class="realtime-close-row">
+      <div id="realtime-close-options" class="realtime-close-row">
         <label><span class="field-label">Close code</span><input class="text-input" type="number" min="1000" max="4999" bind:value={closeCode} /></label>
         <label><span class="field-label">Reason</span><input class="text-input" maxlength="123" bind:value={closeReason} /></label>
         <button class="button-danger" type="button" onclick={() => onClose(closeCode, closeReason)}>Close gracefully</button>
       </div>
     {/if}
 
-    {#if draft.requestType === "websocket"}
+    {#if message.protocol === "websocket"}
       <div class="realtime-composer-toolbar">
-        <label><span class="field-label">Payload type</span><select class="body-mode-select" value={draft.composer.mode} onchange={(event) => patchRawComposer({ mode: event.currentTarget.value as "text" | "json" | "binary" })}><option value="text">Text</option><option value="json">JSON</option><option value="binary">Binary</option></select></label>
-        {#if draft.composer.mode === "json"}<button class="button-secondary button-compact" type="button" onclick={formatJson}>Format</button>{/if}
+        <label><span class="field-label">Payload type</span><select class="body-mode-select" value={message.composer.mode} onchange={(event) => patchRawComposer({ mode: event.currentTarget.value as "text" | "json" | "binary" })}><option value="text">Text</option><option value="json">JSON</option><option value="binary">Binary</option></select></label>
+        {#if message.composer.mode === "json"}<button class="button-secondary button-compact" type="button" onclick={formatJson}>Format</button>{/if}
       </div>
-      {#if draft.composer.mode === "binary"}
+      {#if message.composer.mode === "binary"}
         <div class="realtime-binary-grid">
-          <label><span class="field-label">Binary source</span><select class="text-input" value={binarySource(draft.composer.binary)} onchange={(event) => patchRawComposer({ binary: buildBinary(event.currentTarget.value as "file" | "hex" | "base64", binaryValue(draft.requestType === "websocket" ? draft.composer.binary : null)) })}><option value="file">Local file path</option><option value="hex">Hex</option><option value="base64">Base64</option></select></label>
-          <label><span class="field-label">{binarySource(draft.composer.binary) === "file" ? "File" : "Binary value"}</span><div class="realtime-file-control"><VariableField value={binaryValue(draft.composer.binary)} {variables} className="text-input" disabled={binarySource(draft.composer.binary) === "file"} placeholder={binarySource(draft.composer.binary) === "file" ? "Choose a local file" : ""} onValueInput={(value) => patchRawComposer({ binary: buildBinary(binarySource(draft.requestType === "websocket" ? draft.composer.binary : null), value) })} />{#if binarySource(draft.composer.binary) === "file"}<button class="button-secondary" type="button" onclick={pickBinaryFile} disabled={isPickingBinaryFile}>{isPickingBinaryFile ? "Choosing…" : "Choose file…"}</button>{/if}</div></label>
+          <label><span class="field-label">Binary source</span><select class="text-input" value={binarySource(message.composer.binary)} onchange={(event) => patchRawComposer({ binary: buildBinary(event.currentTarget.value as "file" | "hex" | "base64", binaryValue(message.composer.binary)) })}><option value="file">Local file path</option><option value="hex">Hex</option><option value="base64">Base64</option></select></label>
+          <label><span class="field-label">{binarySource(message.composer.binary) === "file" ? "File" : "Binary value"}</span><div class="realtime-file-control"><VariableField value={binaryValue(message.composer.binary)} {variables} className="text-input" disabled={binarySource(message.composer.binary) === "file"} placeholder={binarySource(message.composer.binary) === "file" ? "Choose a local file" : ""} onValueInput={(value) => patchRawComposer({ binary: buildBinary(binarySource(message.composer.binary), value) })} />{#if binarySource(message.composer.binary) === "file"}<button class="button-secondary" type="button" onclick={pickBinaryFile} disabled={isPickingBinaryFile}>{isPickingBinaryFile ? "Choosing…" : "Choose file…"}</button>{/if}</div></label>
         </div>
-      {:else if draft.composer.mode === "json"}
+      {:else if message.composer.mode === "json"}
         <JsonEditor
-          value={draft.composer.content}
+          value={message.composer.content}
           {variables}
           className="body-textarea realtime-message-input"
           placeholder={'{\n  "message": "hello"\n}'}
@@ -444,15 +543,15 @@
           onValueInput={(value) => patchRawComposer({ content: value })}
         />
       {:else}
-        <VariableField value={draft.composer.content} {variables} className="body-textarea realtime-message-input" multiline={true} spellcheck={false} placeholder="Type a message…" onValueInput={(value) => patchRawComposer({ content: value })} />
+        <VariableField value={message.composer.content} {variables} className="body-textarea realtime-message-input" multiline={true} spellcheck={false} placeholder="Type a message…" onValueInput={(value) => patchRawComposer({ content: value })} />
       {/if}
     {:else}
       <div class="realtime-event-grid">
-        <label><span class="field-label">Event</span><VariableField value={draft.composer.event} {variables} className="text-input" placeholder="message" onValueInput={(value) => patchSocketIoComposer({ event: value })} /></label>
-        <label><span class="field-label">Payload type</span><select class="text-input" value={draft.composer.binary ? "binary" : "json"} onchange={(event) => patchSocketIoComposer({ binary: event.currentTarget.value === "binary" ? { source: "file", path: "" } : null })}><option value="json">JSON arguments</option><option value="binary">One binary payload</option></select></label>
-        {#if draft.composer.binary}
-          <label><span class="field-label">Binary source</span><select class="text-input" value={binarySource(draft.composer.binary)} onchange={(event) => patchSocketIoComposer({ binary: buildBinary(event.currentTarget.value as "file" | "hex" | "base64", binaryValue(draft.requestType === "socketio" ? draft.composer.binary : null)) })}><option value="file">Local file</option><option value="hex">Hex</option><option value="base64">Base64</option></select></label>
-          <label class="realtime-wide-field"><span class="field-label">{binarySource(draft.composer.binary) === "file" ? "File" : "Binary value"}</span><div class="realtime-file-control"><VariableField value={binaryValue(draft.composer.binary)} {variables} className="text-input" disabled={binarySource(draft.composer.binary) === "file"} placeholder={binarySource(draft.composer.binary) === "file" ? "Choose a local file" : ""} onValueInput={(value) => patchSocketIoComposer({ binary: buildBinary(binarySource(draft.requestType === "socketio" ? draft.composer.binary : null), value) })} />{#if binarySource(draft.composer.binary) === "file"}<button class="button-secondary" type="button" onclick={pickBinaryFile} disabled={isPickingBinaryFile}>{isPickingBinaryFile ? "Choosing…" : "Choose file…"}</button>{/if}</div></label>
+        <label><span class="field-label">Event</span><VariableField value={message.composer.event} {variables} className="text-input" placeholder="message" onValueInput={(value) => patchSocketIoComposer({ event: value })} /></label>
+        <label><span class="field-label">Payload type</span><select class="text-input" value={message.composer.binary ? "binary" : "json"} onchange={(event) => patchSocketIoComposer({ binary: event.currentTarget.value === "binary" ? { source: "file", path: "" } : null })}><option value="json">JSON arguments</option><option value="binary">One binary payload</option></select></label>
+        {#if message.composer.binary}
+          <label><span class="field-label">Binary source</span><select class="text-input" value={binarySource(message.composer.binary)} onchange={(event) => patchSocketIoComposer({ binary: buildBinary(event.currentTarget.value as "file" | "hex" | "base64", binaryValue(message.composer.binary)) })}><option value="file">Local file</option><option value="hex">Hex</option><option value="base64">Base64</option></select></label>
+          <label class="realtime-wide-field"><span class="field-label">{binarySource(message.composer.binary) === "file" ? "File" : "Binary value"}</span><div class="realtime-file-control"><VariableField value={binaryValue(message.composer.binary)} {variables} className="text-input" disabled={binarySource(message.composer.binary) === "file"} placeholder={binarySource(message.composer.binary) === "file" ? "Choose a local file" : ""} onValueInput={(value) => patchSocketIoComposer({ binary: buildBinary(binarySource(message.composer.binary), value) })} />{#if binarySource(message.composer.binary) === "file"}<button class="button-secondary" type="button" onclick={pickBinaryFile} disabled={isPickingBinaryFile}>{isPickingBinaryFile ? "Choosing…" : "Choose file…"}</button>{/if}</div></label>
         {:else}
           <label class="realtime-wide-field">
             <span class="field-label">Arguments (JSON array)</span>
@@ -467,8 +566,8 @@
             {#if argumentsError}<span class="field-error" role="alert">{argumentsError}</span>{/if}
           </label>
         {/if}
-        <label class="settings-checkbox-line"><input class="row-toggle settings-checkbox" type="checkbox" checked={draft.composer.waitForAck} onchange={(event) => patchSocketIoComposer({ waitForAck: event.currentTarget.checked })} /><span><strong>Wait for acknowledgement</strong><small>Show the server ACK or timeout.</small></span></label>
-        <label><span class="field-label">ACK timeout (ms)</span><input class="text-input" type="number" min="100" max="60000" value={draft.composer.ackTimeoutMs} disabled={!draft.composer.waitForAck} oninput={(event) => patchSocketIoComposer({ ackTimeoutMs: event.currentTarget.valueAsNumber || 5000 })} /></label>
+        <label class="settings-checkbox-line"><input class="row-toggle settings-checkbox" type="checkbox" checked={message.composer.waitForAck} onchange={(event) => patchSocketIoComposer({ waitForAck: event.currentTarget.checked })} /><span><strong>Wait for acknowledgement</strong><small>Show the server ACK or timeout.</small></span></label>
+        <label><span class="field-label">ACK timeout (ms)</span><input class="text-input" type="number" min="100" max="60000" value={message.composer.ackTimeoutMs} disabled={!message.composer.waitForAck} oninput={(event) => patchSocketIoComposer({ ackTimeoutMs: event.currentTarget.valueAsNumber || 5000 })} /></label>
       </div>
     {/if}
     {#if composerError}<p class="feedback feedback-error" role="alert">{composerError}</p>{/if}

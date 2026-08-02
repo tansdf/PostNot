@@ -12,11 +12,12 @@
   import AuthEditor from "$lib/components/request/AuthEditor.svelte";
   import JsonEditor from "$lib/components/request/JsonEditor.svelte";
   import KeyValueEditor from "$lib/components/request/KeyValueEditor.svelte";
+  import SaveSplitControl from "$lib/components/request/SaveSplitControl.svelte";
   import ScriptEditor from "$lib/components/request/ScriptEditor.svelte";
+  import SendControl from "$lib/components/request/SendControl.svelte";
   import VariableField from "$lib/components/request/VariableField.svelte";
   import { getHeaderNameSuggestions, getHeaderValueSuggestions } from "$lib/header-suggestions";
   import { formatScript } from "$lib/script-formatting";
-  import type { Attachment } from "svelte/attachments";
 
   let {
     request = $bindable(),
@@ -66,37 +67,6 @@
   } = $props();
 
   let activePanel: "query" | "headers" | "body" | "auth" | "scripts" = $state("query");
-  let isSaveMenuOpen = $state(false);
-  let saveSplitRootNode: HTMLDivElement | null = null;
-
-  const attachSaveSplitRoot: Attachment<HTMLDivElement> = (node) => {
-    saveSplitRootNode = node;
-    return () => {
-      if (saveSplitRootNode === node) {
-        saveSplitRootNode = null;
-      }
-    };
-  };
-
-  function closeSaveMenuOnDocumentClick(event: MouseEvent) {
-    if (!isSaveMenuOpen) {
-      return;
-    }
-    const root = saveSplitRootNode;
-    if (!root || root.contains(event.target as Node)) {
-      return;
-    }
-    isSaveMenuOpen = false;
-  }
-
-  function closeSaveMenuOnWindowKeydown(event: KeyboardEvent) {
-    if (!isSaveMenuOpen) {
-      return;
-    }
-    if (event.key === "Escape") {
-      isSaveMenuOpen = false;
-    }
-  }
 
   let jsonValidationError = $state("");
   let multipartErrorText = $state("");
@@ -426,9 +396,6 @@
 
 </script>
 
-<svelte:window onkeydown={closeSaveMenuOnWindowKeydown} />
-<svelte:document onclickcapture={closeSaveMenuOnDocumentClick} />
-
 <section class="panel panel-inset request-panel">
   <div class="request-section-header">
     <div class="request-section-title">
@@ -450,59 +417,14 @@
       />
     </div>
 
-    <div
-      class={[
-        "request-save-split",
-        !showSaveMenu && "request-save-split-solo",
-        (saveDisabled || isSaving) && "request-save-split-disabled"
-      ]}
-      {@attach attachSaveSplitRoot}
-    >
-      <button
-        class="request-save-split-main"
-        type="button"
-        onclick={() => {
-          isSaveMenuOpen = false;
-          void handleSaveRequest();
-        }}
-        disabled={saveDisabled || isSaving}
-      >
-        {isSaving ? "Saving..." : saveLabel}
-      </button>
-      {#if showSaveMenu}
-        <button
-          class="request-save-split-chevron"
-          type="button"
-          aria-expanded={isSaveMenuOpen}
-          aria-haspopup="true"
-          aria-label="More save actions"
-          disabled={saveDisabled || isSaving}
-          onclick={(event) => {
-            event.stopPropagation();
-            isSaveMenuOpen = !isSaveMenuOpen;
-          }}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <path d="M6 9l6 6 6-6" />
-          </svg>
-        </button>
-        {#if isSaveMenuOpen}
-          <div class="request-save-menu" role="menu">
-            <button
-              class="request-save-menu-item"
-              type="button"
-              role="menuitem"
-              onclick={() => {
-                isSaveMenuOpen = false;
-                void handleSaveAsRequest();
-              }}
-            >
-              Save as
-            </button>
-          </div>
-        {/if}
-      {/if}
-    </div>
+    <SaveSplitControl
+      label={saveLabel}
+      disabled={saveDisabled}
+      {isSaving}
+      showMenu={showSaveMenu}
+      onSave={handleSaveRequest}
+      onSaveAs={handleSaveAsRequest}
+    />
 
     <select
       class={`method-select method-${request.method.toLowerCase()}`}
@@ -531,34 +453,14 @@
       />
     </div>
 
-    <div class={["request-send-actions", isSending && "request-send-actions-cancel"]}>
-      <button
-        class="request-send-preview-control"
-        type="button"
-        onclick={handleOpenPreview}
-        aria-label="Preview resolved request"
-        title="Preview resolved request"
-        disabled={isSending || isCanceling}
-      >
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
-          <circle cx="12" cy="12" r="3" />
-        </svg>
-      </button>
-
-      <button
-        class="request-send-main-control"
-        type="button"
-        onclick={() => (isSending ? handleCancelRequest() : handleSendRequest())}
-        disabled={isCanceling || sendDisabled}
-      >
-        {#if isSending}
-          {isCanceling ? "Canceling..." : "Cancel"}
-        {:else}
-          Send
-        {/if}
-      </button>
-    </div>
+    <SendControl
+      {isSending}
+      {isCanceling}
+      disabled={sendDisabled}
+      onPreview={handleOpenPreview}
+      onSend={handleSendRequest}
+      onCancel={handleCancelRequest}
+    />
   </div>
 
   <div class="panel-tabs">

@@ -18,15 +18,19 @@ use crate::{
     domain::{
         activity::{AgentActor, NewAgentActivity},
         collections::{
-            CreateCollectionFolderInput, CreateCollectionInput, SavedRealtimeRequestDetail,
+            CreateCollectionFolderInput, CreateCollectionInput, SavedRealtimeMessageDetail,
         },
-        realtime::{RawMessageMode, RealtimeRequestDraft, RequestType},
+        realtime::{
+            RawMessageMode, RealtimeConnectionDraft, RealtimeConnectionProfileDetail,
+            RealtimeMessageDraft, RequestType,
+        },
         requests::SendRequestPayload,
     },
     error::{AppError, AppResult},
     services::{
-        activity_service, collections_service, environments_service, request_preview_service,
-        secret_store_service, settings_service,
+        activity_service, collections_service, environments_service,
+        realtime_connections_service, request_preview_service, secret_store_service,
+        settings_service,
     },
     storage::paths,
 };
@@ -98,27 +102,74 @@ struct UpdateRequestParams {
 
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-struct CreateRealtimeRequestParams {
+struct CreateRealtimeMessageParams {
     collection_id: String,
     parent_id: Option<String>,
-    request: RealtimeRequestDraft,
+    message: RealtimeMessageDraft,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-struct UpdateRealtimeRequestParams {
-    request_id: String,
+struct RealtimeMessageIdParams {
+    message_id: String,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct UpdateRealtimeMessageParams {
+    message_id: String,
     expected_updated_at: String,
-    request: RealtimeRequestDraft,
+    message: RealtimeMessageDraft,
     #[serde(default)]
     preserve_redacted_fields: Vec<String>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-struct DeleteRealtimeRequestParams {
-    request_id: String,
+struct DeleteRealtimeMessageParams {
+    message_id: String,
     expected_updated_at: String,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct RealtimeConnectionIdParams {
+    connection_id: String,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct CreateRealtimeConnectionParams {
+    connection: RealtimeConnectionDraft,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct UpdateRealtimeConnectionParams {
+    connection_id: String,
+    expected_updated_at: String,
+    connection: RealtimeConnectionDraft,
+    #[serde(default)]
+    preserve_redacted_fields: Vec<String>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct DeleteRealtimeConnectionParams {
+    connection_id: String,
+    expected_updated_at: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SafeRealtimeConnection {
+    id: String,
+    name: String,
+    protocol: RequestType,
+    updated_at: String,
+    connection: RealtimeConnectionDraft,
+    redacted_fields: Vec<String>,
+    warnings: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -136,14 +187,14 @@ struct SafeSavedRequest {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct SafeSavedRealtimeRequest {
+struct SafeSavedRealtimeMessage {
     id: String,
     collection_id: String,
     parent_id: Option<String>,
     name: String,
     request_type: RequestType,
     updated_at: String,
-    request: RealtimeRequestDraft,
+    message: RealtimeMessageDraft,
     redacted_fields: Vec<String>,
     warnings: Vec<String>,
 }
@@ -221,15 +272,31 @@ impl PostNotMcp {
         serde_json::to_string_pretty(&safe).map_err(json_mcp_error)
     }
 
+    #[tool(description = "List standalone realtime connection profiles without opening a connection.")]
+    async fn list_realtime_connections(&self) -> Result<String, McpError> {
+        json_result(realtime_connections_service::list_profiles(&self.pool).await)
+    }
+
+    #[tool(description = "Read a standalone realtime connection profile. Credential-looking literals are redacted.")]
+    async fn get_realtime_connection(
+        &self,
+        Parameters(params): Parameters<RealtimeConnectionIdParams>,
+    ) -> Result<String, McpError> {
+        let detail = realtime_connections_service::get_profile(&self.pool, &params.connection_id)
+            .await
+            .map_err(to_mcp_error)?;
+        serde_json::to_string_pretty(&redact_realtime_connection(detail)).map_err(json_mcp_error)
+    }
+
     #[tool(
         description = "List saved raw WebSocket and Socket.IO definitions in one collection. This authoring tool never connects or sends traffic."
     )]
-    async fn list_realtime_requests(
+    async fn list_realtime_messages(
         &self,
         Parameters(params): Parameters<CollectionIdParams>,
     ) -> Result<String, McpError> {
         json_result(
-            collections_service::list_saved_realtime_requests(&self.pool, &params.collection_id)
+            collections_service::list_saved_realtime_messages(&self.pool, &params.collection_id)
                 .await,
         )
     }
@@ -237,15 +304,15 @@ impl PostNotMcp {
     #[tool(
         description = "Read a saved raw WebSocket or Socket.IO definition without connecting. Credential-looking literals are returned as *** and listed in redactedFields."
     )]
-    async fn get_realtime_request(
+    async fn get_realtime_message(
         &self,
-        Parameters(params): Parameters<RequestIdParams>,
+        Parameters(params): Parameters<RealtimeMessageIdParams>,
     ) -> Result<String, McpError> {
         let detail =
-            collections_service::get_saved_realtime_request(&self.pool, &params.request_id)
+            collections_service::get_saved_realtime_message(&self.pool, &params.message_id)
                 .await
                 .map_err(to_mcp_error)?;
-        let safe = redact_saved_realtime_request(detail);
+        let safe = redact_saved_realtime_message(detail);
         serde_json::to_string_pretty(&safe).map_err(json_mcp_error)
     }
 
@@ -493,17 +560,16 @@ impl PostNotMcp {
     #[tool(
         description = "Create a saved raw WebSocket or Socket.IO definition. This authoring tool stores the definition but never connects or sends traffic."
     )]
-    async fn create_realtime_request(
+    async fn create_realtime_message(
         &self,
-        Parameters(mut params): Parameters<CreateRealtimeRequestParams>,
+        Parameters(params): Parameters<CreateRealtimeMessageParams>,
     ) -> Result<String, McpError> {
-        normalize_realtime_request_ids(&mut params.request);
-        if let Err(error) = validate_realtime_request(&params.request) {
+        if let Err(error) = validate_realtime_message(&params.message) {
             let batch = Uuid::new_v4().to_string();
             self.record_failure(
                 &batch,
-                "create_realtime_request",
-                "realtime_request",
+                "create_realtime_message",
+                "realtime_message",
                 Some(&params.collection_id),
                 &error,
             )
@@ -511,24 +577,49 @@ impl PostNotMcp {
             return Err(to_mcp_error(error));
         }
 
-        let warnings = realtime_credential_warnings(&params.request);
+        let warnings = realtime_credential_warnings(&params.message);
         let batch = Uuid::new_v4().to_string();
         let collection_id = params.collection_id.clone();
-        let result = collections_service::save_realtime_request(
+        let result = collections_service::save_realtime_message(
             &self.pool,
             &params.collection_id,
             params.parent_id.as_deref(),
-            &params.request,
+            &params.message,
         )
         .await;
         self.finish_mutation_with_warnings(
             &batch,
-            "create_realtime_request",
-            "realtime_request",
+            "create_realtime_message",
+            "realtime_message",
             result,
             MutationDetails {
                 collection_id: Some(&collection_id),
-                fields: realtime_request_fields(),
+                fields: realtime_message_fields(),
+                warnings,
+            },
+        )
+        .await
+    }
+
+    #[tool(description = "Create a standalone realtime connection profile without connecting or sending traffic.")]
+    async fn create_realtime_connection(
+        &self,
+        Parameters(params): Parameters<CreateRealtimeConnectionParams>,
+    ) -> Result<String, McpError> {
+        if let Err(error) = realtime_connections_service::validate_connection(&params.connection) {
+            return Err(to_mcp_error(error));
+        }
+        let warnings = realtime_connection_credential_warnings(&params.connection);
+        let batch = Uuid::new_v4().to_string();
+        let result = realtime_connections_service::create_profile(&self.pool, &params.connection).await;
+        self.finish_mutation_with_warnings(
+            &batch,
+            "create_realtime_connection",
+            "realtime_connection",
+            result,
+            MutationDetails {
+                collection_id: None,
+                fields: realtime_connection_fields(),
                 warnings,
             },
         )
@@ -584,17 +675,16 @@ impl PostNotMcp {
     #[tool(
         description = "Fully replace a saved raw WebSocket or Socket.IO definition using optimistic concurrency. This authoring tool never connects or sends traffic."
     )]
-    async fn update_realtime_request(
+    async fn update_realtime_message(
         &self,
-        Parameters(mut params): Parameters<UpdateRealtimeRequestParams>,
+        Parameters(mut params): Parameters<UpdateRealtimeMessageParams>,
     ) -> Result<String, McpError> {
-        normalize_realtime_request_ids(&mut params.request);
-        if let Err(error) = validate_realtime_request(&params.request) {
+        if let Err(error) = validate_realtime_message(&params.message) {
             let batch = Uuid::new_v4().to_string();
             self.record_failure(
                 &batch,
-                "update_realtime_request",
-                "realtime_request",
+                "update_realtime_message",
+                "realtime_message",
                 None,
                 &error,
             )
@@ -603,32 +693,70 @@ impl PostNotMcp {
         }
 
         let current =
-            collections_service::get_saved_realtime_request(&self.pool, &params.request_id)
+            collections_service::get_saved_realtime_message(&self.pool, &params.message_id)
                 .await
                 .map_err(to_mcp_error)?;
         restore_realtime_redacted_fields(
-            &mut params.request,
-            &current.request,
+            &mut params.message,
+            &current.message,
             &params.preserve_redacted_fields,
         );
-        let warnings = realtime_credential_warnings(&params.request);
+        let warnings = realtime_credential_warnings(&params.message);
         let batch = Uuid::new_v4().to_string();
         let collection_id = current.collection_id.clone();
-        let result = collections_service::update_saved_realtime_request_with_revision(
+        let result = collections_service::update_saved_realtime_message_with_revision(
             &self.pool,
-            &params.request_id,
-            &params.request,
+            &params.message_id,
+            &params.message,
             Some(&params.expected_updated_at),
         )
         .await;
         self.finish_mutation_with_warnings(
             &batch,
-            "update_realtime_request",
-            "realtime_request",
+            "update_realtime_message",
+            "realtime_message",
             result,
             MutationDetails {
                 collection_id: Some(&collection_id),
-                fields: realtime_request_fields(),
+                fields: realtime_message_fields(),
+                warnings,
+            },
+        )
+        .await
+    }
+
+    #[tool(description = "Fully replace a standalone realtime connection profile using optimistic concurrency.")]
+    async fn update_realtime_connection(
+        &self,
+        Parameters(mut params): Parameters<UpdateRealtimeConnectionParams>,
+    ) -> Result<String, McpError> {
+        let current = realtime_connections_service::get_profile(&self.pool, &params.connection_id)
+            .await
+            .map_err(to_mcp_error)?;
+        restore_realtime_connection_redacted_fields(
+            &mut params.connection,
+            &current.connection,
+            &params.preserve_redacted_fields,
+        );
+        realtime_connections_service::validate_connection(&params.connection)
+            .map_err(to_mcp_error)?;
+        let warnings = realtime_connection_credential_warnings(&params.connection);
+        let batch = Uuid::new_v4().to_string();
+        let result = realtime_connections_service::update_profile(
+            &self.pool,
+            &params.connection_id,
+            &params.connection,
+            Some(&params.expected_updated_at),
+        )
+        .await;
+        self.finish_mutation_with_warnings(
+            &batch,
+            "update_realtime_connection",
+            "realtime_connection",
+            result,
+            MutationDetails {
+                collection_id: None,
+                fields: realtime_connection_fields(),
                 warnings,
             },
         )
@@ -638,18 +766,18 @@ impl PostNotMcp {
     #[tool(
         description = "Delete a saved raw WebSocket or Socket.IO definition using optimistic concurrency. No live connection is affected."
     )]
-    async fn delete_realtime_request(
+    async fn delete_realtime_message(
         &self,
-        Parameters(params): Parameters<DeleteRealtimeRequestParams>,
+        Parameters(params): Parameters<DeleteRealtimeMessageParams>,
     ) -> Result<String, McpError> {
         let current =
-            collections_service::get_saved_realtime_request(&self.pool, &params.request_id)
+            collections_service::get_saved_realtime_message(&self.pool, &params.message_id)
                 .await
                 .map_err(to_mcp_error)?;
         let batch = Uuid::new_v4().to_string();
-        let result = collections_service::delete_saved_realtime_request_with_revision(
+        let result = collections_service::delete_saved_realtime_message_with_revision(
             &self.pool,
-            &params.request_id,
+            &params.message_id,
             &params.expected_updated_at,
         )
         .await;
@@ -658,8 +786,8 @@ impl PostNotMcp {
             Ok(()) => {
                 self.record(
                     &batch,
-                    "delete_realtime_request",
-                    "realtime_request",
+                    "delete_realtime_message",
+                    "realtime_message",
                     Some(&current.id),
                     &current.name,
                     Some(&current.collection_id),
@@ -670,15 +798,15 @@ impl PostNotMcp {
                 )
                 .await;
                 Ok(
-                    json!({ "deleted": true, "requestId": current.id, "activityBatchId": batch })
+                    json!({ "deleted": true, "messageId": current.id, "activityBatchId": batch })
                         .to_string(),
                 )
             }
             Err(error) => {
                 self.record_failure(
                     &batch,
-                    "delete_realtime_request",
-                    "realtime_request",
+                    "delete_realtime_message",
+                    "realtime_message",
                     Some(&current.collection_id),
                     &error,
                 )
@@ -686,6 +814,38 @@ impl PostNotMcp {
                 Err(to_mcp_error(error))
             }
         }
+    }
+
+    #[tool(description = "Delete a standalone realtime connection profile using optimistic concurrency.")]
+    async fn delete_realtime_connection(
+        &self,
+        Parameters(params): Parameters<DeleteRealtimeConnectionParams>,
+    ) -> Result<String, McpError> {
+        let current = realtime_connections_service::get_profile(&self.pool, &params.connection_id)
+            .await
+            .map_err(to_mcp_error)?;
+        realtime_connections_service::delete_profile(
+            &self.pool,
+            &params.connection_id,
+            Some(&params.expected_updated_at),
+        )
+        .await
+        .map_err(to_mcp_error)?;
+        let batch = Uuid::new_v4().to_string();
+        self.record(
+            &batch,
+            "delete_realtime_connection",
+            "realtime_connection",
+            Some(&current.id),
+            &current.name,
+            None,
+            "succeeded",
+            &["deleted"],
+            None,
+            None,
+        )
+        .await;
+        Ok(json!({"deleted": true, "connectionId": current.id, "activityBatchId": batch}).to_string())
     }
 
     async fn finish_mutation<T: Serialize + TargetMetadata>(
@@ -912,7 +1072,7 @@ impl TargetMetadata for crate::domain::collections::SavedRequestSummary {
         Some(&self.collection_id)
     }
 }
-impl TargetMetadata for crate::domain::collections::SavedRealtimeRequestSummary {
+impl TargetMetadata for crate::domain::collections::SavedRealtimeMessageSummary {
     fn target_id(&self) -> &str {
         &self.id
     }
@@ -922,6 +1082,10 @@ impl TargetMetadata for crate::domain::collections::SavedRealtimeRequestSummary 
     fn collection_id(&self) -> Option<&str> {
         Some(&self.collection_id)
     }
+}
+impl TargetMetadata for RealtimeConnectionProfileDetail {
+    fn target_id(&self) -> &str { &self.id }
+    fn target_name(&self) -> &str { &self.name }
 }
 
 pub async fn run(options: McpOptions) -> Result<(), String> {
@@ -989,55 +1153,13 @@ fn validate_request(request: &SendRequestPayload) -> AppResult<()> {
     Ok(())
 }
 
-fn validate_realtime_request(request: &RealtimeRequestDraft) -> AppResult<()> {
-    let common = request.common();
-    if common.name.trim().is_empty() {
+fn validate_realtime_message(message: &RealtimeMessageDraft) -> AppResult<()> {
+    if message.name().trim().is_empty() {
         return Err(AppError::Message(
-            "Realtime request name is required.".to_string(),
+            "Realtime message name is required.".to_string(),
         ));
     }
-    if common.url.trim().is_empty() {
-        return Err(AppError::Message(
-            "Realtime request URL is required.".to_string(),
-        ));
-    }
-    if !common.url.contains("{{") {
-        let url = url::Url::parse(&common.url)?;
-        let supported = match request {
-            RealtimeRequestDraft::Websocket { .. } => {
-                matches!(url.scheme(), "ws" | "wss")
-            }
-            RealtimeRequestDraft::Socketio { .. } => {
-                matches!(url.scheme(), "http" | "https" | "ws" | "wss")
-            }
-        };
-        if !supported {
-            return Err(AppError::Message(
-                "Realtime request URL scheme is not supported.".to_string(),
-            ));
-        }
-    }
-    if !["none", "basic", "bearer", "api-key", "oauth2"].contains(&common.auth.auth_type.as_str()) {
-        return Err(AppError::Message(
-            "Realtime request auth type is invalid.".to_string(),
-        ));
-    }
-    if !["header", "query"].contains(&common.auth.api_key_in.as_str()) {
-        return Err(AppError::Message(
-            "API key placement is invalid.".to_string(),
-        ));
-    }
-    if let RealtimeRequestDraft::Socketio {
-        auth_payload,
-        composer,
-        ..
-    } = request
-    {
-        if !auth_payload.is_object() {
-            return Err(AppError::Message(
-                "Socket.IO auth payload must be a JSON object.".to_string(),
-            ));
-        }
+    if let RealtimeMessageDraft::Socketio { composer, .. } = message {
         if !composer.arguments.is_array() {
             return Err(AppError::Message(
                 "Socket.IO event arguments must be a JSON array.".to_string(),
@@ -1061,21 +1183,14 @@ fn request_fields() -> &'static [&'static str] {
     ]
 }
 
-fn realtime_request_fields() -> &'static [&'static str] {
+fn realtime_message_fields() -> &'static [&'static str] {
+    &["protocol", "name", "composer"]
+}
+
+fn realtime_connection_fields() -> &'static [&'static str] {
     &[
-        "requestType",
-        "name",
-        "url",
-        "queryParams",
-        "headers",
-        "auth",
-        "reconnect",
-        "subprotocols",
-        "path",
-        "namespace",
-        "authPayload",
-        "transport",
-        "composer",
+        "protocol", "name", "url", "queryParams", "headers", "auth", "reconnect",
+        "subprotocols", "path", "namespace", "authPayload", "transport",
     ]
 }
 
@@ -1094,28 +1209,6 @@ fn normalize_request_ids(request: &mut SendRequestPayload) {
         if file.id.trim().is_empty() {
             file.id = Uuid::new_v4().to_string();
         }
-    }
-}
-
-fn normalize_realtime_request_ids(request: &mut RealtimeRequestDraft) {
-    let common = realtime_common_mut(request);
-    for row in common
-        .query_params
-        .iter_mut()
-        .chain(common.headers.iter_mut())
-    {
-        if row.id.trim().is_empty() {
-            row.id = Uuid::new_v4().to_string();
-        }
-    }
-}
-
-fn realtime_common_mut(
-    request: &mut RealtimeRequestDraft,
-) -> &mut crate::domain::realtime::RealtimeRequestCommon {
-    match request {
-        RealtimeRequestDraft::Websocket { common, .. }
-        | RealtimeRequestDraft::Socketio { common, .. } => common,
     }
 }
 
@@ -1184,47 +1277,10 @@ fn credential_warnings(request: &SendRequestPayload) -> Vec<String> {
     warnings
 }
 
-fn realtime_credential_warnings(request: &RealtimeRequestDraft) -> Vec<String> {
-    let common = request.common();
+fn realtime_credential_warnings(message: &RealtimeMessageDraft) -> Vec<String> {
     let mut warnings = Vec::new();
-    let auth = &common.auth;
-    if [
-        auth.basic_password.as_str(),
-        auth.bearer_token.as_str(),
-        auth.api_key_value.as_str(),
-        auth.oauth2_access_token.as_str(),
-        auth.oauth2_client_secret.as_str(),
-    ]
-    .iter()
-    .any(|value| !value.is_empty() && !value.contains("{{"))
-    {
-        warnings.push(
-            "Literal authentication credentials were stored locally. Prefer {{variables}}."
-                .to_string(),
-        );
-    }
-    if common
-        .headers
-        .iter()
-        .any(|row| sensitive_key(&row.key) && !row.value.is_empty() && !row.value.contains("{{"))
-    {
-        warnings.push(
-            "A credential-looking header value was stored locally. Prefer {{variables}}."
-                .to_string(),
-        );
-    }
-    if common
-        .query_params
-        .iter()
-        .any(|row| sensitive_key(&row.key) && !row.value.is_empty() && !row.value.contains("{{"))
-    {
-        warnings.push(
-            "A credential-looking query value was stored locally. Prefer {{variables}}."
-                .to_string(),
-        );
-    }
-    match request {
-        RealtimeRequestDraft::Websocket { composer, .. }
+    match message {
+        RealtimeMessageDraft::Websocket { composer, .. }
             if composer.mode == RawMessageMode::Json
                 && raw_body_has_sensitive_keys(&composer.content) =>
         {
@@ -1233,12 +1289,8 @@ fn realtime_credential_warnings(request: &RealtimeRequestDraft) -> Vec<String> {
                     .to_string(),
             );
         }
-        RealtimeRequestDraft::Socketio {
-            auth_payload,
-            composer,
-            ..
-        } if json_has_sensitive_keys(auth_payload)
-            || json_has_sensitive_keys(&composer.arguments) =>
+        RealtimeMessageDraft::Socketio { composer, .. }
+            if json_has_sensitive_keys(&composer.arguments) =>
         {
             warnings.push(
                 "A credential-looking Socket.IO payload value was stored locally. Prefer {{variables}}."
@@ -1246,6 +1298,32 @@ fn realtime_credential_warnings(request: &RealtimeRequestDraft) -> Vec<String> {
             );
         }
         _ => {}
+    }
+    warnings
+}
+
+fn realtime_connection_credential_warnings(connection: &RealtimeConnectionDraft) -> Vec<String> {
+    let common = connection.common();
+    let auth = &common.auth;
+    let mut warnings = Vec::new();
+    if [
+        auth.basic_password.as_str(), auth.bearer_token.as_str(), auth.api_key_value.as_str(),
+        auth.oauth2_access_token.as_str(), auth.oauth2_client_secret.as_str(),
+    ]
+    .iter()
+    .any(|value| !value.is_empty() && !value.contains("{{"))
+    {
+        warnings.push("Literal authentication credentials were stored locally. Prefer {{variables}}.".to_string());
+    }
+    if common.headers.iter().chain(common.query_params.iter()).any(|row| {
+        sensitive_key(&row.key) && !row.value.is_empty() && !row.value.contains("{{")
+    }) {
+        warnings.push("A credential-looking connection value was stored locally. Prefer {{variables}}.".to_string());
+    }
+    if let RealtimeConnectionDraft::Socketio { auth_payload, .. } = connection {
+        if json_has_sensitive_keys(auth_payload) {
+            warnings.push("A credential-looking Socket.IO auth payload was stored locally. Prefer {{variables}}.".to_string());
+        }
     }
     warnings
 }
@@ -1332,19 +1410,11 @@ fn redact_saved_request(
     }
 }
 
-fn redact_saved_realtime_request(detail: SavedRealtimeRequestDetail) -> SafeSavedRealtimeRequest {
-    let mut request = detail.request;
+fn redact_saved_realtime_message(detail: SavedRealtimeMessageDetail) -> SafeSavedRealtimeMessage {
+    let mut message = detail.message;
     let mut fields = Vec::new();
-    {
-        let common = realtime_common_mut(&mut request);
-        redact_request_auth(&mut common.auth, &mut fields);
-        redact_key_value_rows(&mut common.headers, "headers", &mut fields);
-        redact_key_value_rows(&mut common.query_params, "queryParams", &mut fields);
-        redact_sensitive_url(&mut common.url, &mut fields);
-    }
-
-    match &mut request {
-        RealtimeRequestDraft::Websocket { composer, .. } => {
+    match &mut message {
+        RealtimeMessageDraft::Websocket { composer, .. } => {
             if composer.mode == RawMessageMode::Json
                 && raw_body_has_sensitive_keys(&composer.content)
             {
@@ -1352,12 +1422,7 @@ fn redact_saved_realtime_request(detail: SavedRealtimeRequestDetail) -> SafeSave
                 fields.push("composer.content".to_string());
             }
         }
-        RealtimeRequestDraft::Socketio {
-            auth_payload,
-            composer,
-            ..
-        } => {
-            redact_sensitive_json(auth_payload, "authPayload", &mut fields);
+        RealtimeMessageDraft::Socketio { composer, .. } => {
             redact_sensitive_json(&mut composer.arguments, "composer.arguments", &mut fields);
         }
     }
@@ -1365,16 +1430,45 @@ fn redact_saved_realtime_request(detail: SavedRealtimeRequestDetail) -> SafeSave
     let warnings = if fields.is_empty() {
         Vec::new()
     } else {
-        vec!["Credential-looking values were redacted. Pass the matching redactedFields paths to preserve them during update_realtime_request.".to_string()]
+        vec!["Credential-looking values were redacted. Pass the matching redactedFields paths to preserve them during update_realtime_message.".to_string()]
     };
-    SafeSavedRealtimeRequest {
+    SafeSavedRealtimeMessage {
         id: detail.id,
         collection_id: detail.collection_id,
         parent_id: detail.parent_id,
         name: detail.name,
         request_type: detail.request_type,
         updated_at: detail.updated_at,
-        request,
+        message,
+        redacted_fields: fields,
+        warnings,
+    }
+}
+
+fn redact_realtime_connection(detail: RealtimeConnectionProfileDetail) -> SafeRealtimeConnection {
+    let mut connection = detail.connection;
+    let mut fields = Vec::new();
+    {
+        let common = realtime_connection_common_mut(&mut connection);
+        redact_request_auth(&mut common.auth, &mut fields);
+        redact_key_value_rows(&mut common.headers, "headers", &mut fields);
+        redact_key_value_rows(&mut common.query_params, "queryParams", &mut fields);
+        redact_sensitive_url(&mut common.url, &mut fields);
+    }
+    if let RealtimeConnectionDraft::Socketio { auth_payload, .. } = &mut connection {
+        redact_sensitive_json(auth_payload, "authPayload", &mut fields);
+    }
+    let warnings = if fields.is_empty() {
+        Vec::new()
+    } else {
+        vec!["Credential-looking values were redacted. Pass matching redactedFields paths to preserve them during update_realtime_connection.".to_string()]
+    };
+    SafeRealtimeConnection {
+        id: detail.id,
+        name: detail.name,
+        protocol: detail.protocol,
+        updated_at: detail.updated_at,
+        connection,
         redacted_fields: fields,
         warnings,
     }
@@ -1541,39 +1635,18 @@ fn restore_redacted_fields(
 }
 
 fn restore_realtime_redacted_fields(
-    next: &mut RealtimeRequestDraft,
-    current: &RealtimeRequestDraft,
+    next: &mut RealtimeMessageDraft,
+    current: &RealtimeMessageDraft,
     fields: &[String],
 ) {
     let fields: HashSet<&str> = fields.iter().map(String::as_str).collect();
-    {
-        let next_common = realtime_common_mut(next);
-        let current_common = current.common();
-        restore_auth_fields(&mut next_common.auth, &current_common.auth, &fields);
-        restore_key_value_rows(
-            &mut next_common.headers,
-            &current_common.headers,
-            "headers",
-            &fields,
-        );
-        restore_key_value_rows(
-            &mut next_common.query_params,
-            &current_common.query_params,
-            "queryParams",
-            &fields,
-        );
-        if fields.contains("url") {
-            next_common.url = current_common.url.clone();
-        }
-    }
-
     match (next, current) {
         (
-            RealtimeRequestDraft::Websocket {
+            RealtimeMessageDraft::Websocket {
                 composer: next_composer,
                 ..
             },
-            RealtimeRequestDraft::Websocket {
+            RealtimeMessageDraft::Websocket {
                 composer: current_composer,
                 ..
             },
@@ -1581,18 +1654,9 @@ fn restore_realtime_redacted_fields(
             next_composer.content = current_composer.content.clone();
         }
         (
-            RealtimeRequestDraft::Socketio {
-                auth_payload: next_auth,
-                composer: next_composer,
-                ..
-            },
-            RealtimeRequestDraft::Socketio {
-                auth_payload: current_auth,
-                composer: current_composer,
-                ..
-            },
+            RealtimeMessageDraft::Socketio { composer: next_composer, .. },
+            RealtimeMessageDraft::Socketio { composer: current_composer, .. },
         ) => {
-            restore_sensitive_json(next_auth, current_auth, "authPayload", &fields);
             restore_sensitive_json(
                 &mut next_composer.arguments,
                 &current_composer.arguments,
@@ -1601,6 +1665,39 @@ fn restore_realtime_redacted_fields(
             );
         }
         _ => {}
+    }
+}
+
+fn restore_realtime_connection_redacted_fields(
+    next: &mut RealtimeConnectionDraft,
+    current: &RealtimeConnectionDraft,
+    fields: &[String],
+) {
+    let fields: HashSet<&str> = fields.iter().map(String::as_str).collect();
+    {
+        let next_common = realtime_connection_common_mut(next);
+        let current_common = current.common();
+        restore_auth_fields(&mut next_common.auth, &current_common.auth, &fields);
+        restore_key_value_rows(&mut next_common.headers, &current_common.headers, "headers", &fields);
+        restore_key_value_rows(&mut next_common.query_params, &current_common.query_params, "queryParams", &fields);
+        if fields.contains("url") {
+            next_common.url = current_common.url.clone();
+        }
+    }
+    if let (
+        RealtimeConnectionDraft::Socketio { auth_payload: next_auth, .. },
+        RealtimeConnectionDraft::Socketio { auth_payload: current_auth, .. },
+    ) = (next, current) {
+        restore_sensitive_json(next_auth, current_auth, "authPayload", &fields);
+    }
+}
+
+fn realtime_connection_common_mut(
+    connection: &mut RealtimeConnectionDraft,
+) -> &mut crate::domain::realtime::RealtimeConnectionCommon {
+    match connection {
+        RealtimeConnectionDraft::Websocket { common, .. }
+        | RealtimeConnectionDraft::Socketio { common, .. } => common,
     }
 }
 
@@ -1715,8 +1812,8 @@ fn json_has_sensitive_keys(value: &Value) -> bool {
 mod tests {
     use super::*;
     use crate::domain::{
-        collections::{SavedRealtimeRequestDetail, SavedRequestDetail},
-        realtime::{RealtimeRequestCommon, ReconnectPolicy, SocketIoComposer, SocketIoTransport},
+        collections::{SavedRealtimeMessageDetail, SavedRequestDetail},
+        realtime::SocketIoComposer,
         requests::{RequestAuth, RequestBody},
     };
 
@@ -1785,72 +1882,31 @@ mod tests {
 
     #[test]
     fn realtime_reads_redact_and_updates_can_preserve_literals() {
-        let original = RealtimeRequestDraft::Socketio {
-            common: RealtimeRequestCommon {
-                name: "Presence".into(),
-                url: "https://example.test?token=url-secret".into(),
-                query_params: vec![crate::domain::requests::KeyValueRow {
-                    id: "query".into(),
-                    key: "api_key".into(),
-                    value: "query-secret".into(),
-                    enabled: true,
-                }],
-                headers: vec![crate::domain::requests::KeyValueRow {
-                    id: "header".into(),
-                    key: "Authorization".into(),
-                    value: "Bearer header-secret".into(),
-                    enabled: true,
-                }],
-                auth: RequestAuth {
-                    auth_type: "bearer".into(),
-                    bearer_token: "auth-secret".into(),
-                    ..RequestAuth::default()
-                },
-                reconnect: ReconnectPolicy::default(),
-            },
-            path: "/socket.io/".into(),
-            namespace: "/".into(),
-            auth_payload: json!({"clientSecret": "payload-secret"}),
-            transport: SocketIoTransport::Auto,
+        let original = RealtimeMessageDraft::Socketio {
+            name: "Presence".into(),
             composer: SocketIoComposer {
                 event: "join".into(),
                 arguments: json!([{"password": "argument-secret"}]),
                 ..SocketIoComposer::default()
             },
         };
-        let safe = redact_saved_realtime_request(SavedRealtimeRequestDetail {
+        let safe = redact_saved_realtime_message(SavedRealtimeMessageDetail {
             id: "request".into(),
             collection_id: "collection".into(),
             parent_id: None,
             name: "Presence".into(),
             request_type: RequestType::Socketio,
             updated_at: "revision".into(),
-            request: original.clone(),
+            message: original.clone(),
         });
 
         let safe_json = serde_json::to_string(&safe).expect("serialize safe projection");
-        for secret in [
-            "url-secret",
-            "query-secret",
-            "header-secret",
-            "auth-secret",
-            "payload-secret",
-            "argument-secret",
-        ] {
-            assert!(
-                !safe_json.contains(secret),
-                "safe projection leaked {secret}"
-            );
-        }
-        assert!(safe.redacted_fields.contains(&"url".to_string()));
-        assert!(safe
-            .redacted_fields
-            .contains(&"authPayload.clientSecret".to_string()));
+        assert!(!safe_json.contains("argument-secret"), "safe projection leaked argument-secret");
         assert!(safe
             .redacted_fields
             .contains(&"composer.arguments.0.password".to_string()));
 
-        let mut replacement = safe.request;
+        let mut replacement = safe.message;
         restore_realtime_redacted_fields(&mut replacement, &original, &safe.redacted_fields);
         assert_eq!(
             serde_json::to_value(replacement).expect("serialize replacement"),

@@ -270,6 +270,7 @@ export type ImportResult = {
   collectionName: string;
   importedRequestCount: number;
   createdCollection: boolean;
+  createdRealtimeConnectionProfileCount?: number;
   details?: ImportDetails | null;
 };
 
@@ -352,7 +353,7 @@ export type RealtimeSocketIoComposer = {
   ackTimeoutMs: number;
 };
 
-type RealtimeRequestCommon = {
+type RealtimeConnectionCommon = {
   name: string;
   url: string;
   queryParams: KeyValueRow[];
@@ -361,20 +362,34 @@ type RealtimeRequestCommon = {
   reconnect: RealtimeReconnectPolicy;
 };
 
-export type RealtimeRequestDraft =
-  | (RealtimeRequestCommon & {
-      requestType: "websocket";
+export type RealtimeConnectionDraft =
+  | (RealtimeConnectionCommon & {
+      protocol: "websocket";
       subprotocols: string[];
-      composer: RealtimeRawComposer;
     })
-  | (RealtimeRequestCommon & {
-      requestType: "socketio";
+  | (RealtimeConnectionCommon & {
+      protocol: "socketio";
       path: string;
       namespace: string;
       authPayload: unknown;
       transport: RealtimeTransport;
-      composer: RealtimeSocketIoComposer;
     });
+
+export type RealtimeMessageDraft =
+  | { protocol: "websocket"; name: string; composer: RealtimeRawComposer }
+  | { protocol: "socketio"; name: string; composer: RealtimeSocketIoComposer };
+
+export type RealtimeConnectionProfileSummary = {
+  id: string;
+  name: string;
+  protocol: RealtimeProtocol;
+  url: string;
+  updatedAt: string;
+};
+
+export type RealtimeConnectionProfileDetail = RealtimeConnectionProfileSummary & {
+  connection: RealtimeConnectionDraft;
+};
 
 export type RealtimePayload =
   | {
@@ -395,7 +410,7 @@ export type RealtimePayload =
 
 export type RealtimeTranscriptEntry = {
   id: string;
-  connectionId: string;
+  sessionId: string;
   generation: number;
   sequence: number;
   occurredAt: string;
@@ -409,7 +424,7 @@ export type RealtimeTranscriptEntry = {
 export type RealtimeRuntimeEvent =
   | {
       type: "status";
-      connectionId: string;
+      sessionId: string;
       generation: number;
       sequence: number;
       status: RealtimeConnectionStatus;
@@ -417,14 +432,14 @@ export type RealtimeRuntimeEvent =
     }
   | {
       type: "transcript";
-      connectionId: string;
+      sessionId: string;
       generation: number;
       sequence: number;
       entry: RealtimeTranscriptEntry;
     }
   | {
       type: "transcript-reset";
-      connectionId: string;
+      sessionId: string;
       generation: number;
       sequence: number;
       entries: RealtimeTranscriptEntry[];
@@ -434,14 +449,18 @@ export type RealtimeWorkspaceTabSource = "blank" | "saved" | "imported";
 
 export type RealtimeWorkspaceTab = {
   id: string;
-  source: RealtimeWorkspaceTabSource;
-  savedRequestId: string | null;
+  selectedProfileId: string | null;
+  profileUpdatedAt: string | null;
+  connectionExternallyChanged: boolean;
+  connectionDraft: RealtimeConnectionDraft;
+  baselineConnectionDraft: RealtimeConnectionDraft | null;
+  selectedMessageId: string | null;
   collectionId: string | null;
   parentId: string | null;
   sourceUpdatedAt: string | null;
-  externallyChanged: boolean;
-  draft: RealtimeRequestDraft;
-  baselineDraft: RealtimeRequestDraft | null;
+  messageExternallyChanged: boolean;
+  messageDraft: RealtimeMessageDraft;
+  baselineMessageDraft: RealtimeMessageDraft | null;
   status: RealtimeConnectionStatus;
   generation: number;
   lastSequence: number;
@@ -457,28 +476,27 @@ export type RealtimeWorkspaceState = {
   activeTabId: string;
 };
 
-export type SavedRealtimeRequestSummary = {
+export type SavedRealtimeMessageSummary = {
   id: string;
   collectionId: string;
   parentId?: string | null;
   name: string;
   requestType: RealtimeProtocol;
-  url: string;
   updatedAt: string;
 };
 
-export type SavedRealtimeRequestDetail = SavedRealtimeRequestSummary & {
-  request: RealtimeRequestDraft;
+export type SavedRealtimeMessageDetail = SavedRealtimeMessageSummary & {
+  message: RealtimeMessageDraft;
 };
 
 export type RealtimeConnectResult = {
-  connectionId: string;
+  sessionId: string;
   generation: number;
   status: RealtimeConnectionStatus;
 };
 
 export type RealtimeSessionSnapshot = {
-  connectionId: string;
+  sessionId: string;
   generation: number;
   lastSequence: number;
   status: RealtimeConnectionStatus;
@@ -813,9 +831,9 @@ export function createRequestDraft(): RequestDraft {
   };
 }
 
-export function createRealtimeRequestDraft(protocol: RealtimeProtocol = "websocket"): RealtimeRequestDraft {
-  const common: RealtimeRequestCommon = {
-    name: protocol === "socketio" ? "Untitled Socket.IO request" : "Untitled WebSocket request",
+export function createRealtimeConnectionDraft(protocol: RealtimeProtocol = "websocket"): RealtimeConnectionDraft {
+  const common: RealtimeConnectionCommon = {
+    name: protocol === "socketio" ? "Untitled Socket.IO connection" : "Untitled WebSocket connection",
     url: protocol === "socketio" ? "http://localhost:3000" : "ws://localhost:8080",
     queryParams: [createKeyValueRow()],
     headers: [createKeyValueRow()],
@@ -831,31 +849,39 @@ export function createRealtimeRequestDraft(protocol: RealtimeProtocol = "websock
   if (protocol === "socketio") {
     return {
       ...common,
-      requestType: "socketio",
+      protocol: "socketio",
       path: "/socket.io/",
       namespace: "/",
       transport: "auto",
-      authPayload: {},
-      composer: {
-        event: "message",
-        arguments: [],
-        binary: null,
-        waitForAck: false,
-        ackTimeoutMs: 5_000
-      }
+      authPayload: {}
     };
   }
 
   return {
     ...common,
-    requestType: "websocket",
-    subprotocols: [],
-    composer: {
-      mode: "text",
-      content: "",
-      binary: null
-    }
+    protocol: "websocket",
+    subprotocols: []
   };
+}
+
+export function createRealtimeMessageDraft(protocol: RealtimeProtocol = "websocket"): RealtimeMessageDraft {
+  return protocol === "socketio"
+    ? {
+        protocol,
+        name: "Untitled Socket.IO message",
+        composer: {
+          event: "message",
+          arguments: [],
+          binary: null,
+          waitForAck: false,
+          ackTimeoutMs: 5_000
+        }
+      }
+    : {
+        protocol,
+        name: "Untitled WebSocket message",
+        composer: { mode: "text", content: "", binary: null }
+      };
 }
 
 export function createDefaultSettings(): AppSettings {
@@ -896,10 +922,10 @@ export function cloneRequestDraft(request: RequestDraft): RequestDraft {
   };
 }
 
-export function cloneRealtimeRequestDraft(request: RealtimeRequestDraft): RealtimeRequestDraft {
-  const requestType = request?.requestType === "socketio" ? "socketio" : "websocket";
-  const defaults = createRealtimeRequestDraft(requestType);
-  const cloned = deepCloneSerializable(request ?? defaults);
+export function cloneRealtimeConnectionDraft(connection: RealtimeConnectionDraft): RealtimeConnectionDraft {
+  const protocol = connection?.protocol === "socketio" ? "socketio" : "websocket";
+  const defaults = createRealtimeConnectionDraft(protocol);
+  const cloned = deepCloneSerializable(connection ?? defaults);
   const common = {
     name: cloned.name ?? defaults.name,
     url: cloned.url ?? defaults.url,
@@ -909,28 +935,48 @@ export function cloneRealtimeRequestDraft(request: RealtimeRequestDraft): Realti
     reconnect: { ...defaults.reconnect, ...(cloned.reconnect ?? {}) }
   };
 
-  if (requestType === "socketio") {
-    const typed = cloned as Extract<RealtimeRequestDraft, { requestType: "socketio" }>;
-    const typedDefaults = defaults as Extract<RealtimeRequestDraft, { requestType: "socketio" }>;
+  if (protocol === "socketio") {
+    const typed = cloned as Extract<RealtimeConnectionDraft, { protocol: "socketio" }>;
+    const typedDefaults = defaults as Extract<RealtimeConnectionDraft, { protocol: "socketio" }>;
     return {
       ...common,
-      requestType,
+      protocol,
       path: typed.path ?? typedDefaults.path,
       namespace: typed.namespace ?? typedDefaults.namespace,
       authPayload: typed.authPayload ?? {},
-      transport: typed.transport === "websocketOnly" ? "websocketOnly" : "auto",
-      composer: { ...typedDefaults.composer, ...(typed.composer ?? {}) }
+      transport: typed.transport === "websocketOnly" ? "websocketOnly" : "auto"
     };
   }
 
-  const typed = cloned as Extract<RealtimeRequestDraft, { requestType: "websocket" }>;
-  const typedDefaults = defaults as Extract<RealtimeRequestDraft, { requestType: "websocket" }>;
+  const typed = cloned as Extract<RealtimeConnectionDraft, { protocol: "websocket" }>;
   return {
     ...common,
-    requestType,
-    subprotocols: Array.isArray(typed.subprotocols) ? typed.subprotocols : [],
-    composer: { ...typedDefaults.composer, ...(typed.composer ?? {}) }
+    protocol,
+    subprotocols: Array.isArray(typed.subprotocols) ? typed.subprotocols : []
   };
+}
+
+export function cloneRealtimeMessageDraft(message: RealtimeMessageDraft): RealtimeMessageDraft {
+  const protocol = message?.protocol === "socketio" ? "socketio" : "websocket";
+  const defaults = createRealtimeMessageDraft(protocol);
+  const cloned = deepCloneSerializable(message ?? defaults);
+  return protocol === "socketio"
+    ? {
+        protocol,
+        name: cloned.name ?? defaults.name,
+        composer: {
+          ...(defaults as Extract<RealtimeMessageDraft, { protocol: "socketio" }>).composer,
+          ...(cloned as Extract<RealtimeMessageDraft, { protocol: "socketio" }>).composer
+        }
+      }
+    : {
+        protocol,
+        name: cloned.name ?? defaults.name,
+        composer: {
+          ...(defaults as Extract<RealtimeMessageDraft, { protocol: "websocket" }>).composer,
+          ...(cloned as Extract<RealtimeMessageDraft, { protocol: "websocket" }>).composer
+        }
+      };
 }
 
 export function cloneResponsePayload(response: ResponsePayload): ResponsePayload {

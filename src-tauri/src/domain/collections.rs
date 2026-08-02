@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::domain::{
-    realtime::{RealtimeRequestDraft, RequestType},
+    realtime::{RealtimeMessageDraft, RequestType},
     requests::SendRequestPayload,
 };
 
@@ -124,24 +124,23 @@ pub struct SavedRequestDetail {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SavedRealtimeRequestSummary {
+pub struct SavedRealtimeMessageSummary {
     pub id: String,
     pub collection_id: String,
     pub parent_id: Option<String>,
     pub name: String,
     pub request_type: RequestType,
-    pub url: String,
     pub updated_at: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SavedRealtimeRequestDetail {
+pub struct SavedRealtimeMessageDetail {
     pub id: String,
     pub collection_id: String,
     pub parent_id: Option<String>,
     pub name: String,
     pub request_type: RequestType,
     pub updated_at: String,
-    pub request: RealtimeRequestDraft,
+    pub message: RealtimeMessageDraft,
 }

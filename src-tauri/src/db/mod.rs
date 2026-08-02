@@ -48,6 +48,7 @@ pub async fn init_path(database_path: &Path) -> AppResult<SqlitePool> {
 }
 
 pub async fn ensure_application_defaults(pool: &SqlitePool) -> AppResult<()> {
+    crate::services::realtime_connections_service::migrate_legacy_realtime_data(pool).await?;
     crate::services::settings_service::ensure_defaults(pool).await?;
     crate::services::collections_service::ensure_starter_collection(pool).await
 }

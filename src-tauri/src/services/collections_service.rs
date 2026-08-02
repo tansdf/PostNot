@@ -9,12 +9,12 @@ use crate::{
         collections::{
             CollectionItemSummary, CollectionSearchResult, CollectionSummary,
             CreateCollectionFolderInput, CreateCollectionInput, MoveCollectionItemInput,
-            SavedRealtimeRequestDetail, SavedRealtimeRequestSummary, SavedRequestDetail,
+            SavedRealtimeMessageDetail, SavedRealtimeMessageSummary, SavedRequestDetail,
             SavedRequestSummary, UpdateCollectionFolderInput,
         },
         realtime::{
-            RealtimeRequestDraft, RequestType, VersionedRealtimeRequest,
-            REALTIME_REQUEST_SCHEMA_VERSION,
+            RealtimeMessageDraft, RequestType, VersionedRealtimeMessage,
+            REALTIME_MESSAGE_SCHEMA_VERSION,
         },
         requests::SendRequestPayload,
     },
@@ -39,10 +39,10 @@ pub struct ImportCollectionRequest {
 }
 
 #[derive(Debug, Clone)]
-pub struct ImportCollectionRealtimeRequest {
+pub struct ImportCollectionRealtimeMessage {
     pub parent_id: Option<String>,
     pub sort_order: i64,
-    pub request: RealtimeRequestDraft,
+    pub message: RealtimeMessageDraft,
 }
 
 const STARTER_COLLECTION_SEEDED_KEY: &str = "starter_collection_seeded";
@@ -357,7 +357,7 @@ pub async fn import_collection_atomic(
             INSERT INTO collection_items (
               id, collection_id, parent_id, kind, name, sort_order, method, url,
               query_params_json, headers_json, body_json, auth_json,
-              prerequest_script, test_script, request_type, realtime_request_json,
+              prerequest_script, test_script, request_type, realtime_message_json,
               created_at, updated_at
             ) VALUES (?1, ?2, ?3, 'request', ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, 'http', NULL, ?14, ?15)
             "#,
@@ -390,7 +390,7 @@ pub async fn import_mixed_collection_atomic(
     input: &CreateCollectionInput,
     folders: &[ImportCollectionFolder],
     requests: &[ImportCollectionRequest],
-    realtime_requests: &[ImportCollectionRealtimeRequest],
+    realtime_messages: &[ImportCollectionRealtimeMessage],
 ) -> AppResult<CollectionSummary> {
     let name = input.name.trim();
     if name.is_empty() {
@@ -451,7 +451,7 @@ pub async fn import_mixed_collection_atomic(
             INSERT INTO collection_items (
               id, collection_id, parent_id, kind, name, sort_order, method, url,
               query_params_json, headers_json, body_json, auth_json,
-              prerequest_script, test_script, request_type, realtime_request_json,
+              prerequest_script, test_script, request_type, realtime_message_json,
               created_at, updated_at
             ) VALUES (?1, ?2, ?3, 'request', ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, 'http', NULL, ?14, ?15)
             "#,
@@ -475,33 +475,32 @@ pub async fn import_mixed_collection_atomic(
         .await?;
     }
 
-    for imported_request in realtime_requests {
-        validate_realtime_request(&imported_request.request)?;
-        let request = &imported_request.request;
+    for imported_message in realtime_messages {
+        validate_realtime_message(&imported_message.message)?;
+        let message = &imported_message.message;
         let item_id = Uuid::new_v4().to_string();
-        let item_name = saved_realtime_request_name(request);
-        let versioned_request = VersionedRealtimeRequest::new(request.clone());
+        let item_name = saved_realtime_message_name(message);
+        let versioned_message = VersionedRealtimeMessage::new(message.clone());
         sqlx::query(
             r#"
             INSERT INTO collection_items (
               id, collection_id, parent_id, kind, name, sort_order, method, url,
               query_params_json, headers_json, body_json, auth_json,
-              prerequest_script, test_script, request_type, realtime_request_json,
+              prerequest_script, test_script, request_type, realtime_message_json,
               created_at, updated_at
             ) VALUES (
-              ?1, ?2, ?3, 'request', ?4, ?5, NULL, ?6,
-              '[]', '[]', '{}', '{}', '', '', ?7, ?8, ?9, ?10
+              ?1, ?2, ?3, 'request', ?4, ?5, NULL, NULL,
+              '[]', '[]', '{}', '{}', '', '', ?6, ?7, ?8, ?9
             )
             "#,
         )
         .bind(&item_id)
         .bind(&collection_id)
-        .bind(imported_request.parent_id.as_deref())
+        .bind(imported_message.parent_id.as_deref())
         .bind(&item_name)
-        .bind(imported_request.sort_order)
-        .bind(&request.common().url)
-        .bind(request.request_type().as_str())
-        .bind(serde_json::to_string(&versioned_request)?)
+        .bind(imported_message.sort_order)
+        .bind(message.protocol().as_str())
+        .bind(serde_json::to_string(&versioned_message)?)
         .bind(&now)
         .bind(&now)
         .execute(&mut *transaction)
@@ -867,7 +866,7 @@ pub async fn save_request(
         INSERT INTO collection_items (
           id, collection_id, parent_id, kind, name, sort_order, method, url,
           query_params_json, headers_json, body_json, auth_json,
-          prerequest_script, test_script, request_type, realtime_request_json,
+          prerequest_script, test_script, request_type, realtime_message_json,
           created_at, updated_at
         ) VALUES (?1, ?2, ?3, 'request', ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, 'http', NULL, ?14, ?15)
         "#,
@@ -927,7 +926,7 @@ pub async fn save_requests_atomic(
             r#"INSERT INTO collection_items (
               id, collection_id, parent_id, kind, name, sort_order, method, url,
               query_params_json, headers_json, body_json, auth_json,
-              prerequest_script, test_script, request_type, realtime_request_json,
+              prerequest_script, test_script, request_type, realtime_message_json,
               created_at, updated_at
             ) VALUES (?1, ?2, ?3, 'request', ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, 'http', NULL, ?14, ?15)"#,
         )
@@ -1072,13 +1071,13 @@ pub async fn get_saved_request(pool: &SqlitePool, item_id: &str) -> AppResult<Sa
     })
 }
 
-pub async fn list_saved_realtime_requests(
+pub async fn list_saved_realtime_messages(
     pool: &SqlitePool,
     collection_id: &str,
-) -> AppResult<Vec<SavedRealtimeRequestSummary>> {
+) -> AppResult<Vec<SavedRealtimeMessageSummary>> {
     let rows = sqlx::query(
         r#"
-        SELECT id, collection_id, parent_id, name, request_type, url, updated_at
+        SELECT id, collection_id, parent_id, name, request_type, updated_at
         FROM collection_items
         WHERE collection_id = ?1
           AND kind = 'request'
@@ -1091,36 +1090,36 @@ pub async fn list_saved_realtime_requests(
     .await?;
 
     rows.into_iter()
-        .map(map_saved_realtime_request_summary)
+        .map(map_saved_realtime_message_summary)
         .collect()
 }
 
-pub async fn save_realtime_request(
+pub async fn save_realtime_message(
     pool: &SqlitePool,
     collection_id: &str,
     parent_id: Option<&str>,
-    request: &RealtimeRequestDraft,
-) -> AppResult<SavedRealtimeRequestSummary> {
+    message: &RealtimeMessageDraft,
+) -> AppResult<SavedRealtimeMessageSummary> {
     ensure_collection_exists(pool, collection_id).await?;
     validate_parent_folder(pool, collection_id, parent_id).await?;
-    validate_realtime_request(request)?;
+    validate_realtime_message(message)?;
 
     let item_id = Uuid::new_v4().to_string();
-    let item_name = saved_realtime_request_name(request);
+    let item_name = saved_realtime_message_name(message);
     let now = now_iso();
     let sort_order = next_sort_order(pool, collection_id, parent_id).await?;
-    let versioned_request = VersionedRealtimeRequest::new(request.clone());
+    let versioned_message = VersionedRealtimeMessage::new(message.clone());
 
     sqlx::query(
         r#"
         INSERT INTO collection_items (
           id, collection_id, parent_id, kind, name, sort_order, method, url,
           query_params_json, headers_json, body_json, auth_json,
-          prerequest_script, test_script, request_type, realtime_request_json,
+          prerequest_script, test_script, request_type, realtime_message_json,
           created_at, updated_at
         ) VALUES (
-          ?1, ?2, ?3, 'request', ?4, ?5, NULL, ?6,
-          '[]', '[]', '{}', '{}', '', '', ?7, ?8, ?9, ?10
+          ?1, ?2, ?3, 'request', ?4, ?5, NULL, NULL,
+          '[]', '[]', '{}', '{}', '', '', ?6, ?7, ?8, ?9
         )
         "#,
     )
@@ -1129,33 +1128,32 @@ pub async fn save_realtime_request(
     .bind(parent_id)
     .bind(&item_name)
     .bind(sort_order)
-    .bind(&request.common().url)
-    .bind(request.request_type().as_str())
-    .bind(serde_json::to_string(&versioned_request)?)
+    .bind(message.protocol().as_str())
+    .bind(serde_json::to_string(&versioned_message)?)
     .bind(&now)
     .bind(&now)
     .execute(pool)
     .await?;
 
     touch_collection(pool, collection_id).await?;
-    get_saved_realtime_request_summary(pool, &item_id).await
+    get_saved_realtime_message_summary(pool, &item_id).await
 }
 
-pub async fn update_saved_realtime_request(
+pub async fn update_saved_realtime_message(
     pool: &SqlitePool,
     item_id: &str,
-    request: &RealtimeRequestDraft,
-) -> AppResult<SavedRealtimeRequestSummary> {
-    update_saved_realtime_request_with_revision(pool, item_id, request, None).await
+    message: &RealtimeMessageDraft,
+) -> AppResult<SavedRealtimeMessageSummary> {
+    update_saved_realtime_message_with_revision(pool, item_id, message, None).await
 }
 
-pub async fn update_saved_realtime_request_with_revision(
+pub async fn update_saved_realtime_message_with_revision(
     pool: &SqlitePool,
     item_id: &str,
-    request: &RealtimeRequestDraft,
+    message: &RealtimeMessageDraft,
     expected_updated_at: Option<&str>,
-) -> AppResult<SavedRealtimeRequestSummary> {
-    validate_realtime_request(request)?;
+) -> AppResult<SavedRealtimeMessageSummary> {
+    validate_realtime_message(message)?;
 
     let collection_id: Option<String> = sqlx::query_scalar(
         r#"
@@ -1172,41 +1170,40 @@ pub async fn update_saved_realtime_request_with_revision(
 
     let Some(collection_id) = collection_id else {
         return Err(AppError::Message(
-            "Saved realtime request not found.".to_string(),
+            "Saved realtime message not found.".to_string(),
         ));
     };
 
-    let item_name = saved_realtime_request_name(request);
+    let item_name = saved_realtime_message_name(message);
     let now = now_iso();
-    let versioned_request = VersionedRealtimeRequest::new(request.clone());
-    let request_json = serde_json::to_string(&versioned_request)?;
+    let versioned_message = VersionedRealtimeMessage::new(message.clone());
+    let message_json = serde_json::to_string(&versioned_message)?;
 
     let result = sqlx::query(
         r#"
         UPDATE collection_items
         SET name = ?2,
             method = NULL,
-            url = ?3,
+            url = NULL,
             query_params_json = '[]',
             headers_json = '[]',
             body_json = '{}',
             auth_json = '{}',
             prerequest_script = '',
             test_script = '',
-            request_type = ?4,
-            realtime_request_json = ?5,
-            updated_at = ?6
+            request_type = ?3,
+            realtime_message_json = ?4,
+            updated_at = ?5
         WHERE id = ?1
           AND kind = 'request'
           AND request_type IN ('websocket', 'socketio')
-          AND (?7 IS NULL OR updated_at = ?7)
+          AND (?6 IS NULL OR updated_at = ?6)
         "#,
     )
     .bind(item_id)
     .bind(&item_name)
-    .bind(&request.common().url)
-    .bind(request.request_type().as_str())
-    .bind(request_json)
+    .bind(message.protocol().as_str())
+    .bind(message_json)
     .bind(&now)
     .bind(expected_updated_at)
     .execute(pool)
@@ -1228,23 +1225,23 @@ pub async fn update_saved_realtime_request_with_revision(
         return match current_updated_at {
             Some(current_updated_at) => Err(AppError::Conflict { current_updated_at }),
             None => Err(AppError::Message(
-                "Saved realtime request not found.".to_string(),
+                "Saved realtime message not found.".to_string(),
             )),
         };
     }
 
     touch_collection(pool, &collection_id).await?;
-    get_saved_realtime_request_summary(pool, item_id).await
+    get_saved_realtime_message_summary(pool, item_id).await
 }
 
-pub async fn get_saved_realtime_request(
+pub async fn get_saved_realtime_message(
     pool: &SqlitePool,
     item_id: &str,
-) -> AppResult<SavedRealtimeRequestDetail> {
+) -> AppResult<SavedRealtimeMessageDetail> {
     let row = sqlx::query(
         r#"
         SELECT id, collection_id, parent_id, name, request_type,
-               realtime_request_json, updated_at
+               realtime_message_json, updated_at
         FROM collection_items
         WHERE id = ?1
           AND kind = 'request'
@@ -1254,9 +1251,9 @@ pub async fn get_saved_realtime_request(
     .bind(item_id)
     .fetch_optional(pool)
     .await?
-    .ok_or_else(|| AppError::Message("Saved realtime request not found.".to_string()))?;
+    .ok_or_else(|| AppError::Message("Saved realtime message not found.".to_string()))?;
 
-    map_saved_realtime_request_detail(row)
+    map_saved_realtime_message_detail(row)
 }
 
 pub async fn delete_collection_item(pool: &SqlitePool, item_id: &str) -> AppResult<()> {
@@ -1295,7 +1292,7 @@ pub async fn delete_saved_request(pool: &SqlitePool, item_id: &str) -> AppResult
     delete_collection_item(pool, item_id).await
 }
 
-pub async fn delete_saved_realtime_request(pool: &SqlitePool, item_id: &str) -> AppResult<()> {
+pub async fn delete_saved_realtime_message(pool: &SqlitePool, item_id: &str) -> AppResult<()> {
     let exists: Option<String> = sqlx::query_scalar(
         r#"
         SELECT id
@@ -1311,14 +1308,14 @@ pub async fn delete_saved_realtime_request(pool: &SqlitePool, item_id: &str) -> 
 
     if exists.is_none() {
         return Err(AppError::Message(
-            "Saved realtime request not found.".to_string(),
+            "Saved realtime message not found.".to_string(),
         ));
     }
 
     delete_collection_item(pool, item_id).await
 }
 
-pub async fn delete_saved_realtime_request_with_revision(
+pub async fn delete_saved_realtime_message_with_revision(
     pool: &SqlitePool,
     item_id: &str,
     expected_updated_at: &str,
@@ -1336,7 +1333,7 @@ pub async fn delete_saved_realtime_request_with_revision(
     .bind(item_id)
     .fetch_optional(&mut *transaction)
     .await?
-    .ok_or_else(|| AppError::Message("Saved realtime request not found.".to_string()))?;
+    .ok_or_else(|| AppError::Message("Saved realtime message not found.".to_string()))?;
 
     let collection_id: String = row.get("collection_id");
     let current_updated_at: String = row.get("updated_at");
@@ -1605,10 +1602,10 @@ async fn get_saved_request_summary(
     Ok(map_saved_request_summary(row))
 }
 
-async fn get_saved_realtime_request_summary(
+async fn get_saved_realtime_message_summary(
     pool: &SqlitePool,
     item_id: &str,
-) -> AppResult<SavedRealtimeRequestSummary> {
+) -> AppResult<SavedRealtimeMessageSummary> {
     let row = sqlx::query(
         r#"
         SELECT id, collection_id, parent_id, name, request_type, url, updated_at
@@ -1621,9 +1618,9 @@ async fn get_saved_realtime_request_summary(
     .bind(item_id)
     .fetch_optional(pool)
     .await?
-    .ok_or_else(|| AppError::Message("Saved realtime request not found.".to_string()))?;
+    .ok_or_else(|| AppError::Message("Saved realtime message not found.".to_string()))?;
 
-    map_saved_realtime_request_summary(row)
+    map_saved_realtime_message_summary(row)
 }
 
 async fn get_collection_item_summary(
@@ -2016,74 +2013,67 @@ fn map_saved_request_detail(row: sqlx::sqlite::SqliteRow) -> AppResult<SavedRequ
     })
 }
 
-fn map_saved_realtime_request_summary(
+fn map_saved_realtime_message_summary(
     row: sqlx::sqlite::SqliteRow,
-) -> AppResult<SavedRealtimeRequestSummary> {
-    Ok(SavedRealtimeRequestSummary {
+) -> AppResult<SavedRealtimeMessageSummary> {
+    Ok(SavedRealtimeMessageSummary {
         id: row.get("id"),
         collection_id: row.get("collection_id"),
         parent_id: row.get("parent_id"),
         name: row.get("name"),
-        request_type: parse_realtime_request_type(&row.get::<String, _>("request_type"))?,
-        url: row.get("url"),
+        request_type: parse_realtime_message_type(&row.get::<String, _>("request_type"))?,
         updated_at: row.get("updated_at"),
     })
 }
 
-fn map_saved_realtime_request_detail(
+fn map_saved_realtime_message_detail(
     row: sqlx::sqlite::SqliteRow,
-) -> AppResult<SavedRealtimeRequestDetail> {
-    let stored_request_type = parse_realtime_request_type(&row.get::<String, _>("request_type"))?;
-    let request_json: Option<String> = row.get("realtime_request_json");
-    let request_json = request_json.ok_or_else(|| {
-        AppError::Message("Saved realtime request payload is missing.".to_string())
+) -> AppResult<SavedRealtimeMessageDetail> {
+    let stored_request_type = parse_realtime_message_type(&row.get::<String, _>("request_type"))?;
+    let message_json: Option<String> = row.get("realtime_message_json");
+    let message_json = message_json.ok_or_else(|| {
+        AppError::Message("Saved realtime message payload is missing.".to_string())
     })?;
-    let versioned: VersionedRealtimeRequest = serde_json::from_str(&request_json)?;
-    if versioned.version != REALTIME_REQUEST_SCHEMA_VERSION {
+    let versioned: VersionedRealtimeMessage = serde_json::from_str(&message_json)?;
+    if versioned.version != REALTIME_MESSAGE_SCHEMA_VERSION {
         return Err(AppError::Message(format!(
-            "Unsupported saved realtime request version: {}.",
+            "Unsupported saved realtime message version: {}.",
             versioned.version
         )));
     }
-    if versioned.request.request_type() != stored_request_type {
+    if versioned.message.protocol() != stored_request_type {
         return Err(AppError::Message(
-            "Saved realtime request type does not match its payload.".to_string(),
+            "Saved realtime message type does not match its payload.".to_string(),
         ));
     }
 
-    Ok(SavedRealtimeRequestDetail {
+    Ok(SavedRealtimeMessageDetail {
         id: row.get("id"),
         collection_id: row.get("collection_id"),
         parent_id: row.get("parent_id"),
         name: row.get("name"),
         request_type: stored_request_type,
         updated_at: row.get("updated_at"),
-        request: versioned.request,
+        message: versioned.message,
     })
 }
 
-fn parse_realtime_request_type(value: &str) -> AppResult<RequestType> {
+fn parse_realtime_message_type(value: &str) -> AppResult<RequestType> {
     match value {
         "websocket" => Ok(RequestType::Websocket),
         "socketio" => Ok(RequestType::Socketio),
         _ => Err(AppError::Message(format!(
-            "Unsupported realtime request type: {value}."
+            "Unsupported realtime message type: {value}."
         ))),
     }
 }
 
-fn validate_realtime_request(request: &RealtimeRequestDraft) -> AppResult<()> {
-    if let RealtimeRequestDraft::Socketio {
-        auth_payload,
-        composer,
-        ..
-    } = request
+fn validate_realtime_message(message: &RealtimeMessageDraft) -> AppResult<()> {
+    if message.name().trim().is_empty() {
+        return Err(AppError::Message("Realtime message name is required.".to_string()));
+    }
+    if let RealtimeMessageDraft::Socketio { composer, .. } = message
     {
-        if !auth_payload.is_object() {
-            return Err(AppError::Message(
-                "Socket.IO auth payload must be a JSON object.".to_string(),
-            ));
-        }
         if !composer.arguments.is_array() {
             return Err(AppError::Message(
                 "Socket.IO event arguments must be a JSON array.".to_string(),
@@ -2103,20 +2093,17 @@ fn saved_request_name(request: &SendRequestPayload) -> String {
     format!("{} {}", request.method, request.url)
 }
 
-fn saved_realtime_request_name(request: &RealtimeRequestDraft) -> String {
-    let common = request.common();
-    let trimmed_name = common.name.trim();
+fn saved_realtime_message_name(message: &RealtimeMessageDraft) -> String {
+    let trimmed_name = message.name().trim();
     if !trimmed_name.is_empty() {
         return trimmed_name.to_string();
     }
 
-    let protocol_name = match request {
-        RealtimeRequestDraft::Websocket { .. } => "WebSocket",
-        RealtimeRequestDraft::Socketio { .. } => "Socket.IO",
+    let protocol_name = match message {
+        RealtimeMessageDraft::Websocket { .. } => "WebSocket",
+        RealtimeMessageDraft::Socketio { .. } => "Socket.IO",
     };
-    format!("{protocol_name} {}", common.url)
-        .trim_end()
-        .to_string()
+    format!("{protocol_name} message")
 }
 
 fn now_iso() -> String {

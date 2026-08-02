@@ -2,18 +2,17 @@ use sqlx::{Row, SqlitePool};
 
 use super::{
     create_collection, create_collection_folder, delete_collection,
-    delete_saved_realtime_request_with_revision, ensure_starter_collection,
-    get_saved_realtime_request, get_saved_request, list_collections, list_saved_realtime_requests,
-    list_saved_requests, move_collection_item, save_realtime_request, save_request,
-    search_collection_entities, update_saved_realtime_request_with_revision,
+    delete_saved_realtime_message_with_revision, ensure_starter_collection,
+    get_saved_realtime_message, get_saved_request, list_collections, list_saved_realtime_messages,
+    list_saved_requests, move_collection_item, save_realtime_message, save_request,
+    search_collection_entities, update_saved_realtime_message_with_revision,
     update_saved_request_with_revision, STARTER_COLLECTION_DESCRIPTION, STARTER_COLLECTION_NAME,
     STARTER_COLLECTION_SEEDED_KEY,
 };
 use crate::domain::{
     collections::{CreateCollectionFolderInput, CreateCollectionInput, MoveCollectionItemInput},
     realtime::{
-        RawWebSocketComposer, RealtimeRequestCommon, RealtimeRequestDraft, ReconnectPolicy,
-        SocketIoComposer, SocketIoTransport,
+        RawWebSocketComposer, RealtimeMessageDraft, SocketIoComposer,
     },
     requests::{RequestAuth, RequestBody, SendRequestPayload},
 };
@@ -57,7 +56,7 @@ async fn setup_test_db() -> SqlitePool {
           test_script TEXT NOT NULL DEFAULT '',
           request_type TEXT NOT NULL DEFAULT 'http'
             CHECK (request_type IN ('http', 'websocket', 'socketio')),
-          realtime_request_json TEXT NULL,
+          realtime_message_json TEXT NULL,
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL,
           FOREIGN KEY (collection_id) REFERENCES collections(id) ON DELETE CASCADE,
@@ -142,15 +141,19 @@ async fn realtime_migration_defaults_existing_items_to_http() {
         .execute(&pool)
         .await
         .expect("apply realtime migration");
+    sqlx::raw_sql(include_str!("../../migrations/0011_realtime_connections_and_messages.sql"))
+        .execute(&pool)
+        .await
+        .expect("rename realtime message column");
 
     let row = sqlx::query(
-        "SELECT request_type, realtime_request_json FROM collection_items WHERE id = 'request-1'",
+        "SELECT request_type, realtime_message_json FROM collection_items WHERE id = 'request-1'",
     )
     .fetch_one(&pool)
     .await
     .expect("read migrated request");
     assert_eq!(row.get::<String, _>("request_type"), "http");
-    assert_eq!(row.get::<Option<String>, _>("realtime_request_json"), None);
+    assert_eq!(row.get::<Option<String>, _>("realtime_message_json"), None);
 }
 
 #[tokio::test]
@@ -164,26 +167,25 @@ async fn realtime_crud_round_trips_and_enforces_optimistic_revision() {
         .expect("create folder");
     let websocket = websocket_request("Events", "wss://example.test/events");
 
-    let created = save_realtime_request(&pool, &collection.id, Some(&folder.id), &websocket)
+    let created = save_realtime_message(&pool, &collection.id, Some(&folder.id), &websocket)
         .await
         .expect("save websocket request");
     assert_eq!(
         created.request_type,
         crate::domain::realtime::RequestType::Websocket
     );
-    assert_eq!(created.url, "wss://example.test/events");
 
-    let detail = get_saved_realtime_request(&pool, &created.id)
+    let detail = get_saved_realtime_message(&pool, &created.id)
         .await
         .expect("get websocket request");
     assert_eq!(detail.parent_id.as_deref(), Some(folder.id.as_str()));
     assert_eq!(
-        serde_json::to_value(detail.request).expect("serialize detail"),
+        serde_json::to_value(detail.message).expect("serialize detail"),
         serde_json::to_value(&websocket).expect("serialize fixture")
     );
 
     let socketio = socketio_request("Presence", "https://example.test");
-    let updated = update_saved_realtime_request_with_revision(
+    let updated = update_saved_realtime_message_with_revision(
         &pool,
         &created.id,
         &socketio,
@@ -197,7 +199,7 @@ async fn realtime_crud_round_trips_and_enforces_optimistic_revision() {
     );
     assert_ne!(updated.updated_at, created.updated_at);
 
-    let stale = update_saved_realtime_request_with_revision(
+    let stale = update_saved_realtime_message_with_revision(
         &pool,
         &created.id,
         &websocket,
@@ -222,7 +224,7 @@ async fn protocol_specific_lists_and_getters_do_not_cross_protocols() {
     )
     .await
     .expect("save http request");
-    let realtime = save_realtime_request(
+    let realtime = save_realtime_message(
         &pool,
         &collection.id,
         None,
@@ -237,14 +239,14 @@ async fn protocol_specific_lists_and_getters_do_not_cross_protocols() {
     assert_eq!(http_items.len(), 1);
     assert_eq!(http_items[0].id, http.id);
 
-    let realtime_items = list_saved_realtime_requests(&pool, &collection.id)
+    let realtime_items = list_saved_realtime_messages(&pool, &collection.id)
         .await
         .expect("list realtime requests");
     assert_eq!(realtime_items.len(), 1);
     assert_eq!(realtime_items[0].id, realtime.id);
 
     assert!(get_saved_request(&pool, &realtime.id).await.is_err());
-    assert!(get_saved_realtime_request(&pool, &http.id).await.is_err());
+    assert!(get_saved_realtime_message(&pool, &http.id).await.is_err());
 
     let collections = list_collections(&pool).await.expect("list collections");
     assert_eq!(
@@ -263,7 +265,7 @@ async fn realtime_delete_requires_the_current_revision() {
     let collection = create_collection(&pool, &collection_input("Realtime"))
         .await
         .expect("create collection");
-    let created = save_realtime_request(
+    let created = save_realtime_message(
         &pool,
         &collection.id,
         None,
@@ -272,18 +274,18 @@ async fn realtime_delete_requires_the_current_revision() {
     .await
     .expect("save realtime request");
 
-    let stale = delete_saved_realtime_request_with_revision(&pool, &created.id, "stale-revision")
+    let stale = delete_saved_realtime_message_with_revision(&pool, &created.id, "stale-revision")
         .await
         .expect_err("stale delete must conflict");
     assert!(matches!(stale, crate::error::AppError::Conflict { .. }));
-    get_saved_realtime_request(&pool, &created.id)
+    get_saved_realtime_message(&pool, &created.id)
         .await
         .expect("stale delete preserves request");
 
-    delete_saved_realtime_request_with_revision(&pool, &created.id, &created.updated_at)
+    delete_saved_realtime_message_with_revision(&pool, &created.id, &created.updated_at)
         .await
         .expect("delete current revision");
-    assert!(get_saved_realtime_request(&pool, &created.id)
+    assert!(get_saved_realtime_message(&pool, &created.id)
         .await
         .is_err());
 }
@@ -306,32 +308,16 @@ fn folder_input(name: &str, parent_id: Option<String>) -> CreateCollectionFolder
     }
 }
 
-fn realtime_common(name: &str, url: &str) -> RealtimeRequestCommon {
-    RealtimeRequestCommon {
+fn websocket_request(name: &str, _url: &str) -> RealtimeMessageDraft {
+    RealtimeMessageDraft::Websocket {
         name: name.to_string(),
-        url: url.to_string(),
-        query_params: Vec::new(),
-        headers: Vec::new(),
-        auth: RequestAuth::default(),
-        reconnect: ReconnectPolicy::default(),
-    }
-}
-
-fn websocket_request(name: &str, url: &str) -> RealtimeRequestDraft {
-    RealtimeRequestDraft::Websocket {
-        common: realtime_common(name, url),
-        subprotocols: vec!["graphql-transport-ws".to_string()],
         composer: RawWebSocketComposer::default(),
     }
 }
 
-fn socketio_request(name: &str, url: &str) -> RealtimeRequestDraft {
-    RealtimeRequestDraft::Socketio {
-        common: realtime_common(name, url),
-        path: "/socket.io/".to_string(),
-        namespace: "/presence".to_string(),
-        auth_payload: serde_json::json!({"tenant": "test"}),
-        transport: SocketIoTransport::Auto,
+fn socketio_request(name: &str, _url: &str) -> RealtimeMessageDraft {
+    RealtimeMessageDraft::Socketio {
+        name: name.to_string(),
         composer: SocketIoComposer {
             event: "join".to_string(),
             arguments: serde_json::json!(["room-1"]),

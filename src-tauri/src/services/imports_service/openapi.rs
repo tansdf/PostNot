@@ -285,6 +285,7 @@ pub(super) async fn import_openapi_collection(
         collection_name: created_collection.name,
         imported_request_count: imported_requests.len(),
         created_collection: true,
+        created_realtime_connection_profile_count: 0,
         details: Some(ImportDetails {
             format: "openapi".to_string(),
             summary: format!(

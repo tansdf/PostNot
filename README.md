@@ -18,6 +18,7 @@ PostNot is built for working with HTTP APIs on your own machine, with local pers
 - Compose and send HTTP requests from a desktop-native UI, including body-bearing RFC 10008 `QUERY` requests
 - Work across multiple request tabs with restored local workspace state between launches
 - Save requests into collections and nested folders
+- Reuse standalone WebSocket and Socket.IO connection profiles while selecting and sending multiple collection messages through one live tab session
 - Browse those folders in the sidebar and collections page with aligned tree guides and folder icons
 - Search collections, folders, and saved requests from the sidebar
 - Reorder saved requests and folders, and move them across folders or collections with drag-and-drop from the sidebar and collections page

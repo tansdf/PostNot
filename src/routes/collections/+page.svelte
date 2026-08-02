@@ -220,7 +220,7 @@
 
   async function handleOpenSavedRequest(item: CollectionItemSummary) {
     if (item.requestType === "websocket" || item.requestType === "socketio") {
-      await goto(resolve(`/websockets?savedRequestId=${encodeURIComponent(item.id)}`));
+      await goto(resolve(`/websockets?messageId=${encodeURIComponent(item.id)}`));
       return;
     }
     await goto(resolve(`/?savedRequestId=${encodeURIComponent(item.id)}`));

@@ -334,7 +334,7 @@
 
     await collections.selectCollection(collectionId);
     const target = requestType === "websocket" || requestType === "socketio"
-      ? resolve(`/websockets?savedRequestId=${encodeURIComponent(itemId)}`)
+      ? resolve(`/websockets?messageId=${encodeURIComponent(itemId)}`)
       : resolve(`/?savedRequestId=${encodeURIComponent(itemId)}`);
     await goto(target);
   }
@@ -883,7 +883,7 @@
                           <button
                             class={[
                               "sidebar-request-link",
-                              page.url.searchParams.get("savedRequestId") === item.id && "sidebar-request-active",
+                              page.url.searchParams.get(item.requestType === "websocket" || item.requestType === "socketio" ? "messageId" : "savedRequestId") === item.id && "sidebar-request-active",
                               revealedSidebarItemId === item.id && "sidebar-search-revealed",
                               collectionDnd.isDraggingRequest(item.id) && "sidebar-request-dragging",
                               collectionDnd.matchesDropIndicator(collection.id, item.id, "before") && "sidebar-drop-target-before",
@@ -892,7 +892,7 @@
                             type="button"
                             onclick={() => openSavedRequest(collection.id, item.id, item.requestType)}
                             onkeydown={handleTreeKeydown}
-                            aria-current={page.url.searchParams.get("savedRequestId") === item.id ? "page" : undefined}
+                            aria-current={page.url.searchParams.get(item.requestType === "websocket" || item.requestType === "socketio" ? "messageId" : "savedRequestId") === item.id ? "page" : undefined}
                             data-sidebar-tree-row="true"
                             style={`--tree-depth:${depth};`}
                             onpointerdown={(event) => handleItemPointerDown(event, item)}

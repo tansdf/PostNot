@@ -35,6 +35,7 @@ pub(super) async fn import_curl_request(
             collection_name: collection.name,
             imported_request_count: 1,
             created_collection: false,
+            created_realtime_connection_profile_count: 0,
             details: Some(ImportDetails {
                 format: "curl".to_string(),
                 summary: "1 request imported from cURL.".to_string(),
@@ -67,6 +68,7 @@ pub(super) async fn import_curl_request(
         collection_name: created.name,
         imported_request_count: 1,
         created_collection: true,
+        created_realtime_connection_profile_count: 0,
         details: Some(ImportDetails {
             format: "curl".to_string(),
             summary: "1 request imported from cURL.".to_string(),

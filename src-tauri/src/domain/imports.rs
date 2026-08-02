@@ -18,6 +18,8 @@ pub struct ImportResult {
     pub imported_request_count: usize,
     pub created_collection: bool,
     #[serde(default)]
+    pub created_realtime_connection_profile_count: usize,
+    #[serde(default)]
     pub details: Option<ImportDetails>,
 }
 

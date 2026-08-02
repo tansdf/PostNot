@@ -9,11 +9,18 @@ use crate::{
             PostNotCollectionDocument, PostNotCollectionItem, POSTNOT_COLLECTION_SCHEMA,
             POSTNOT_COLLECTION_VERSION,
         },
-        realtime::REALTIME_REQUEST_SCHEMA_VERSION,
+        realtime::{
+            RealtimeConnectionDraft, REALTIME_MESSAGE_SCHEMA_VERSION,
+            LEGACY_REALTIME_REQUEST_SCHEMA_VERSION,
+        },
     },
     error::{AppError, AppResult},
-    services::collections_service::{
-        self, ImportCollectionFolder, ImportCollectionRealtimeRequest, ImportCollectionRequest,
+    services::{
+        collections_service::{
+            self, ImportCollectionFolder, ImportCollectionRealtimeMessage,
+            ImportCollectionRequest,
+        },
+        realtime_connections_service,
     },
 };
 
@@ -27,17 +34,19 @@ pub(super) async fn import_postnot_collection(
 
     let mut folders = Vec::new();
     let mut requests = Vec::new();
-    let mut realtime_requests = Vec::new();
+    let mut realtime_messages = Vec::new();
+    let mut connections = Vec::new();
     let mut imported_items = Vec::new();
     flatten_items(
         None,
         &document.items,
         &mut folders,
         &mut requests,
-        &mut realtime_requests,
+        &mut realtime_messages,
+        &mut connections,
         &mut imported_items,
     )?;
-    let imported_request_count = requests.len() + realtime_requests.len();
+    let imported_request_count = requests.len() + realtime_messages.len();
     let collection_name = document.collection.name.trim().to_string();
 
     let created = collections_service::import_mixed_collection_atomic(
@@ -50,15 +59,21 @@ pub(super) async fn import_postnot_collection(
         },
         &folders,
         &requests,
-        &realtime_requests,
+        &realtime_messages,
     )
     .await?;
+    let profile_count_before = realtime_connections_service::list_profiles(pool).await?.len();
+    for connection in &connections {
+        realtime_connections_service::get_or_create_exact_profile(pool, connection).await?;
+    }
+    let created_profile_count = realtime_connections_service::list_profiles(pool).await?.len().saturating_sub(profile_count_before);
 
     Ok(ImportResult {
         collection_id: created.id,
         collection_name: created.name,
         imported_request_count,
         created_collection: true,
+        created_realtime_connection_profile_count: created_profile_count,
         details: Some(ImportDetails {
             format: "postnot".to_string(),
             summary: format!(
@@ -67,7 +82,15 @@ pub(super) async fn import_postnot_collection(
                 if imported_request_count == 1 { "" } else { "s" }
             ),
             imported_items,
-            warnings: Vec::new(),
+            warnings: if connections.is_empty() {
+                Vec::new()
+            } else {
+                vec![format!(
+                    "{} standalone connection profile{} created; matching existing profiles were reused.",
+                    created_profile_count,
+                    if created_profile_count == 1 { " was" } else { "s were" }
+                )]
+            },
             errors: Vec::new(),
         }),
     })
@@ -79,7 +102,7 @@ fn validate_document(document: &PostNotCollectionDocument) -> AppResult<()> {
             "Unsupported PostNot collection schema.".to_string(),
         ));
     }
-    if document.version != POSTNOT_COLLECTION_VERSION {
+    if !matches!(document.version, 1 | POSTNOT_COLLECTION_VERSION) {
         return Err(AppError::Message(format!(
             "Unsupported PostNot collection version: {}.",
             document.version
@@ -98,7 +121,8 @@ fn flatten_items(
     items: &[PostNotCollectionItem],
     folders: &mut Vec<ImportCollectionFolder>,
     requests: &mut Vec<ImportCollectionRequest>,
-    realtime_requests: &mut Vec<ImportCollectionRealtimeRequest>,
+    realtime_messages: &mut Vec<ImportCollectionRealtimeMessage>,
+    connections: &mut Vec<RealtimeConnectionDraft>,
     imported_items: &mut Vec<String>,
 ) -> AppResult<()> {
     for (sort_order, item) in items.iter().enumerate() {
@@ -128,7 +152,8 @@ fn flatten_items(
                     items,
                     folders,
                     requests,
-                    realtime_requests,
+                    realtime_messages,
+                    connections,
                     imported_items,
                 )?;
             }
@@ -140,19 +165,35 @@ fn flatten_items(
                 });
                 imported_items.push(request.name.clone());
             }
-            PostNotCollectionItem::Realtime { request } => {
-                if request.version != REALTIME_REQUEST_SCHEMA_VERSION {
+            PostNotCollectionItem::Message { message } => {
+                if message.version != REALTIME_MESSAGE_SCHEMA_VERSION {
                     return Err(AppError::Message(format!(
-                        "Unsupported saved realtime request version: {}.",
+                        "Unsupported saved realtime message version: {}.",
+                        message.version
+                    )));
+                }
+                realtime_messages.push(ImportCollectionRealtimeMessage {
+                    parent_id: parent_id.map(str::to_string),
+                    sort_order: sort_order as i64,
+                    message: message.message.clone(),
+                });
+                imported_items.push(message.message.name().to_string());
+            }
+            PostNotCollectionItem::Realtime { request } => {
+                if request.version != LEGACY_REALTIME_REQUEST_SCHEMA_VERSION {
+                    return Err(AppError::Message(format!(
+                        "Unsupported legacy realtime request version: {}.",
                         request.version
                     )));
                 }
-                realtime_requests.push(ImportCollectionRealtimeRequest {
+                let (connection, message) = request.request.clone().split();
+                connections.push(connection);
+                imported_items.push(message.name().to_string());
+                realtime_messages.push(ImportCollectionRealtimeMessage {
                     parent_id: parent_id.map(str::to_string),
                     sort_order: sort_order as i64,
-                    request: request.request.clone(),
+                    message,
                 });
-                imported_items.push(request.request.common().name.clone());
             }
         }
     }
@@ -168,7 +209,8 @@ mod tests {
         domain::{
             collections::{CreateCollectionFolderInput, CreateCollectionInput},
             realtime::{
-                RawWebSocketComposer, RealtimeRequestCommon, RealtimeRequestDraft, ReconnectPolicy,
+                LegacyRealtimeRequestDraft, RawWebSocketComposer, RealtimeConnectionCommon,
+                RealtimeMessageDraft, ReconnectPolicy, VersionedLegacyRealtimeRequest,
             },
             requests::{RequestAuth, RequestBody, SendRequestPayload},
         },
@@ -202,17 +244,9 @@ mod tests {
         }
     }
 
-    fn realtime_request() -> RealtimeRequestDraft {
-        RealtimeRequestDraft::Websocket {
-            common: RealtimeRequestCommon {
-                name: "Events".to_string(),
-                url: "wss://example.test/events".to_string(),
-                query_params: Vec::new(),
-                headers: Vec::new(),
-                auth: RequestAuth::default(),
-                reconnect: ReconnectPolicy::default(),
-            },
-            subprotocols: vec!["graphql-transport-ws".to_string()],
+    fn realtime_message() -> RealtimeMessageDraft {
+        RealtimeMessageDraft::Websocket {
+            name: "Events".to_string(),
             composer: RawWebSocketComposer::default(),
         }
     }
@@ -244,11 +278,11 @@ mod tests {
         collections_service::save_request(pool, &collection.id, Some(&folder.id), &http_request())
             .await
             .expect("save http request");
-        collections_service::save_realtime_request(
+        collections_service::save_realtime_message(
             pool,
             &collection.id,
             Some(&folder.id),
-            &realtime_request(),
+            &realtime_message(),
         )
         .await
         .expect("save realtime request");
@@ -301,12 +335,12 @@ mod tests {
             .iter()
             .find(|item| item.request_type.as_deref() == Some("websocket"))
             .expect("imported websocket");
-        let detail = collections_service::get_saved_realtime_request(&pool, &realtime_item.id)
+        let detail = collections_service::get_saved_realtime_message(&pool, &realtime_item.id)
             .await
             .expect("read imported websocket");
         assert_eq!(
-            serde_json::to_value(detail.request).expect("serialize imported request"),
-            serde_json::to_value(realtime_request()).expect("serialize source request")
+            serde_json::to_value(detail.message).expect("serialize imported message"),
+            serde_json::to_value(realtime_message()).expect("serialize source message")
         );
     }
 
@@ -322,5 +356,34 @@ mod tests {
         assert_eq!(omitted_count, 1);
         assert!(json.contains("\"Health\""));
         assert!(!json.contains("\"Events\""));
+    }
+
+    #[tokio::test]
+    async fn version_one_combined_entries_split_into_profiles_and_messages() {
+        let pool = setup_test_db().await;
+        let document = PostNotCollectionDocument {
+            schema: POSTNOT_COLLECTION_SCHEMA.to_string(),
+            version: 1,
+            collection: crate::domain::portability::PostNotCollectionMetadata {
+                name: "Legacy".to_string(), description: String::new(),
+                pre_request_script: String::new(), test_script: String::new(),
+            },
+            items: vec![PostNotCollectionItem::Realtime {
+                request: VersionedLegacyRealtimeRequest {
+                    version: LEGACY_REALTIME_REQUEST_SCHEMA_VERSION,
+                    request: LegacyRealtimeRequestDraft::Websocket {
+                        common: RealtimeConnectionCommon {
+                            name: "Legacy socket".to_string(), url: "wss://example.test".to_string(),
+                            query_params: Vec::new(), headers: Vec::new(), auth: RequestAuth::default(), reconnect: ReconnectPolicy::default(),
+                        },
+                        subprotocols: Vec::new(), composer: RawWebSocketComposer::default(),
+                    },
+                },
+            }],
+        };
+        let result = import_postnot_collection(&pool, &serde_json::to_string(&document).unwrap()).await.unwrap();
+        assert_eq!(result.created_realtime_connection_profile_count, 1);
+        assert_eq!(realtime_connections_service::list_profiles(&pool).await.unwrap().len(), 1);
+        assert_eq!(collections_service::list_saved_realtime_messages(&pool, &result.collection_id).await.unwrap().len(), 1);
     }
 }
