@@ -593,7 +593,14 @@
 
 <section class="sidebar-section">
   <div class="sidebar-section-header">
-    <h2>Collections</h2>
+    <h2>
+      <a
+        class={["sidebar-section-link", page.url.pathname.startsWith("/collections") && "sidebar-section-link-active"]}
+        href={resolve("/collections")}
+        aria-current={page.url.pathname.startsWith("/collections") ? "page" : undefined}
+        title="Open Collections workspace"
+      >Collections</a>
+    </h2>
     <button
       class="sidebar-plus-button"
       type="button"

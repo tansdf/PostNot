@@ -13,6 +13,7 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ### Changed
 
+- Reorganized the application sidebar into compact workspace controls, a height-filling Collections tree, and anchored utility navigation so saved requests retain substantially more working space.
 - Split realtime persistence and workspace editing into independently selected connection profiles and message-only collection items. A tab now keeps one live WebSocket or Socket.IO session while messages are selected, edited, and sent without reconnecting or clearing its transcript.
 - Renamed live runtime connection identifiers to session identifiers, locked connection editing while a session is active, and rejected protocol-incompatible messages before they reach the transport.
 - Bumped PostNot collection portability to version 2 for message-only realtime entries while continuing to import version 1 combined entries by splitting them into profiles and messages.

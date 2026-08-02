@@ -2,6 +2,8 @@
   import type { Snippet } from "svelte";
   import { resolve } from "$app/paths";
   import { page } from "$app/state";
+  import McpGlyph from "$lib/components/icons/McpGlyph.svelte";
+  import NavigationGlyph from "$lib/components/icons/NavigationGlyph.svelte";
   import CollectionDragController from "$lib/components/layout/CollectionDragController.svelte";
   import NotificationHost from "$lib/components/layout/NotificationHost.svelte";
   import SidebarCollections from "$lib/components/layout/SidebarCollections.svelte";
@@ -20,51 +22,62 @@
   <div class="app-shell">
     <aside class="sidebar">
       <div class="brand-block">
-        <p class="eyebrow">Desktop API Client</p>
         <h1>{title} <span class={["version-pill", updater.availableUpdate && "version-pill-update-ready"]}>v{__APP_VERSION__}{#if updater.availableUpdate}<span class="version-pill-arrow" title={`Version ${updater.availableUpdate.version} is ready to install`} aria-label={`Version ${updater.availableUpdate.version} is ready to install`}>↑</span>{/if}</span></h1>
       </div>
 
-      <nav class="sidebar-nav" aria-label="Primary">
-        <a class={["sidebar-link", page.url.pathname === "/" && "sidebar-link-active"]} href={resolve("/")}>Requests</a>
+      <nav class="sidebar-nav" aria-label="Workspaces">
+        <a
+          class={["sidebar-link", page.url.pathname === "/" && "sidebar-link-active"]}
+          href={resolve("/")}
+          aria-current={page.url.pathname === "/" ? "page" : undefined}
+        >Requests</a>
         <a
           class={["sidebar-link", page.url.pathname.startsWith("/websockets") && "sidebar-link-active"]}
           href={resolve("/websockets")}
+          aria-current={page.url.pathname.startsWith("/websockets") ? "page" : undefined}
         >
           WebSockets
         </a>
         <a
-          class={["sidebar-link", page.url.pathname.startsWith("/collections") && "sidebar-link-active"]}
-          href={resolve("/collections")}
-        >
-          Collections
-        </a>
-        <a
-          class={["sidebar-link", page.url.pathname.startsWith("/environments") && "sidebar-link-active"]}
-          href={resolve("/environments")}
-        >
-          Environments
-        </a>
-        <a
           class={["sidebar-link", page.url.pathname.startsWith("/playbooks") && "sidebar-link-active"]}
           href={resolve("/playbooks")}
+          aria-current={page.url.pathname.startsWith("/playbooks") ? "page" : undefined}
         >
           Playbooks
-        </a>
-        <a
-          class={["sidebar-link", page.url.pathname.startsWith("/activity") && "sidebar-link-active"]}
-          href={resolve("/activity")}
-        >
-          MCP Integration
-        </a>
-        <a
-          class={["sidebar-link", page.url.pathname.startsWith("/settings") && "sidebar-link-active"]}
-          href={resolve("/settings")}
-        >
-          Settings
         </a>
       </nav>
 
       <SidebarCollections />
+
+      <nav class="sidebar-utility-nav" aria-label="Utilities">
+        <a
+          class={["sidebar-utility-link", page.url.pathname.startsWith("/environments") && "sidebar-utility-link-active"]}
+          href={resolve("/environments")}
+          aria-current={page.url.pathname.startsWith("/environments") ? "page" : undefined}
+          title="Environments"
+        >
+          <NavigationGlyph name="environment" />
+          <span>Env</span>
+        </a>
+        <a
+          class={["sidebar-utility-link", page.url.pathname.startsWith("/activity") && "sidebar-utility-link-active"]}
+          href={resolve("/activity")}
+          aria-current={page.url.pathname.startsWith("/activity") ? "page" : undefined}
+          title="MCP Activity"
+        >
+          <McpGlyph name="activity" />
+          <span>Activity</span>
+        </a>
+        <a
+          class={["sidebar-utility-link", "sidebar-settings-link", page.url.pathname.startsWith("/settings") && "sidebar-utility-link-active"]}
+          href={resolve("/settings")}
+          aria-current={page.url.pathname.startsWith("/settings") ? "page" : undefined}
+          aria-label="Settings"
+          title="Settings"
+        >
+          <NavigationGlyph name="settings" />
+        </a>
+      </nav>
     </aside>
 
     <main class="workspace">

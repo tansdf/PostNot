@@ -154,22 +154,22 @@ button:disabled {
 
 .sidebar {
   height: 100%;
-  padding: 20px 22px 16px;
+  padding: var(--space-4) 22px;
   background: var(--bg-sidebar);
   color: var(--text-inverse);
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
   min-height: 0;
   overflow: hidden;
 }
 
 .brand-block h1 {
-  margin: 4px 0 2px;
-  font-size: 1.6rem;
+  margin: 0;
+  font-size: 1.35rem;
   line-height: 1;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
 }
 
@@ -1867,43 +1867,123 @@ select option {
 
 .sidebar-nav {
   display: grid;
-  gap: 6px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-1);
 }
 
 .sidebar-link {
-  display: block;
-  padding: 10px 12px;
-  border-radius: var(--radius-md);
+  min-width: 0;
+  min-height: var(--control-height-md);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-control);
   color: var(--text-inverse);
   text-decoration: none;
   background: var(--sidebar-link-bg);
   border: 1px solid transparent;
-  border-left: 3px solid transparent;
-  font-size: 0.92rem;
+  font-size: var(--font-label);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
   transition: var(--motion-base) var(--ease-standard);
 }
 
-.sidebar-link:hover {
+.sidebar-link:hover,
+.sidebar-utility-link:hover,
+.sidebar-section-link:hover {
   background: var(--sidebar-link-hover-bg);
 }
 
 .sidebar-link-active {
   background: var(--sidebar-active-bg);
-  border-left-color: var(--bg-accent);
+  border-color: var(--sidebar-card-border);
+  box-shadow: inset 0 -3px var(--bg-accent);
+}
+
+.sidebar-link:focus-visible,
+.sidebar-utility-link:focus-visible,
+.sidebar-section-link:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--bg-accent) 62%, white 18%);
+  outline-offset: 2px;
 }
 
 .sidebar-section {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   min-height: 0;
   overflow: hidden;
 }
 
 .sidebar-section h2 {
   margin: 0;
-  font-size: 1rem;
+  min-width: 0;
+  font-size: var(--font-section-title);
+}
+
+.sidebar-section-link {
+  min-height: var(--control-height-sm);
+  padding: 0 var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-compact);
+  color: var(--text-inverse);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  transition: var(--motion-base) var(--ease-standard);
+}
+
+.sidebar-section-link-active {
+  background: var(--sidebar-active-bg);
+  border-color: var(--sidebar-card-border);
+  box-shadow: inset 3px 0 var(--bg-accent);
+}
+
+.sidebar-utility-nav {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) var(--control-height-md);
+  gap: var(--space-1);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--sidebar-card-border);
+}
+
+.sidebar-utility-link {
+  min-width: 0;
+  height: var(--control-height-md);
+  padding: 0 var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: var(--sidebar-link-bg);
+  color: var(--sidebar-text-strong);
+  text-decoration: none;
+  font-size: var(--font-label);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  transition: var(--motion-base) var(--ease-standard);
+}
+
+.sidebar-utility-link svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.sidebar-utility-link-active {
+  background: var(--sidebar-active-bg);
+  border-color: var(--sidebar-card-border);
+  color: var(--text-inverse);
+  box-shadow: inset 0 -3px var(--bg-accent);
+}
+
+.sidebar-settings-link {
+  width: var(--control-height-md);
+  padding: 0;
 }
 
 .sidebar-search-shell {
@@ -1977,6 +2057,18 @@ select option {
 
 .sidebar-plus-button:hover:not(:disabled) {
   background: var(--sidebar-link-hover-bg);
+}
+
+@media (max-width: 980px) {
+  .sidebar-section {
+    flex: none;
+    overflow: hidden;
+  }
+
+  .sidebar-section-scroll {
+    max-height: min(320px, 42vh);
+    overflow-y: auto;
+  }
 }
 
 .sidebar-inline-error,

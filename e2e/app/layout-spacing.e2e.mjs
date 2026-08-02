@@ -33,6 +33,41 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
+test("sidebar reserves its flexible middle region for collections", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/");
+
+  const workspaceNavigation = page.getByRole("navigation", { name: "Workspaces" });
+  await expect(workspaceNavigation.getByRole("link")).toHaveCount(3);
+  await expect(workspaceNavigation.getByRole("link", { name: "Requests" })).toHaveAttribute("aria-current", "page");
+
+  const collectionsLink = page.getByRole("link", { name: "Collections" });
+  await expect(collectionsLink).toHaveAttribute("href", "/collections");
+
+  const utilities = page.getByRole("navigation", { name: "Utilities" });
+  await expect(utilities.getByRole("link")).toHaveCount(3);
+  const settingsLink = utilities.getByRole("link", { name: "Settings" });
+  await expect(settingsLink).toHaveAttribute("title", "Settings");
+  await expect(settingsLink).toHaveText("");
+
+  const geometry = await page.locator("aside.sidebar").evaluate((sidebar) => {
+    const workspaceNav = sidebar.querySelector(".sidebar-nav")?.getBoundingClientRect();
+    const collectionTree = sidebar.querySelector(".sidebar-section-scroll")?.getBoundingClientRect();
+    const utilityNav = sidebar.querySelector(".sidebar-utility-nav")?.getBoundingClientRect();
+    if (!workspaceNav || !collectionTree || !utilityNav) throw new Error("Sidebar regions are missing");
+    return {
+      workspaceHeight: workspaceNav.height,
+      collectionHeight: collectionTree.height,
+      collectionBottom: collectionTree.bottom,
+      utilityTop: utilityNav.top
+    };
+  });
+
+  expect(geometry.workspaceHeight).toBeLessThanOrEqual(40);
+  expect(geometry.collectionHeight).toBeGreaterThan(geometry.workspaceHeight * 4);
+  expect(geometry.collectionBottom).toBeLessThanOrEqual(geometry.utilityTop);
+});
+
 for (const viewport of viewports) {
   for (const route of routes) {
     test(`${route.name} follows panel spacing contract at ${viewport.name}`, async ({ page }, testInfo) => {
