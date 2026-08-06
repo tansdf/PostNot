@@ -6,6 +6,16 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.24.1] - 2026-08-06
+
+### Changed
+
+- Expanded import regression coverage across cURL, Postman collections and environments, OpenAPI JSON/YAML, PostNot portability, validation errors, authentication, request bodies, hierarchy, and SQLite persistence.
+
+### Fixed
+
+- Preserved an explicit `GET` method during cURL import when `--data*` or `--form` options are present, while retaining cURL's implicit `POST` behavior when no method is specified.
+
 ## [0.24.0] - 2026-08-02
 
 ### Added

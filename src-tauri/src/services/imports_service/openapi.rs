@@ -1157,3 +1157,283 @@ fn raw_body_value_to_string(content_type: &str, value: &serde_json::Value) -> St
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
+
+    use super::*;
+    use crate::domain::collections::CollectionItemSummary;
+
+    async fn setup_test_db() -> SqlitePool {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("in-memory database");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("run migrations");
+        pool
+    }
+
+    fn collect_requests(items: &[CollectionItemSummary], requests: &mut Vec<(String, String)>) {
+        for item in items {
+            if item.kind == "request" {
+                requests.push((item.name.clone(), item.id.clone()));
+            }
+            collect_requests(&item.children, requests);
+        }
+    }
+
+    #[test]
+    fn yaml_draft_import_resolves_servers_parameters_json_body_and_auth() {
+        let source = r#"
+openapi: 3.0.3
+info:
+  title: Users API
+servers:
+  - url: https://{region}.example.test/v1
+    variables:
+      region:
+        default: eu
+security:
+  - bearerAuth: []
+paths:
+  /users/{id}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    post:
+      summary: Update user
+      tags: [Users]
+      parameters:
+        - name: limit
+          in: query
+          required: true
+          schema:
+            type: integer
+            default: 25
+        - name: X-Tenant
+          in: header
+          example: acme
+      requestBody:
+        $ref: '#/components/requestBodies/UserBody'
+components:
+  parameters:
+    UserId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+  requestBodies:
+    UserBody:
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/User'
+  schemas:
+    User:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          example: Ada
+        age:
+          type: integer
+          default: 42
+        optional:
+          type: string
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+"#;
+
+        let imported = import_openapi_to_draft(source).expect("import OpenAPI draft");
+        let request = imported.request;
+
+        assert_eq!(request.name, "Update user");
+        assert_eq!(request.method, "POST");
+        assert_eq!(request.url, "https://eu.example.test/v1/users/{{id}}");
+        assert_eq!(request.query_params.len(), 1);
+        assert_eq!(request.query_params[0].key, "limit");
+        assert_eq!(request.query_params[0].value, "25");
+        assert!(request
+            .headers
+            .iter()
+            .any(|header| header.key == "X-Tenant" && header.value == "acme"));
+        assert!(request
+            .headers
+            .iter()
+            .any(|header| { header.key == "Content-Type" && header.value == "application/json" }));
+        assert_eq!(request.body.mode, "json");
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&request.body.raw).unwrap(),
+            serde_json::json!({ "age": 42, "name": "Ada" })
+        );
+        assert_eq!(request.auth.auth_type, "bearer");
+    }
+
+    #[tokio::test]
+    async fn collection_import_persists_tags_and_supported_body_modes() {
+        let pool = setup_test_db().await;
+        let source = r#"{
+          "openapi": "3.1.0",
+          "info": {
+            "title": "  Upload API  ",
+            "description": "  Import body modes  "
+          },
+          "servers": [{ "url": "https://api.example.test" }],
+          "paths": {
+            "/plain": {
+              "put": {
+                "summary": "Plain request",
+                "requestBody": {
+                  "content": { "text/plain": { "example": "hello" } }
+                }
+              }
+            },
+            "/token": {
+              "post": {
+                "summary": "Token request",
+                "tags": ["Auth"],
+                "requestBody": {
+                  "content": {
+                    "application/x-www-form-urlencoded": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "grant_type": { "type": "string", "default": "client_credentials" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "/upload": {
+              "post": {
+                "summary": "Upload request",
+                "tags": ["Files"],
+                "requestBody": {
+                  "content": {
+                    "multipart/form-data": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "attachment": { "type": "string", "format": "binary" },
+                          "caption": { "type": "string", "example": "Quarterly report" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }"#;
+
+        let result = import_openapi_collection(&pool, source)
+            .await
+            .expect("import OpenAPI collection");
+
+        assert_eq!(result.collection_name, "Upload API");
+        assert_eq!(result.imported_request_count, 3);
+        assert_eq!(result.details.as_ref().unwrap().format, "openapi");
+
+        let collection = collections_service::get_collection(&pool, &result.collection_id)
+            .await
+            .expect("read imported collection");
+        assert_eq!(collection.description, "Import body modes");
+
+        let items = collections_service::list_collection_items(&pool, &result.collection_id)
+            .await
+            .expect("list imported items");
+        assert!(items.iter().any(|item| item.name == "Auth"));
+        assert!(items.iter().any(|item| item.name == "Files"));
+
+        let mut request_ids = Vec::new();
+        collect_requests(&items, &mut request_ids);
+        assert_eq!(request_ids.len(), 3);
+
+        let plain_id = request_ids
+            .iter()
+            .find(|(name, _)| name == "Plain request")
+            .map(|(_, id)| id)
+            .expect("plain request");
+        let plain = collections_service::get_saved_request(&pool, plain_id)
+            .await
+            .expect("read plain request")
+            .request;
+        assert_eq!(plain.method, "PUT");
+        assert_eq!(plain.url, "https://api.example.test/plain");
+        assert_eq!(plain.body.mode, "raw");
+        assert_eq!(plain.body.raw, "hello");
+        assert!(plain
+            .headers
+            .iter()
+            .any(|header| { header.key == "Content-Type" && header.value == "text/plain" }));
+
+        let token_id = request_ids
+            .iter()
+            .find(|(name, _)| name == "Token request")
+            .map(|(_, id)| id)
+            .expect("token request");
+        let token = collections_service::get_saved_request(&pool, token_id)
+            .await
+            .expect("read token request")
+            .request;
+        assert_eq!(token.body.mode, "form-urlencoded");
+        assert_eq!(token.body.form[0].key, "grant_type");
+        assert_eq!(token.body.form[0].value, "client_credentials");
+
+        let upload_id = request_ids
+            .iter()
+            .find(|(name, _)| name == "Upload request")
+            .map(|(_, id)| id)
+            .expect("upload request");
+        let upload = collections_service::get_saved_request(&pool, upload_id)
+            .await
+            .expect("read upload request")
+            .request;
+        assert_eq!(upload.body.mode, "multipart");
+        assert_eq!(upload.body.form[0].key, "caption");
+        assert_eq!(upload.body.form[0].value, "Quarterly report");
+        assert_eq!(upload.body.files[0].name, "attachment");
+        assert_eq!(upload.body.files[0].path, "");
+    }
+
+    #[test]
+    fn draft_import_rejects_unsupported_ambiguous_and_unresolved_documents() {
+        let unsupported =
+            import_openapi_to_draft(r#"{"openapi":"2.0","info":{"title":"Old"},"paths":{}}"#)
+                .expect_err("OpenAPI 2 should fail");
+        assert_eq!(
+            unsupported.to_string(),
+            "Only OpenAPI 3.x documents are supported right now."
+        );
+
+        let ambiguous = import_openapi_to_draft(
+            r#"{
+              "openapi":"3.0.3",
+              "info":{"title":"Two"},
+              "paths":{"/items":{"get":{},"post":{}}}
+            }"#,
+        )
+        .expect_err("multi-operation draft should fail");
+        assert!(ambiguous.to_string().contains("contains 2 operations"));
+
+        let unresolved = import_openapi_to_draft(
+            r##"{
+              "openapi":"3.0.3",
+              "info":{"title":"Broken"},
+              "paths":{"/items":{"get":{"parameters":[{"$ref":"#/components/parameters/Missing"}]}}}
+            }"##,
+        )
+        .expect_err("unresolved parameter should fail");
+        assert!(unresolved.to_string().contains("could not be resolved"));
+    }
+}

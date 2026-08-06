@@ -71,3 +71,53 @@ pub async fn import_postman_environment(
 
     postman::import_postman_environment(pool, secret_store, &normalized_input).await
 }
+
+#[cfg(test)]
+mod tests {
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    use super::*;
+
+    #[test]
+    fn draft_imports_reject_empty_sources_at_the_shared_boundary() {
+        let curl_error = import_curl_to_draft(" \n\t ").expect_err("empty cURL source should fail");
+        assert_eq!(curl_error.to_string(), "Import source cannot be empty.");
+
+        let openapi_error =
+            import_openapi_to_draft("").expect_err("empty OpenAPI source should fail");
+        assert_eq!(openapi_error.to_string(), "Import source cannot be empty.");
+    }
+
+    #[tokio::test]
+    async fn collection_dispatch_rejects_empty_and_unknown_formats() {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("in-memory database");
+
+        let empty = import_requests(
+            &pool,
+            &ImportRequestInput {
+                format: "curl".to_string(),
+                source: "  ".to_string(),
+                target_collection_id: None,
+            },
+        )
+        .await
+        .expect_err("empty collection source should fail");
+        assert_eq!(empty.to_string(), "Import source cannot be empty.");
+
+        let unsupported = import_requests(
+            &pool,
+            &ImportRequestInput {
+                format: "insomnia".to_string(),
+                source: "{}".to_string(),
+                target_collection_id: None,
+            },
+        )
+        .await
+        .expect_err("unknown collection format should fail");
+        assert_eq!(unsupported.to_string(), "Unsupported import format.");
+    }
+}

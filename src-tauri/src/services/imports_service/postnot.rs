@@ -386,4 +386,61 @@ mod tests {
         assert_eq!(realtime_connections_service::list_profiles(&pool).await.unwrap().len(), 1);
         assert_eq!(collections_service::list_saved_realtime_messages(&pool, &result.collection_id).await.unwrap().len(), 1);
     }
+
+    #[test]
+    fn rejects_invalid_postnot_document_metadata_and_folder_names() {
+        let base = PostNotCollectionDocument {
+            schema: POSTNOT_COLLECTION_SCHEMA.to_string(),
+            version: POSTNOT_COLLECTION_VERSION,
+            collection: crate::domain::portability::PostNotCollectionMetadata {
+                name: "Portable".to_string(),
+                description: String::new(),
+                pre_request_script: String::new(),
+                test_script: String::new(),
+            },
+            items: Vec::new(),
+        };
+
+        let mut wrong_schema = base.clone();
+        wrong_schema.schema = "https://example.test/wrong-schema".to_string();
+        assert_eq!(
+            validate_document(&wrong_schema).unwrap_err().to_string(),
+            "Unsupported PostNot collection schema."
+        );
+
+        let mut wrong_version = base.clone();
+        wrong_version.version = POSTNOT_COLLECTION_VERSION + 1;
+        assert_eq!(
+            validate_document(&wrong_version).unwrap_err().to_string(),
+            format!(
+                "Unsupported PostNot collection version: {}.",
+                POSTNOT_COLLECTION_VERSION + 1
+            )
+        );
+
+        let mut unnamed = base.clone();
+        unnamed.collection.name = "  ".to_string();
+        assert_eq!(
+            validate_document(&unnamed).unwrap_err().to_string(),
+            "PostNot collection name is required."
+        );
+
+        let invalid_items = vec![PostNotCollectionItem::Folder {
+            name: " \n ".to_string(),
+            pre_request_script: String::new(),
+            test_script: String::new(),
+            items: Vec::new(),
+        }];
+        let error = flatten_items(
+            None,
+            &invalid_items,
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Vec::new(),
+        )
+        .expect_err("blank folder name should fail");
+        assert_eq!(error.to_string(), "PostNot folder name is required.");
+    }
 }

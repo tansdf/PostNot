@@ -631,3 +631,283 @@ fn strip_query_from_postman_raw_url(raw_url: &str, has_query_rows: bool) -> Stri
         None => trimmed.to_string(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
+
+    use super::*;
+    use crate::services::secret_store_service::{InMemorySecretStore, SecretStore};
+
+    async fn setup_test_db() -> SqlitePool {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("in-memory database");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("run migrations");
+        pool
+    }
+
+    #[tokio::test]
+    async fn collection_import_preserves_hierarchy_scripts_and_request_fields() {
+        let pool = setup_test_db().await;
+        let source = r#"{
+          "info": {
+            "name": "  Billing API  ",
+            "description": { "content": "  Imported billing requests  " }
+          },
+          "event": [
+            { "listen": "prerequest", "script": { "exec": ["collection-pre-1", "collection-pre-2"] } },
+            { "listen": "test", "script": { "exec": "collection-test" } }
+          ],
+          "item": [{
+            "name": "Invoices",
+            "event": [{ "listen": "prerequest", "script": { "exec": ["folder-pre"] } }],
+            "item": [{
+              "name": "Create invoice",
+              "event": [
+                { "listen": "prerequest", "script": { "exec": ["request-pre"] } },
+                { "listen": "test", "script": { "exec": ["request-test-1", "request-test-2"] } }
+              ],
+              "request": {
+                "method": "post",
+                "url": {
+                  "raw": "https://api.example.test/invoices?limit=10&archived=true#section",
+                  "query": [
+                    { "key": "limit", "value": "10" },
+                    { "key": "archived", "value": "true", "disabled": true }
+                  ]
+                },
+                "header": [
+                  { "key": "X-Trace", "value": "trace-1" },
+                  { "key": "X-Skip", "value": "ignored", "disabled": true }
+                ],
+                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"amount\":42}",
+                  "options": { "raw": { "language": "json" } }
+                }
+              }
+            }]
+          }]
+        }"#;
+
+        let result = import_postman_collection(&pool, source)
+            .await
+            .expect("import Postman collection");
+
+        assert_eq!(result.collection_name, "Billing API");
+        assert_eq!(result.imported_request_count, 1);
+        assert_eq!(result.details.as_ref().unwrap().format, "postman");
+
+        let collection = collections_service::get_collection(&pool, &result.collection_id)
+            .await
+            .expect("read imported collection");
+        assert_eq!(collection.description, "Imported billing requests");
+        assert_eq!(
+            collection.pre_request_script,
+            "collection-pre-1\ncollection-pre-2"
+        );
+        assert_eq!(collection.test_script, "collection-test");
+
+        let items = collections_service::list_collection_items(&pool, &result.collection_id)
+            .await
+            .expect("list imported items");
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].name, "Invoices");
+        assert_eq!(items[0].pre_request_script, "folder-pre");
+        assert_eq!(items[0].children.len(), 1);
+
+        let detail = collections_service::get_saved_request(&pool, &items[0].children[0].id)
+            .await
+            .expect("read imported request");
+        let request = detail.request;
+        assert_eq!(request.name, "Create invoice");
+        assert_eq!(request.method, "POST");
+        assert_eq!(request.url, "https://api.example.test/invoices#section");
+        assert_eq!(request.query_params.len(), 2);
+        assert!(request.query_params[0].enabled);
+        assert!(!request.query_params[1].enabled);
+        assert_eq!(request.headers[0].key, "X-Trace");
+        assert!(!request.headers[1].enabled);
+        assert_eq!(request.auth.auth_type, "bearer");
+        assert_eq!(request.auth.bearer_token, "{{token}}");
+        assert_eq!(request.body.mode, "json");
+        assert_eq!(request.body.raw, "{\"amount\":42}");
+        assert_eq!(request.pre_request_script, "request-pre");
+        assert_eq!(request.test_script, "request-test-1\nrequest-test-2");
+    }
+
+    #[test]
+    fn maps_urlencoded_multipart_and_supported_auth_types() {
+        let urlencoded: PostmanItem = serde_json::from_str(
+            r#"{
+              "name": "Login",
+              "request": {
+                "method": "POST",
+                "url": "https://api.example.test/login",
+                "auth": { "type": "basic", "basic": [
+                  { "key": "username", "value": "alice" },
+                  { "key": "password", "value": "secret" }
+                ] },
+                "body": { "mode": "urlencoded", "urlencoded": [
+                  { "key": "grant_type", "value": "password" },
+                  { "key": "unused", "value": "x", "disabled": true }
+                ] }
+              }
+            }"#,
+        )
+        .expect("parse Postman item");
+        let request = map_postman_request(&urlencoded, urlencoded.request.as_ref().unwrap())
+            .expect("map urlencoded request");
+        assert_eq!(request.body.mode, "form-urlencoded");
+        assert_eq!(request.body.form[0].key, "grant_type");
+        assert!(!request.body.form[1].enabled);
+        assert_eq!(request.auth.auth_type, "basic");
+        assert_eq!(request.auth.basic_username, "alice");
+        assert_eq!(request.auth.basic_password, "secret");
+
+        let multipart: PostmanItem = serde_json::from_str(
+            r#"{
+              "name": "Upload",
+              "request": {
+                "method": "POST",
+                "url": "https://api.example.test/upload",
+                "auth": { "type": "apikey", "apikey": [
+                  { "key": "key", "value": "X-API-Key" },
+                  { "key": "value", "value": "{{api_key}}" },
+                  { "key": "in", "value": "query" }
+                ] },
+                "body": { "mode": "formdata", "formdata": [
+                  { "key": "caption", "value": "Quarterly report", "type": "text" },
+                  { "key": "report", "src": ["/tmp/report.pdf", "/tmp/ignored.pdf"], "type": "file" }
+                ] }
+              }
+            }"#,
+        )
+        .expect("parse Postman item");
+        let request = map_postman_request(&multipart, multipart.request.as_ref().unwrap())
+            .expect("map multipart request");
+        assert_eq!(request.body.mode, "multipart");
+        assert_eq!(request.body.form[0].key, "caption");
+        assert_eq!(request.body.files[0].name, "report");
+        assert_eq!(request.body.files[0].path, "/tmp/report.pdf");
+        assert_eq!(request.auth.auth_type, "api-key");
+        assert_eq!(request.auth.api_key_name, "X-API-Key");
+        assert_eq!(request.auth.api_key_value, "{{api_key}}");
+        assert_eq!(request.auth.api_key_in, "query");
+
+        let oauth: PostmanItem = serde_json::from_str(
+            r#"{
+              "name": "OAuth",
+              "request": {
+                "method": "GET",
+                "url": "https://api.example.test/me",
+                "auth": { "type": "oauth2", "oauth2": [
+                  { "key": "accessToken", "value": "{{access_token}}" },
+                  { "key": "tokenUrl", "value": "https://auth.example.test/token" },
+                  { "key": "clientId", "value": "client" },
+                  { "key": "clientSecret", "value": "{{client_secret}}" },
+                  { "key": "scope", "value": "read write" }
+                ] }
+              }
+            }"#,
+        )
+        .expect("parse Postman item");
+        let request = map_postman_request(&oauth, oauth.request.as_ref().unwrap())
+            .expect("map OAuth request");
+        assert_eq!(request.auth.auth_type, "oauth2");
+        assert_eq!(request.auth.oauth2_access_token, "{{access_token}}");
+        assert_eq!(
+            request.auth.oauth2_token_url,
+            "https://auth.example.test/token"
+        );
+        assert_eq!(request.auth.oauth2_client_id, "client");
+        assert_eq!(request.auth.oauth2_client_secret, "{{client_secret}}");
+        assert_eq!(request.auth.oauth2_scope, "read write");
+    }
+
+    #[tokio::test]
+    async fn environment_import_preserves_values_activation_and_secret_storage() {
+        let pool = setup_test_db().await;
+        let store = Arc::new(InMemorySecretStore::default());
+        let secret_store: Arc<dyn SecretStore> = store.clone();
+        let input = ImportEnvironmentInput {
+            source: r#"{
+              "name": "  Production  ",
+              "values": [
+                { "key": "host", "value": "api.example.test", "enabled": true },
+                { "key": "retries", "value": 3 },
+                { "key": "feature", "value": true, "disabled": true },
+                { "key": "token", "value": "top-secret", "type": "secret" },
+                { "key": "", "value": "not-counted" }
+              ]
+            }"#
+            .to_string(),
+            set_active: true,
+        };
+
+        let result = import_postman_environment(&pool, secret_store.clone(), &input)
+            .await
+            .expect("import Postman environment");
+
+        assert_eq!(result.environment_name, "Production");
+        assert_eq!(result.imported_variable_count, 4);
+        assert!(result.activated);
+
+        let environment =
+            environments_service::get_environment(&pool, secret_store, &result.environment_id)
+                .await
+                .expect("read imported environment");
+        assert!(environment.is_active);
+        assert!(environment
+            .variables
+            .iter()
+            .any(|variable| variable.key == "retries" && variable.value == "3"));
+        assert!(environment.variables.iter().any(|variable| {
+            variable.key == "feature" && variable.value == "true" && !variable.enabled
+        }));
+        let secret = environment
+            .variables
+            .iter()
+            .find(|variable| variable.key == "token")
+            .expect("secret variable");
+        assert!(secret.is_secret);
+        assert_eq!(secret.value, "top-secret");
+
+        let stored: String =
+            sqlx::query_scalar("SELECT variables_json FROM environments WHERE id = ?1")
+                .bind(&result.environment_id)
+                .fetch_one(&pool)
+                .await
+                .expect("read stored variables");
+        assert!(!stored.contains("top-secret"));
+        assert_eq!(
+            store
+                .get_environment_variable_secret(&result.environment_id, &secret.id)
+                .expect("read stored secret"),
+            Some("top-secret".to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn collection_import_rejects_documents_without_requests() {
+        let pool = setup_test_db().await;
+        let error = import_postman_collection(
+            &pool,
+            r#"{"info":{"name":"Empty"},"item":[{"name":"Folder","item":[]}]}"#,
+        )
+        .await
+        .expect_err("empty Postman collection should fail");
+
+        assert_eq!(
+            error.to_string(),
+            "No requests were found in this Postman collection."
+        );
+    }
+}

@@ -96,6 +96,7 @@ pub(super) fn parse_curl_command(source: &str) -> AppResult<SendRequestPayload> 
     let mut body_mode = "none".to_string();
     let mut form_rows: Vec<KeyValueRow> = Vec::new();
     let mut file_rows: Vec<FileRow> = Vec::new();
+    let mut has_explicit_method = false;
     let mut force_get = false;
     let mut compressed = false;
     let mut auth = empty_auth();
@@ -107,6 +108,7 @@ pub(super) fn parse_curl_command(source: &str) -> AppResult<SendRequestPayload> 
             "-X" | "--request" => {
                 if let Some(value) = inline_value.or_else(|| next_value(&parts, &mut i)) {
                     method = normalize_method(value);
+                    has_explicit_method = true;
                 }
             }
             "--url" => {
@@ -158,7 +160,7 @@ pub(super) fn parse_curl_command(source: &str) -> AppResult<SendRequestPayload> 
                             "raw".to_string()
                         };
                     }
-                    if method == "GET" && !force_get {
+                    if method == "GET" && !has_explicit_method && !force_get {
                         method = "POST".to_string();
                     }
                 }
@@ -167,7 +169,7 @@ pub(super) fn parse_curl_command(source: &str) -> AppResult<SendRequestPayload> 
                 if let Some(value) = inline_value.or_else(|| next_value(&parts, &mut i)) {
                     apply_form_part(value, &mut form_rows, &mut file_rows);
                     body_mode = "multipart".to_string();
-                    if method == "GET" && !force_get {
+                    if method == "GET" && !has_explicit_method && !force_get {
                         method = "POST".to_string();
                     }
                 }
@@ -364,7 +366,23 @@ fn looks_like_json(value: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_curl_command;
+    use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
+
+    use super::{import_curl_request, parse_curl_command};
+    use crate::{domain::collections::CreateCollectionInput, services::collections_service};
+
+    async fn setup_test_db() -> SqlitePool {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("in-memory database");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("run migrations");
+        pool
+    }
 
     #[test]
     fn parses_url_flag_and_splits_query_params() {
@@ -436,6 +454,32 @@ mod tests {
     }
 
     #[test]
+    fn preserves_explicit_get_method_when_data_is_present() {
+        let cases = [
+            r#"curl \
+  --request 'GET' \
+  --url '{{curl_for_ip_url}}/ip' \
+  --header 'Content-Type: application/json' \
+  --data-raw '{
+  "ellk": "{{curl_for_ip_url}}",
+  "asdasd": "{{example_var1}}"
+}'"#,
+            r#"curl \
+  --request GET \
+  --url 'https://api.example.com/ip' \
+  --header 'Content-Type: application/json' \
+  --data-raw '{"example": true}'"#,
+        ];
+
+        for source in cases {
+            let request = parse_curl_command(source).unwrap();
+
+            assert_eq!(request.method, "GET");
+            assert_eq!(request.body.mode, "json");
+        }
+    }
+
+    #[test]
     fn imports_query_method_with_content() {
         let request = parse_curl_command(
             "curl --request QUERY -H 'Content-Type: application/sql' --data 'SELECT * FROM items' https://api.example.com/search",
@@ -487,5 +531,87 @@ https://api.example.com/me"#,
         assert!(request.headers.iter().any(|header| {
             header.key == "Accept-Encoding" && header.value == "gzip, deflate, br"
         }));
+    }
+
+    #[test]
+    fn maps_inline_options_basic_auth_and_request_metadata() {
+        let request = parse_curl_command(
+            r#"curl `
+--request=PATCH `
+--url=https://api.example.test/items/42?notify=true `
+--header='Content-Type: application/json' `
+--user-agent 'PostNot import test' `
+--referer 'https://app.example.test/' `
+--cookie '@cookies.txt' `
+--user 'alice:secret' `
+--data-raw '{"name":"updated"}'"#,
+        )
+        .expect("parse cURL command");
+
+        assert_eq!(request.method, "PATCH");
+        assert_eq!(request.url, "https://api.example.test/items/42");
+        assert_eq!(request.query_params[0].key, "notify");
+        assert_eq!(request.query_params[0].value, "true");
+        assert!(request
+            .headers
+            .iter()
+            .any(|header| { header.key == "Content-Type" && header.value == "application/json" }));
+        assert!(request
+            .headers
+            .iter()
+            .any(|header| { header.key == "User-Agent" && header.value == "PostNot import test" }));
+        assert!(request.headers.iter().any(|header| {
+            header.key == "Referer" && header.value == "https://app.example.test/"
+        }));
+        assert!(!request
+            .headers
+            .iter()
+            .any(|header| header.key.eq_ignore_ascii_case("cookie")));
+        assert_eq!(request.auth.auth_type, "basic");
+        assert_eq!(request.auth.basic_username, "alice");
+        assert_eq!(request.auth.basic_password, "secret");
+        assert_eq!(request.body.mode, "json");
+        assert_eq!(request.body.raw, "{\"name\":\"updated\"}");
+    }
+
+    #[tokio::test]
+    async fn imports_curl_into_an_existing_collection() {
+        let pool = setup_test_db().await;
+        let collection = collections_service::create_collection(
+            &pool,
+            &CreateCollectionInput {
+                name: "Existing".to_string(),
+                description: String::new(),
+                pre_request_script: String::new(),
+                test_script: String::new(),
+            },
+        )
+        .await
+        .expect("create collection");
+
+        let result = import_curl_request(
+            &pool,
+            "curl --request DELETE https://api.example.test/items/42",
+            Some(&collection.id),
+        )
+        .await
+        .expect("import cURL into collection");
+
+        assert_eq!(result.collection_id, collection.id);
+        assert_eq!(result.collection_name, "Existing");
+        assert_eq!(result.imported_request_count, 1);
+        assert!(!result.created_collection);
+        assert_eq!(result.details.as_ref().unwrap().format, "curl");
+
+        let items = collections_service::list_collection_items(&pool, &collection.id)
+            .await
+            .expect("list imported request");
+        assert_eq!(items.len(), 1);
+        let request = collections_service::get_saved_request(&pool, &items[0].id)
+            .await
+            .expect("read imported request")
+            .request;
+        assert_eq!(request.method, "DELETE");
+        assert_eq!(request.url, "https://api.example.test/items/42");
     }
 }
