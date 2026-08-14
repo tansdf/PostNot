@@ -24,6 +24,8 @@
     matched: boolean;
   };
 
+  const SIDEBAR_VISIBLE_INDENT_LEVELS = 3;
+
   const cachedSidebarState = readCachedJson<CachedSidebarState>(UI_CACHE_KEYS.sidebarExpanded);
 
   let expandedCollectionIds = new SvelteSet<string>(cachedSidebarState?.expandedCollectionIds ?? []);
@@ -42,15 +44,12 @@
     });
   }
 
-  function formatUpdatedAt(value: string) {
-    try {
-      return new Intl.DateTimeFormat(undefined, {
-        month: "short",
-        day: "numeric"
-      }).format(new Date(value));
-    } catch {
-      return value;
-    }
+  function itemDisplayName(item: CollectionItemSummary) {
+    return item.name || item.url || (item.kind === "folder" ? "Untitled folder" : "Untitled request");
+  }
+
+  function treeIndent(depth: number) {
+    return `${Math.min(depth, SIDEBAR_VISIBLE_INDENT_LEVELS) * 8}px`;
   }
 
   function tokenizeQuery(query: string) {
@@ -134,6 +133,17 @@
 
   function resultBreadcrumb(result: CollectionSearchResult) {
     return [result.collectionName, ...result.ancestorNames].join(" / ");
+  }
+
+  function searchResultTitle(result: CollectionSearchResult) {
+    const displayName = result.name || result.url || "Untitled request";
+    const path = result.kind === "collection"
+      ? displayName
+      : `${resultBreadcrumb(result)} / ${displayName}`;
+
+    return result.kind === "request" && result.name && result.url
+      ? `${path} — ${result.url}`
+      : path;
   }
 
   function isTypingTarget(target: EventTarget | null) {
@@ -617,14 +627,20 @@
     </button>
   </div>
 
-  <div class="sidebar-search-shell">
+  <div class="sidebar-search-shell" role="search" aria-label="Filter collection navigation">
+    <svg class="sidebar-search-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="11" cy="11" r="6.5"></circle>
+      <path d="m16 16 4 4"></path>
+    </svg>
     <input
       bind:this={searchInput}
-      class="text-input sidebar-search-input"
+      class="sidebar-search-input"
       type="text"
+      role="searchbox"
       value={collectionSearch.query}
-      placeholder="Search collections"
+      placeholder="Filter collections"
       aria-label="Search collections, folders, and saved requests"
+      aria-keyshortcuts="Control+K Meta+K"
       aria-controls={collectionSearch.isActive && collectionSearch.results.length > 0 ? "sidebar-collection-search-results" : undefined}
       aria-activedescendant={collectionSearch.activeResult ? `sidebar-search-result-${collectionSearch.activeResult.id}` : undefined}
       autocapitalize="off"
@@ -646,8 +662,13 @@
         aria-label="Clear collection search"
         title="Clear"
       >
-        ×
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="m7 7 10 10"></path>
+          <path d="m17 7-10 10"></path>
+        </svg>
       </button>
+    {:else}
+      <kbd class="sidebar-search-shortcut" aria-hidden="true">Ctrl K</kbd>
     {/if}
   </div>
 
@@ -687,93 +708,79 @@
               ]}
               type="button"
               role="option"
+              aria-label={`${result.kind}: ${searchResultTitle(result)}`}
               aria-selected={collectionSearch.activeIndex === index}
               data-sidebar-search-active={collectionSearch.activeIndex === index}
+              title={searchResultTitle(result)}
               onclick={() => openSearchResult(result)}
               onmouseenter={() => collectionSearch.setActiveIndex(index)}
               onfocus={() => collectionSearch.setActiveIndex(index)}
             >
-              <div class="sidebar-search-result-topline">
-                <span class={["sidebar-search-kind", `sidebar-search-kind-${result.kind}`]}>
-                  {result.kind}
-                </span>
-
-                {#if result.kind === "collection" && result.requestCount !== null && result.requestCount !== undefined}
-                  <span class="sidebar-search-count">
-                    {result.requestCount} request{result.requestCount === 1 ? "" : "s"}
-                  </span>
-                {/if}
-              </div>
-
-              <div class="sidebar-search-result-body">
-                {#if result.kind === "folder"}
-                  <span class="sidebar-search-folder-icon" aria-hidden="true">
+              <span class="sidebar-search-identity" aria-hidden="true">
+                {#if result.kind === "collection"}
+                  <span class="sidebar-search-kind sidebar-search-kind-collection">COLL</span>
+                {:else if result.kind === "folder"}
+                  <span class="sidebar-search-folder-icon">
                     <FolderGlyph variant="sidebar-closed" />
                   </span>
+                {:else if result.requestType === "websocket" || result.requestType === "socketio"}
+                  <span class="protocol-badge">{result.requestType === "socketio" ? "S.IO" : "WS"}</span>
+                {:else}
+                  <span class={`method-badge method-${result.method?.toLowerCase() ?? "get"}`}>{result.method ?? "GET"}</span>
+                {/if}
+              </span>
+
+              <span class="sidebar-search-copy">
+                <strong class="sidebar-search-title">
+                  {#if result.kind === "request" && !result.name}
+                    {#each buildHighlightSegments(result.url ?? "", collectionSearch.query) as segment, segmentIndex (`title-url-${segmentIndex}-${segment.matched}-${segment.text}`)}
+                      {#if segment.matched}
+                        <mark>{segment.text}</mark>
+                      {:else}
+                        {segment.text}
+                      {/if}
+                    {/each}
+                  {:else}
+                    {#each buildHighlightSegments(result.name, collectionSearch.query) as segment, segmentIndex (`title-name-${segmentIndex}-${segment.matched}-${segment.text}`)}
+                      {#if segment.matched}
+                        <mark>{segment.text}</mark>
+                      {:else}
+                        {segment.text}
+                      {/if}
+                    {/each}
+                  {/if}
+                </strong>
+
+                {#if result.kind === "request" && result.name}
+                  <span class="sidebar-search-url-text">
+                    {#each buildHighlightSegments(result.url ?? "", collectionSearch.query) as segment, segmentIndex (`meta-url-${segmentIndex}-${segment.matched}-${segment.text}`)}
+                      {#if segment.matched}
+                        <mark>{segment.text}</mark>
+                      {:else}
+                        {segment.text}
+                      {/if}
+                    {/each}
+                  </span>
                 {/if}
 
-                <div class="sidebar-search-copy">
-                  <strong class="sidebar-search-title">
-                    {#if result.kind === "request" && !result.name}
-                      {#if result.requestType === "websocket" || result.requestType === "socketio"}
-                        <span class="protocol-badge">{result.requestType === "socketio" ? "S.IO" : "WS"}</span>
+                {#if result.kind !== "collection"}
+                  <span class="sidebar-search-breadcrumb">
+                    {#each buildHighlightSegments(resultBreadcrumb(result), collectionSearch.query) as segment, segmentIndex (`breadcrumb-${segmentIndex}-${segment.matched}-${segment.text}`)}
+                      {#if segment.matched}
+                        <mark>{segment.text}</mark>
                       {:else}
-                        <span class={`method-badge method-${result.method?.toLowerCase() ?? "get"}`}>{result.method ?? "GET"}</span>
+                        {segment.text}
                       {/if}
-                      <span class="sidebar-search-title-text">
-                        {#each buildHighlightSegments(result.url ?? "", collectionSearch.query) as segment}
-                          {#if segment.matched}
-                            <mark>{segment.text}</mark>
-                          {:else}
-                            {segment.text}
-                          {/if}
-                        {/each}
-                      </span>
-                    {:else}
-                      {#each buildHighlightSegments(result.name, collectionSearch.query) as segment}
-                        {#if segment.matched}
-                          <mark>{segment.text}</mark>
-                        {:else}
-                          {segment.text}
-                        {/if}
-                      {/each}
-                    {/if}
-                  </strong>
+                    {/each}
+                  </span>
+                {/if}
+              </span>
 
-                  {#if result.kind === "request" && result.name}
-                    <span class="sidebar-search-request-meta">
-                      {#if result.requestType === "websocket" || result.requestType === "socketio"}
-                        <span class="protocol-badge">{result.requestType === "socketio" ? "S.IO" : "WS"}</span>
-                      {:else}
-                        <span class={`method-badge method-${result.method?.toLowerCase() ?? "get"}`}>{result.method ?? "GET"}</span>
-                      {/if}
-                      <span class="sidebar-search-url-text">
-                        {#each buildHighlightSegments(result.url ?? "", collectionSearch.query) as segment}
-                          {#if segment.matched}
-                            <mark>{segment.text}</mark>
-                          {:else}
-                            {segment.text}
-                          {/if}
-                        {/each}
-                      </span>
-                    </span>
-                  {/if}
-
-                  {#if result.kind !== "collection"}
-                    <span class="sidebar-search-breadcrumb">
-                      {#each buildHighlightSegments(resultBreadcrumb(result), collectionSearch.query) as segment}
-                        {#if segment.matched}
-                          <mark>{segment.text}</mark>
-                        {:else}
-                          {segment.text}
-                        {/if}
-                      {/each}
-                    </span>
-                  {/if}
-
-                  <span class="sidebar-search-updated">Updated {formatUpdatedAt(result.updatedAt)}</span>
-                </div>
-              </div>
+              {#if result.kind === "collection" && result.requestCount !== null && result.requestCount !== undefined}
+                <span class="sidebar-search-count" title={`${result.requestCount} request${result.requestCount === 1 ? "" : "s"}`}>
+                  {result.requestCount}
+                </span>
+              {/if}
             </button>
           {/each}
         </div>
@@ -794,26 +801,6 @@
           >
             <div class="sidebar-collection-row">
               <button
-                class="sidebar-collection-button"
-                type="button"
-                onclick={() => openCollection(collection.id)}
-                onkeydown={(event) =>
-                  handleTreeKeydown(event, {
-                    expanded: expandedCollectionIds.has(collection.id),
-                    toggle: () => toggleCollection(collection.id)
-                  })}
-                aria-expanded={expandedCollectionIds.has(collection.id)}
-                aria-current={collections.selectedCollectionId === collection.id ? "page" : undefined}
-                data-sidebar-tree-row="true"
-                data-collection-drop="root"
-                data-collection-id={collection.id}
-              >
-                <strong>{collection.name}</strong>
-                <span>{collection.requestCount} request{collection.requestCount === 1 ? "" : "s"}</span>
-                <span class="sidebar-collection-meta">Updated {formatUpdatedAt(collection.updatedAt)}</span>
-              </button>
-
-              <button
                 class="sidebar-toggle-button"
                 type="button"
                 onclick={() => toggleCollection(collection.id)}
@@ -829,6 +816,25 @@
                   <path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
                 </svg>
               </button>
+
+              <button
+                class="sidebar-collection-button"
+                type="button"
+                onclick={() => openCollection(collection.id)}
+                onkeydown={(event) =>
+                  handleTreeKeydown(event, {
+                    expanded: expandedCollectionIds.has(collection.id),
+                    toggle: () => toggleCollection(collection.id)
+                  })}
+                aria-expanded={expandedCollectionIds.has(collection.id)}
+                aria-current={collections.selectedCollectionId === collection.id ? "page" : undefined}
+                data-sidebar-tree-row="true"
+                data-collection-drop="root"
+                data-collection-id={collection.id}
+              >
+                <strong>{collection.name}</strong>
+                <span class="sidebar-collection-count">{collection.requestCount}</span>
+              </button>
             </div>
 
             {#if expandedCollectionIds.has(collection.id)}
@@ -838,14 +844,16 @@
                 {:else if (collections.collectionItemsByCollection[collection.id] ?? []).length === 0}
                   <span class="sidebar-collection-meta">No saved requests yet.</span>
                 {:else}
-                  {#snippet renderSidebarItems(items: CollectionItemSummary[], depth: number)}
-                    <div class={["sidebar-item-tree", depth > 0 && "sidebar-item-tree-nested"]}>
+                  {#snippet renderSidebarItems(items: CollectionItemSummary[], depth: number, ancestorNames: string[])}
+                    <div class="sidebar-item-tree">
                       {#each items as item (item.id)}
+                        {@const itemPath = [...ancestorNames, itemDisplayName(item)]}
                         {#if item.kind === "folder"}
-                          <div class={["sidebar-folder-group", depth > 0 && "sidebar-folder-group-nested"]}>
+                          <div class="sidebar-folder-group">
                             <button
                               class={[
                                 "sidebar-folder-button",
+                                depth > 0 && "sidebar-tree-row-nested",
                                 expandedFolderIds.has(item.id) && "sidebar-folder-open",
                                 revealedSidebarItemId === item.id && "sidebar-search-revealed",
                                 collectionDnd.isDraggingItem(item.id) && "sidebar-request-dragging",
@@ -864,12 +872,13 @@
                               aria-expanded={expandedFolderIds.has(item.id)}
                               aria-label={`${item.name}, ${item.children.length === 0 ? "empty" : `${item.children.length} item${item.children.length === 1 ? "" : "s"}`}`}
                               data-sidebar-tree-row="true"
-                              style={`--tree-depth:${depth};`}
+                              style:--tree-indent={treeIndent(depth)}
                               data-collection-drop="item"
                               data-collection-id={collection.id}
                               data-item-id={item.id}
                               data-item-kind={item.kind}
                               data-sidebar-item-id={item.id}
+                              title={itemPath.join(" / ")}
                             >
                               <span class="sidebar-folder-icon" aria-hidden="true">
                                 <FolderGlyph
@@ -878,22 +887,19 @@
                               </span>
                               <span class="sidebar-folder-text">
                                 <strong class="sidebar-folder-name">{item.name}</strong>
-                                <span class="sidebar-collection-meta sidebar-folder-count">
-                                  {item.children.length === 0
-                                    ? "Empty"
-                                    : `${item.children.length} item${item.children.length === 1 ? "" : "s"}`}
-                                </span>
                               </span>
+                              <span class="sidebar-folder-count">{item.children.length}</span>
                             </button>
 
                             {#if expandedFolderIds.has(item.id)}
-                              {@render renderSidebarItems(item.children, depth + 1)}
+                              {@render renderSidebarItems(item.children, depth + 1, itemPath)}
                             {/if}
                           </div>
                         {:else}
                           <button
                             class={[
                               "sidebar-request-link",
+                              depth > 0 && "sidebar-tree-row-nested",
                               page.url.searchParams.get(item.requestType === "websocket" || item.requestType === "socketio" ? "messageId" : "savedRequestId") === item.id && "sidebar-request-active",
                               revealedSidebarItemId === item.id && "sidebar-search-revealed",
                               collectionDnd.isDraggingRequest(item.id) && "sidebar-request-dragging",
@@ -905,32 +911,27 @@
                             onkeydown={handleTreeKeydown}
                             aria-current={page.url.searchParams.get(item.requestType === "websocket" || item.requestType === "socketio" ? "messageId" : "savedRequestId") === item.id ? "page" : undefined}
                             data-sidebar-tree-row="true"
-                            style={`--tree-depth:${depth};`}
+                            style:--tree-indent={treeIndent(depth)}
                             onpointerdown={(event) => handleItemPointerDown(event, item)}
                             data-collection-drop="item"
                             data-collection-id={collection.id}
                             data-item-id={item.id}
                             data-item-kind={item.kind}
                             data-sidebar-item-id={item.id}
+                            title={`${itemPath.join(" / ")}${item.url ? ` — ${item.url}` : ""}`}
                           >
-                            <strong class="sidebar-request-name">
-                              {#if item.name}
-                                {item.name}
-                              {:else}
-                                {#if item.requestType === "websocket" || item.requestType === "socketio"}
-                                  <span class="protocol-badge">{item.requestType === "socketio" ? "S.IO" : "WS"}</span> {item.url ?? ""}
-                                {:else}
-                                  <span class={`method-badge method-${item.method?.toLowerCase() ?? "get"}`}>{item.method ?? "GET"}</span> {item.url ?? ""}
-                                {/if}
-                              {/if}
-                            </strong>
-                            <span class="sidebar-request-url">
+                            <span class="sidebar-request-kind" aria-hidden="true">
                               {#if item.requestType === "websocket" || item.requestType === "socketio"}
                                 <span class="protocol-badge">{item.requestType === "socketio" ? "S.IO" : "WS"}</span>
                               {:else}
                                 <span class={`method-badge method-${item.method?.toLowerCase() ?? "get"}`}>{item.method ?? "GET"}</span>
                               {/if}
-                              {item.url ?? ""}
+                            </span>
+                            <span class="sidebar-request-copy">
+                              <strong class="sidebar-request-name">{itemDisplayName(item)}</strong>
+                              {#if item.name && item.url}
+                                <span class="sidebar-request-url">{item.url}</span>
+                              {/if}
                             </span>
                           </button>
                         {/if}
@@ -938,7 +939,7 @@
                     </div>
                   {/snippet}
 
-                  {@render renderSidebarItems(collections.collectionItemsByCollection[collection.id] ?? [], 0)}
+                  {@render renderSidebarItems(collections.collectionItemsByCollection[collection.id] ?? [], 0, [collection.name])}
                 {/if}
               </div>
             {/if}

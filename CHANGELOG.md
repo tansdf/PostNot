@@ -6,6 +6,18 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.24.2] - 2026-08-14
+
+### Changed
+
+- Reworked the desktop Collections sidebar into a compact flat tree that preserves collection counts, folder hierarchy, request methods or realtime protocols, names, and URLs while capping visual indentation for deeply nested content.
+- Aligned collection search with the compact navigation language through a 32-pixel filter rail, a visible `Ctrl K` shortcut, concise result guidance, and flat highlighted results that retain type, URL, ancestry, and collection-count context.
+
+### Fixed
+
+- Removed the passive sticky depth overlay that could cover collection rows, while retaining complete hierarchy in row tooltips.
+- Prevented long saved-request names from inheriting URL typography or being cropped vertically by fixed-height rows; names now use up to two readable lines above a separately truncated URL.
+
 ## [0.24.1] - 2026-08-06
 
 ### Changed

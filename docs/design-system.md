@@ -287,6 +287,10 @@ Every async or data-dependent surface must design all four states: initial/loadi
 
 Primary navigation is route-based and uses `.sidebar-link` plus `.sidebar-link-active`. Collections use a shared folder glyph/path implementation across the sidebar and Collections page.
 
+The desktop collection navigator uses flat compact rows rather than collection cards. Collection rows keep the name and request count; folder rows keep the shared glyph, name, and direct-child count; saved-definition rows keep the HTTP method or realtime protocol, name, and URL. Last-updated metadata belongs in the Collections workspace, not in primary navigation. Logical indentation increases for the first three folder levels and then caps at `24px`, so arbitrary nesting cannot consume the row's content width. The complete hierarchy remains available in each row's tooltip. Do not place a passive sticky breadcrumb over the scrolling tree: path chrome must provide a real navigation action or be omitted. Saved-definition rows may grow to two name lines plus one truncated URL line and must never crop text vertically with a fixed height.
+
+Collection search is a compact filter rail, not a full-size form field. Keep the keyboard shortcut visible while idle, use the same accent rail and flat-row geometry for results, and retain the matched entity's type, name, URL, ancestry, and collection count. Updated timestamps remain in the Collections workspace rather than search results.
+
 - Tree rows need a clear selected, expanded, hover, and drop-target state.
 - Expand/collapse controls require `aria-expanded` and an accessible name.
 - Drag-and-drop must have a non-drag alternative for essential movement or ordering work. Collection folders and saved requests use the Collections-page **Move…** dialog, which exposes destination collection, folder/root, and first/after-sibling position to keyboard users. Destination contents load only when that collection is selected; keep the folder, position, and confirmation controls disabled while loading and guard stale completions when users change destinations quickly.
