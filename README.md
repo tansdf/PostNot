@@ -35,6 +35,7 @@ PostNot is built for working with HTTP APIs on your own machine, with local pers
 - Import from cURL, including common flags for URL selection, query/body data, multipart forms, cookies, compression, redirects, and shell continuations
 - Export the active request as redacted-by-default cURL or PostNot request JSON, with optional non-secret environment variable inclusion
 - Export collections and environments back to Postman-compatible JSON
+- Export a redacted portable workspace and import it additively on another PostNot installation, with optional open request and realtime drafts
 - Attach local files to multipart requests
 - Run inherited collection, folder, and saved-request pre-request and test scripts (worker-backed JavaScript around each send)
 - Call helper HTTP requests from scripts with `await pn.http.send(...)`
@@ -42,6 +43,7 @@ PostNot is built for working with HTTP APIs on your own machine, with local pers
 - Fetch OAuth2 client-credentials bearer tokens from the request editor and optionally persist them into the active environment
 - Inspect large responses with full body reads and JSON-friendly rendering
 - Use floating notifications, persisted settings, and signed in-app update checks with download progress
+- Inspect local data ownership and cap history by entry count, age, and response-body disk usage
 - Autosave environment edits by default, with keyboard saves via `Ctrl+S` / `Cmd+S` on requests and environments
 - Connect local MCP-compatible agents so they can inspect collections, safely create or update HTTP requests, and manage standalone realtime connection profiles and messages for later manual use
 - Follow MCP-authored changes in the MCP Integration view with persistent audit records, live collection refresh, and stale-draft protection
@@ -50,7 +52,7 @@ PostNot is built for working with HTTP APIs on your own machine, with local pers
 
 - Local-first: request data and app state live on your machine
 - Desktop-native: Rust request execution and Tauri packaging instead of a browser-only shell
-- Practical portability: bring data in from Postman, OpenAPI 3, or cURL and export collections and environments back out in Postman-compatible JSON
+- Practical portability: bring data in from Postman, OpenAPI 3, or cURL, and move PostNot authoring data between installations with a versioned portable workspace
 - Safer secret handling: environment secrets are kept out of SQLite, stored history snapshots preserve unresolved secret variables, and single-request exports redact credential-looking values by default
 
 ## Privacy And Storage
@@ -59,6 +61,8 @@ PostNot is built for working with HTTP APIs on your own machine, with local pers
 - Secret environment variables are stored in the operating system credential store instead of SQLite.
 - When requests use secret environment variables, PostNot keeps the unresolved `{{variable}}` references in history snapshots rather than persisting the resolved secret values.
 - Single-request cURL and PostNot JSON exports redact credential-looking values by default, including bearer tokens, OAuth2 access tokens, client secrets, API keys, cookies, and basic-auth passwords; the export dialog can include active non-secret environment variables while keeping secrets redacted.
+- Portable workspace JSON is an interoperability export, not an encrypted backup. It includes authoring data and optional drafts, clears known credential literals and secret values, and excludes history, response bodies, realtime transcripts, playbook runs, and Agent Activity.
+- Settings reports database, history-body, and temporary realtime storage separately. History retention can enforce entry-count, age, and response-body byte caps together.
 - MCP runs locally over stdio via the installed PostNot executable. Secret environment values are omitted from discovery, saved credential literals are redacted on reads, and the MCP Integration audit log stores metadata rather than request or realtime values.
 
 ## Agent Integration (MCP)

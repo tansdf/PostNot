@@ -2068,7 +2068,7 @@ fn parse_realtime_message_type(value: &str) -> AppResult<RequestType> {
     }
 }
 
-fn validate_realtime_message(message: &RealtimeMessageDraft) -> AppResult<()> {
+pub(crate) fn validate_realtime_message(message: &RealtimeMessageDraft) -> AppResult<()> {
     if message.name().trim().is_empty() {
         return Err(AppError::Message("Realtime message name is required.".to_string()));
     }

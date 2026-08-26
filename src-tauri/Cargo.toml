@@ -1,6 +1,6 @@
 [package]
 name = "postnot"
-version = "0.24.2"
+version = "0.25.0"
 description = "Local-first desktop API client"
 authors = ["PostNot"]
 license = "Apache-2.0"
@@ -45,3 +45,18 @@ uuid = { version = "1", features = ["serde", "v4"] }
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
+
+# Keep fast incremental local builds while limiting debug symbols so Tauri dependency artifacts do not grow unchecked.
+[profile.dev]
+debug = 1
+incremental = true
+
+[profile.dev.package."*"]
+debug = 0
+
+[profile.test]
+debug = 1
+incremental = true
+
+[profile.test.package."*"]
+debug = 0

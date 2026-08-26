@@ -130,6 +130,8 @@ export type AppSettings = {
   followRedirects: boolean;
   validateTls: boolean;
   historyLimit: number;
+  historyRetentionDays: number;
+  historyStorageLimitBytes: number;
   isHistoryCollapsed: boolean;
   environmentAutosave: boolean;
   notificationTimeoutMs: number;
@@ -696,6 +698,106 @@ export type ExportResult = {
   omittedRealtimeRequestCount?: number;
 };
 
+export type PortableWorkspaceCounts = {
+  collections: number;
+  folders: number;
+  httpRequests: number;
+  realtimeMessages: number;
+  realtimeConnections: number;
+  environments: number;
+  environmentVariables: number;
+  playbooks: number;
+  playbookSteps: number;
+  requestDrafts: number;
+  realtimeDrafts: number;
+};
+
+export type WorkspaceRedaction = {
+  resourceKind: string;
+  resourceExportId: string;
+  path: string;
+  reason: string;
+};
+
+export type PortableRequestDraft = {
+  savedRequestExportId: string | null;
+  request: RequestDraft;
+};
+
+export type PortableRealtimeDraft = {
+  selectedProfileExportId: string | null;
+  selectedMessageExportId: string | null;
+  connection: RealtimeConnectionDraft;
+  message: RealtimeMessageDraft;
+};
+
+export type PortableWorkspaceDrafts = {
+  requests: PortableRequestDraft[];
+  realtime: PortableRealtimeDraft[];
+};
+
+export type PortableWorkspaceExportResult = {
+  filePath: string;
+  counts: PortableWorkspaceCounts;
+  redactionCount: number;
+  warnings: string[];
+};
+
+export type PortableWorkspaceImportPreview = {
+  version: number;
+  exportedAt: string;
+  exportedByVersion: string;
+  counts: PortableWorkspaceCounts;
+  redactionCount: number;
+  credentialFieldsRequiringInput: number;
+  warnings: string[];
+};
+
+export type ImportedPortableRequestDraft = {
+  savedRequestId: string | null;
+  collectionId: string | null;
+  parentId: string | null;
+  request: RequestDraft;
+};
+
+export type ImportedPortableRealtimeDraft = {
+  selectedProfileId: string | null;
+  selectedMessageId: string | null;
+  collectionId: string | null;
+  parentId: string | null;
+  connection: RealtimeConnectionDraft;
+  message: RealtimeMessageDraft;
+};
+
+export type PortableWorkspaceImportResult = {
+  counts: PortableWorkspaceCounts;
+  reusedRealtimeConnectionCount: number;
+  credentialFieldsRequiringInput: WorkspaceRedaction[];
+  requestDrafts: ImportedPortableRequestDraft[];
+  realtimeDrafts: ImportedPortableRealtimeDraft[];
+  warnings: string[];
+};
+
+export type StorageSummary = {
+  dataDirectory: string;
+  databaseSizeBytes: number;
+  historyEntryCount: number;
+  historyResponseBodyBytes: number;
+  realtimeTemporaryBytes: number;
+  collectionCount: number;
+  collectionItemCount: number;
+  realtimeConnectionCount: number;
+  environmentCount: number;
+  playbookCount: number;
+  playbookRunCount: number;
+  agentActivityCount: number;
+};
+
+export type HistoryRetentionResult = {
+  removedEntryCount: number;
+  releasedResponseBodyBytes: number;
+};
+
 export type ScriptTestResult = {
   id: string;
   name: string;
@@ -892,6 +994,8 @@ export function createDefaultSettings(): AppSettings {
     followRedirects: true,
     validateTls: true,
     historyLimit: 200,
+    historyRetentionDays: 0,
+    historyStorageLimitBytes: 0,
     isHistoryCollapsed: false,
     environmentAutosave: true,
     notificationTimeoutMs: 5_000,

@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "generatedAt": "2026-08-02T13:51:54.995Z",
+  "generatedAt": "2026-08-23T21:18:38.411Z",
   "viewport": {
     "width": 1995,
     "height": 1179
@@ -48,7 +48,7 @@
       "waitFor": ".settings-page"
     }
   ],
-  "inputHash": "693be3ea42f91faa39beb21acd20af5ce1e991b25c76d44a1808b3c8fbd734c1",
+  "inputHash": "509915039dd4e1148f21874d777bef848873bac77a67dccfd3097c3c8e6359d6",
   "inputs": [
     {
       "path": "scripts/capture-docs-screenshots.mjs",
@@ -108,7 +108,7 @@
     },
     {
       "path": "src/lib/components/layout/SidebarCollections.svelte",
-      "sha256": "dc2bf056f45e140bd9229e6f6b3644ed9c98b1b2767c4fffa5685d7ede82575a"
+      "sha256": "be3d18255d7f61f1fb08b22db940bf090ad18e3de322a0710d550a8d9c2976dd"
     },
     {
       "path": "src/lib/components/realtime/RealtimeEditor.svelte",
@@ -172,7 +172,7 @@
     },
     {
       "path": "src/lib/styles/app.css",
-      "sha256": "2cd76e051611892320c4a6137e6be5f0e520c0ca0966ecdea2a3cdfb80c4b2ee"
+      "sha256": "7030568f84081170b85323122474f93570cf98ed31d6877a3cbe05b74c422f32"
     },
     {
       "path": "src/lib/styles/tokens.css",
@@ -204,7 +204,7 @@
     },
     {
       "path": "src/routes/settings/+page.svelte",
-      "sha256": "ef79789b18b044b49af1e121b8b1907713bcb1cba4f35129cd1fc374aa7bc071"
+      "sha256": "a9a66b7bfe7d6f04d67b287a06045803f041c9fbff490e9fc25c28322ba5d3a3"
     },
     {
       "path": "src/routes/websockets/+page.svelte",

@@ -1,13 +1,14 @@
-use tauri::State;
+use tauri::{AppHandle, State};
 
 use crate::{
     app_state::AppState,
     domain::{
         settings::{AppSettings, McpSetupInfo},
+        storage::StorageSummary,
         workspace::RequestWorkspaceState,
     },
     error::AppResult,
-    services::settings_service,
+    services::{settings_service, storage_service},
 };
 
 #[tauri::command]
@@ -54,6 +55,14 @@ pub async fn update_settings(
 ) -> AppResult<AppSettings> {
     settings_service::save_settings(state.db(), &settings).await?;
     settings_service::get_settings(state.db()).await
+}
+
+#[tauri::command]
+pub async fn get_storage_summary(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> AppResult<StorageSummary> {
+    storage_service::get_summary(state.db(), &app).await
 }
 
 #[tauri::command]

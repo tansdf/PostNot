@@ -20,6 +20,10 @@ pub struct AppSettings {
     pub follow_redirects: bool,
     pub validate_tls: bool,
     pub history_limit: u32,
+    #[serde(default)]
+    pub history_retention_days: u32,
+    #[serde(default)]
+    pub history_storage_limit_bytes: u64,
     pub is_history_collapsed: bool,
     pub environment_autosave: bool,
     pub notification_timeout_ms: u64,

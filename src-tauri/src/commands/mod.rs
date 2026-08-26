@@ -9,3 +9,4 @@ pub mod requests;
 pub mod responses;
 pub mod settings;
 pub mod updates;
+pub mod workspace;

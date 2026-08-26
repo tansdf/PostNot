@@ -8,6 +8,7 @@ use crate::{
     domain::{
         history::{HistoryEntryDetail, HistoryEntrySummary},
         requests::{KeyValueRow, ResponseBody, ResponsePayload, SendRequestPayload},
+        storage::HistoryRetentionResult,
     },
     error::{AppError, AppResult},
     services::{
@@ -18,7 +19,12 @@ use crate::{
 };
 
 const PREVIEW_LIMIT: usize = 4_096;
-const DEFAULT_HISTORY_LIMIT: u32 = 200;
+#[derive(Debug)]
+struct HistoryRetentionCandidate {
+    id: String,
+    response_body_path: Option<PathBuf>,
+    executed_at: String,
+}
 
 pub async fn record_success(
     pool: &SqlitePool,
@@ -110,7 +116,7 @@ pub(crate) async fn record_success_in_dir(
         body_store.mark_history_owned(handle_id, final_path)?;
     }
 
-    prune(pool, Some(body_store)).await
+    prune(pool, Some(body_store)).await.map(|_| ())
 }
 
 pub async fn record_failure(
@@ -134,7 +140,7 @@ pub async fn record_failure(
     .execute(pool)
     .await?;
 
-    prune(pool, Some(body_store)).await
+    prune(pool, Some(body_store)).await.map(|_| ())
 }
 
 pub async fn list_history(
@@ -231,18 +237,102 @@ pub async fn clear_history(pool: &SqlitePool, body_store: &ResponseBodyStore) ->
     delete_committed_paths(paths, Some(body_store)).await
 }
 
-async fn prune(pool: &SqlitePool, body_store: Option<&ResponseBodyStore>) -> AppResult<()> {
-    let history_limit = settings_service::history_limit(pool)
-        .await
-        .unwrap_or(DEFAULT_HISTORY_LIMIT);
+pub async fn apply_history_retention(
+    pool: &SqlitePool,
+    body_store: &ResponseBodyStore,
+) -> AppResult<HistoryRetentionResult> {
+    prune(pool, Some(body_store)).await
+}
 
-    let paths = delete_history_entries(
-        pool,
-        "DELETE FROM history_entries WHERE id IN (SELECT id FROM history_entries ORDER BY executed_at DESC LIMIT -1 OFFSET ?1) RETURNING response_body_path",
-        i64::from(history_limit),
+async fn prune(
+    pool: &SqlitePool,
+    body_store: Option<&ResponseBodyStore>,
+) -> AppResult<HistoryRetentionResult> {
+    let (history_limit, retention_days, storage_limit_bytes) =
+        settings_service::history_retention(pool).await?;
+    let rows = sqlx::query(
+        r#"
+        SELECT id, response_body_path, executed_at
+        FROM history_entries
+        ORDER BY executed_at DESC, id DESC
+        "#,
     )
+    .fetch_all(pool)
     .await?;
-    delete_committed_paths(paths, body_store).await
+    let candidates = rows
+        .into_iter()
+        .map(|row| HistoryRetentionCandidate {
+            id: row.get("id"),
+            response_body_path: row
+                .get::<Option<String>, _>("response_body_path")
+                .map(PathBuf::from),
+            executed_at: row.get("executed_at"),
+        })
+        .collect::<Vec<_>>();
+    let cutoff = (retention_days > 0)
+        .then(|| chrono::Utc::now() - chrono::Duration::days(i64::from(retention_days)));
+    let mut retained_body_bytes = 0_u64;
+    let mut removals = Vec::new();
+
+    for (index, candidate) in candidates.into_iter().enumerate() {
+        let body_bytes =
+            response_body_storage_bytes(candidate.response_body_path.as_deref()).await?;
+        let exceeds_count = index >= history_limit as usize;
+        let exceeds_age = cutoff.is_some_and(|cutoff| {
+            chrono::DateTime::parse_from_rfc3339(&candidate.executed_at)
+                .map(|executed_at| executed_at < cutoff)
+                .unwrap_or(false)
+        });
+        let exceeds_storage = storage_limit_bytes > 0
+            && retained_body_bytes.saturating_add(body_bytes) > storage_limit_bytes;
+        if exceeds_count || exceeds_age || exceeds_storage {
+            removals.push((candidate.id, candidate.response_body_path, body_bytes));
+        } else {
+            retained_body_bytes = retained_body_bytes.saturating_add(body_bytes);
+        }
+    }
+
+    if removals.is_empty() {
+        return Ok(HistoryRetentionResult::default());
+    }
+    let mut transaction = pool.begin().await?;
+    for (id, _, _) in &removals {
+        sqlx::query("DELETE FROM history_entries WHERE id = ?1")
+            .bind(id)
+            .execute(&mut *transaction)
+            .await?;
+    }
+    transaction.commit().await?;
+
+    let released_response_body_bytes = removals
+        .iter()
+        .map(|(_, _, bytes)| bytes)
+        .fold(0_u64, |total, bytes| total.saturating_add(*bytes));
+    let paths = removals
+        .iter()
+        .filter_map(|(_, path, _)| path.clone())
+        .collect::<Vec<_>>();
+    delete_committed_paths(paths, body_store).await?;
+
+    Ok(HistoryRetentionResult {
+        removed_entry_count: removals.len() as u64,
+        released_response_body_bytes,
+    })
+}
+
+async fn response_body_storage_bytes(path: Option<&Path>) -> AppResult<u64> {
+    let Some(path) = path else {
+        return Ok(0);
+    };
+    let mut total = 0_u64;
+    for candidate in [path.to_path_buf(), path.with_extension("idx")] {
+        match tokio::fs::metadata(candidate).await {
+            Ok(metadata) => total = total.saturating_add(metadata.len()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+    }
+    Ok(total)
 }
 
 async fn delete_history_entries(
@@ -326,4 +416,96 @@ pub(crate) async fn stored_response_body_paths(pool: &SqlitePool) -> AppResult<V
 
 fn path_to_string(path: PathBuf) -> String {
     path.to_string_lossy().to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{db, services::settings_service};
+
+    #[tokio::test]
+    async fn retention_applies_age_and_actual_body_bytes_together() {
+        let root = std::env::temp_dir().join(format!("postnot-retention-test-{}", Uuid::new_v4()));
+        let database_path = root.join("postnot.sqlite");
+        let bodies_path = root.join("bodies");
+        std::fs::create_dir_all(&bodies_path).expect("create test body directory");
+        let pool = db::init_path(&database_path)
+            .await
+            .expect("initialize test database");
+        settings_service::ensure_defaults(&pool)
+            .await
+            .expect("seed settings");
+        let mut settings = settings_service::get_settings(&pool)
+            .await
+            .expect("load settings");
+        settings.history_limit = 10;
+        settings.history_retention_days = 30;
+        settings.history_storage_limit_bytes = 1024 * 1024;
+        settings_service::save_settings(&pool, &settings)
+            .await
+            .expect("save retention settings");
+
+        let newest_path = bodies_path.join("newest.body");
+        let middle_path = bodies_path.join("middle.body");
+        let old_path = bodies_path.join("old.body");
+        std::fs::write(&newest_path, vec![b'a'; 700 * 1024]).expect("write newest body");
+        std::fs::write(&middle_path, vec![b'b'; 700 * 1024]).expect("write middle body");
+        std::fs::write(&old_path, b"old").expect("write old body");
+        let now = chrono::Utc::now();
+        seed_history(&pool, "newest", &newest_path, &now.to_rfc3339()).await;
+        seed_history(
+            &pool,
+            "middle",
+            &middle_path,
+            &(now - chrono::Duration::seconds(1)).to_rfc3339(),
+        )
+        .await;
+        seed_history(
+            &pool,
+            "old",
+            &old_path,
+            &(now - chrono::Duration::days(60)).to_rfc3339(),
+        )
+        .await;
+
+        let store = ResponseBodyStore::new(bodies_path);
+        let result = apply_history_retention(&pool, &store)
+            .await
+            .expect("apply retention");
+        assert_eq!(result.removed_entry_count, 2);
+        assert!(result.released_response_body_bytes >= 700 * 1024 + 3);
+        assert!(newest_path.exists());
+        assert!(!middle_path.exists());
+        assert!(!old_path.exists());
+        let remaining: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM history_entries")
+            .fetch_one(&pool)
+            .await
+            .expect("count history");
+        assert_eq!(remaining, 1);
+
+        pool.close().await;
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    async fn seed_history(pool: &SqlitePool, id: &str, body_path: &Path, executed_at: &str) {
+        sqlx::query(
+            r#"
+            INSERT INTO history_entries
+                (id, request_name, method, url, request_snapshot_json, status_code,
+                 duration_ms, response_headers_json, response_body_path,
+                 response_body_preview, error_text, executed_at)
+            VALUES (?1, ?2, 'GET', 'https://example.test', ?3, 200, 1, '[]', ?4, '', '', ?5)
+            "#,
+        )
+        .bind(id)
+        .bind(id)
+        .bind(
+            r#"{"name":"test","method":"GET","url":"https://example.test","queryParams":[],"headers":[],"body":{"mode":"none","raw":"","form":[],"files":[]},"auth":{"type":"none"},"preRequestScript":"","testScript":""}"#,
+        )
+        .bind(path_to_string(body_path.to_path_buf()))
+        .bind(executed_at)
+        .execute(pool)
+        .await
+        .expect("insert history entry");
+    }
 }

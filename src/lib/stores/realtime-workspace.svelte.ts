@@ -8,7 +8,8 @@ import {
   cloneRealtimeConnectionDraft, cloneRealtimeMessageDraft, createRealtimeConnectionDraft, createRealtimeMessageDraft,
   type RealtimeConnectionDraft, type RealtimeConnectionProfileDetail, type RealtimeConnectionProfileSummary,
   type RealtimeMessageDraft, type RealtimeRuntimeEvent, type RealtimeSessionSnapshot, type RealtimeWorkspaceState,
-  type RealtimeWorkspaceTab, type SavedRealtimeMessageDetail, type SavedRealtimeMessageSummary
+  type RealtimeWorkspaceTab, type SavedRealtimeMessageDetail, type SavedRealtimeMessageSummary,
+  type ImportedPortableRealtimeDraft, type PortableRealtimeDraft
 } from "$lib/api/types";
 import {
   createRealtimeWorkspaceTab, normalizeRealtimeWorkspaceState, realtimeConnectionEquals, realtimeMessageEquals,
@@ -55,6 +56,31 @@ class RealtimeWorkspaceStore {
   createBlankTab(protocol: "websocket" | "socketio" = "websocket") {
     const tab = createRealtimeWorkspaceTab(createRealtimeConnectionDraft(protocol), createRealtimeMessageDraft(protocol));
     this.insertAfterActive(tab); this.activeTabId = tab.id; void this.persistNow(); return tab;
+  }
+  createPortableDrafts(): PortableRealtimeDraft[] {
+    return this.tabs.map((tab) => ({
+      selectedProfileExportId: tab.selectedProfileId,
+      selectedMessageExportId: tab.selectedMessageId,
+      connection: cloneRealtimeConnectionDraft(tab.connectionDraft),
+      message: cloneRealtimeMessageDraft(tab.messageDraft)
+    }));
+  }
+  appendPortableDrafts(drafts: ImportedPortableRealtimeDraft[]) {
+    if (!drafts.length) return;
+    const nextTabs = drafts.map((draft) => {
+      const tab = createRealtimeWorkspaceTab(draft.connection, draft.message, {
+        selectedProfileId: draft.selectedProfileId,
+        selectedMessageId: draft.selectedMessageId,
+        collectionId: draft.collectionId,
+        parentId: draft.parentId
+      });
+      tab.baselineConnectionDraft = null;
+      tab.baselineMessageDraft = null;
+      return tab;
+    });
+    this.tabs = [...this.tabs, ...nextTabs];
+    this.activeTabId = nextTabs[nextTabs.length - 1].id;
+    void this.persistNow();
   }
   updateConnectionDraft(tabId: string, draft: RealtimeConnectionDraft) { this.updateTab(tabId, (tab) => { tab.connectionDraft = cloneRealtimeConnectionDraft(draft); tab.errorText = ""; }); this.schedulePersist(); }
   updateMessageDraft(tabId: string, draft: RealtimeMessageDraft) { this.updateTab(tabId, (tab) => { tab.messageDraft = cloneRealtimeMessageDraft(draft); tab.errorText = ""; }); this.schedulePersist(); }

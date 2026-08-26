@@ -9,5 +9,7 @@ pub mod portability;
 pub mod realtime;
 pub mod requests;
 pub mod settings;
+pub mod storage;
 pub mod updates;
 pub mod workspace;
+pub mod workspace_portability;

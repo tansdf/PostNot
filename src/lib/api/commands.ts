@@ -50,7 +50,16 @@ import {
   type SavedRequestSummary,
   type AgentActivityEntry,
   type AgentActivityPage,
-  type McpSetupInfo
+  type McpSetupInfo,
+  type HistoryRetentionResult,
+  type ImportedPortableRealtimeDraft,
+  type ImportedPortableRequestDraft,
+  type PortableWorkspaceCounts,
+  type PortableWorkspaceDrafts,
+  type PortableWorkspaceExportResult,
+  type PortableWorkspaceImportPreview,
+  type PortableWorkspaceImportResult,
+  type StorageSummary
 } from "$lib/api/types";
 
 export function hasTauriRuntime() {
@@ -796,6 +805,26 @@ export async function updateSettings(settings: AppSettings): Promise<AppSettings
   return updatedSettings;
 }
 
+export async function getStorageSummary(): Promise<StorageSummary> {
+  if (!hasTauriRuntime()) {
+    return {
+      dataDirectory: "/home/demo/.local/share/com.postnot.app",
+      databaseSizeBytes: 1_572_864,
+      historyEntryCount: 42,
+      historyResponseBodyBytes: 8_388_608,
+      realtimeTemporaryBytes: 0,
+      collectionCount: 3,
+      collectionItemCount: 24,
+      realtimeConnectionCount: 2,
+      environmentCount: 2,
+      playbookCount: 1,
+      playbookRunCount: 6,
+      agentActivityCount: 4
+    };
+  }
+  return invoke<StorageSummary>("get_storage_summary");
+}
+
 export async function checkForUpdates(): Promise<UpdateCheckResult> {
   if (!hasTauriRuntime()) {
     await waitForMockLatency();
@@ -836,6 +865,90 @@ export async function clearHistory(): Promise<void> {
   }
 
   await invoke("clear_history");
+}
+
+export async function applyHistoryRetention(): Promise<HistoryRetentionResult> {
+  if (!hasTauriRuntime()) {
+    return { removedEntryCount: 0, releasedResponseBodyBytes: 0 };
+  }
+  return invoke<HistoryRetentionResult>("apply_history_retention");
+}
+
+export async function exportPortableWorkspace(
+  includeOpenDrafts: boolean,
+  drafts: PortableWorkspaceDrafts
+): Promise<PortableWorkspaceExportResult | null> {
+  if (!hasTauriRuntime()) {
+    return {
+      filePath: "postnot-workspace.postnot_workspace.json",
+      counts: emptyPortableWorkspaceCounts(),
+      redactionCount: 0,
+      warnings: []
+    };
+  }
+  return invoke<PortableWorkspaceExportResult | null>("export_portable_workspace", {
+    input: { includeOpenDrafts, drafts }
+  });
+}
+
+export async function inspectPortableWorkspace(
+  source: string
+): Promise<PortableWorkspaceImportPreview> {
+  if (!hasTauriRuntime()) {
+    const parsed = JSON.parse(source) as {
+      version?: number;
+      exportedAt?: string;
+      exportedBy?: { version?: string };
+      warnings?: string[];
+      redactions?: unknown[];
+    };
+    return {
+      version: parsed.version ?? 1,
+      exportedAt: parsed.exportedAt ?? new Date().toISOString(),
+      exportedByVersion: parsed.exportedBy?.version ?? "preview",
+      counts: emptyPortableWorkspaceCounts(),
+      redactionCount: parsed.redactions?.length ?? 0,
+      credentialFieldsRequiringInput: parsed.redactions?.length ?? 0,
+      warnings: parsed.warnings ?? []
+    };
+  }
+  return invoke<PortableWorkspaceImportPreview>("inspect_portable_workspace", { source });
+}
+
+export async function importPortableWorkspace(
+  source: string,
+  includeOpenDrafts: boolean
+): Promise<PortableWorkspaceImportResult> {
+  if (!hasTauriRuntime()) {
+    const preview = await inspectPortableWorkspace(source);
+    return {
+      counts: preview.counts,
+      reusedRealtimeConnectionCount: 0,
+      credentialFieldsRequiringInput: [],
+      requestDrafts: [] as ImportedPortableRequestDraft[],
+      realtimeDrafts: [] as ImportedPortableRealtimeDraft[],
+      warnings: preview.warnings
+    };
+  }
+  return invoke<PortableWorkspaceImportResult>("import_portable_workspace", {
+    input: { source, includeOpenDrafts }
+  });
+}
+
+function emptyPortableWorkspaceCounts(): PortableWorkspaceCounts {
+  return {
+    collections: 0,
+    folders: 0,
+    httpRequests: 0,
+    realtimeMessages: 0,
+    realtimeConnections: 0,
+    environments: 0,
+    environmentVariables: 0,
+    playbooks: 0,
+    playbookSteps: 0,
+    requestDrafts: 0,
+    realtimeDrafts: 0
+  };
 }
 
 export async function readResponseBodyWindow(input: {

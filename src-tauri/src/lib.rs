@@ -89,6 +89,7 @@ pub fn run() -> Result<(), String> {
             commands::settings::get_settings,
             commands::settings::get_mcp_setup_info,
             commands::settings::update_settings,
+            commands::settings::get_storage_summary,
             commands::settings::get_request_workspace_state,
             commands::settings::save_request_workspace_state,
             commands::updates::check_for_updates,
@@ -96,6 +97,7 @@ pub fn run() -> Result<(), String> {
             commands::history::list_history,
             commands::history::get_history_entry,
             commands::history::clear_history,
+            commands::history::apply_history_retention,
             commands::collections::list_collections,
             commands::collections::search_collection_entities,
             commands::collections::get_collection_sidebar_state,
@@ -146,6 +148,9 @@ pub fn run() -> Result<(), String> {
             commands::imports::import_requests,
             commands::imports::import_curl_request_to_draft,
             commands::imports::import_openapi_request_to_draft,
+            commands::workspace::export_portable_workspace,
+            commands::workspace::inspect_portable_workspace,
+            commands::workspace::import_portable_workspace,
         ])
         .run(tauri::generate_context!())
         .map_err(|error| error.to_string())

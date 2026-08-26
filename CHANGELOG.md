@@ -6,6 +6,21 @@ The project currently uses pre-1.0 semantic versioning. Minor versions mark mean
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-08-26
+
+### Added
+
+- Added versioned portable workspace JSON export and validate-before-write additive import for collections, folders, HTTP requests, realtime messages and profiles, scripts, environments, playbooks, and optional open request/realtime drafts.
+- Added a Data & Storage settings surface with durable/temporary storage ownership details and history retention limits by entry count, age, and response-body disk usage.
+
+### Security
+
+- Portable workspace exports omit history, response bodies, transcripts, playbook runs, Agent Activity, and secret environment values; credential-looking literals are cleared with an explicit redaction report, and imported secret slots require local input.
+
+### Fixed
+
+- Increased shared warning and success feedback contrast so portable workspace status messages satisfy the application accessibility gate.
+
 ## [0.24.2] - 2026-08-14
 
 ### Changed

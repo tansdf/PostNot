@@ -1,5 +1,6 @@
 pub mod activity_service;
 pub mod collections_service;
+pub mod credential_redaction_service;
 pub mod environments_service;
 pub mod exports_service;
 pub mod history_service;
@@ -17,8 +18,10 @@ pub mod request_url_service;
 pub mod response_body_service;
 pub mod secret_store_service;
 pub mod settings_service;
+pub mod storage_service;
 pub mod updates_service;
 pub mod window_state_service;
+pub mod workspace_portability_service;
 
 #[cfg(test)]
 mod response_body_service_tests;

@@ -12,7 +12,7 @@ PostNot is a local-first desktop API client built with:
 - TypeScript
 - SQLite
 
-The app already supports request execution, resolved request preview before send, full response body reads, history, collections with nested folders and drag-and-drop request/folder moves, sidebar collection search, raw WebSocket and Socket.IO connection workspaces with session-only transcripts, playbooks for sequential saved-request execution, environments, secret environment storage, mixed PostNot collection portability, import/export flows including OpenAPI 3 import, broader cURL flag coverage, redacted-by-default single-request cURL/JSON export with optional non-secret environment variable inclusion, OAuth2 bearer auth helpers with client-credentials token fetch, notifications, settings, signed in-app update checks with download progress, inherited collection/folder/saved-request pre-request and test scripts (worker-backed frontend JavaScript execution around the native send), async script helper requests through `pn.http.send(...)`, script-driven active-environment variable writes, and a local authoring-only MCP server with Agent Activity.
+The app already supports request execution, resolved request preview before send, full response body reads, history, collections with nested folders and drag-and-drop request/folder moves, sidebar collection search, raw WebSocket and Socket.IO connection workspaces with session-only transcripts, playbooks for sequential saved-request execution, environments, secret environment storage, mixed PostNot collection portability, redacted portable workspace export and additive import, data-ownership summaries and count/age/byte history retention, import/export flows including OpenAPI 3 import, broader cURL flag coverage, redacted-by-default single-request cURL/JSON export with optional non-secret environment variable inclusion, OAuth2 bearer auth helpers with client-credentials token fetch, notifications, settings, signed in-app update checks with download progress, inherited collection/folder/saved-request pre-request and test scripts (worker-backed frontend JavaScript execution around the native send), async script helper requests through `pn.http.send(...)`, script-driven active-environment variable writes, and a local authoring-only MCP server with Agent Activity.
 
 ## Canonical Working Directory
 
@@ -58,6 +58,8 @@ Implemented now:
 - persistent disconnected WebSockets tab workspace, bounded session-only transcripts, file-backed large payloads, and opt-in reconnect
 - standalone WebSocket/Socket.IO connection profiles plus message-only realtime items in shared collection trees with protocol-aware routing
 - lossless mixed PostNot collection import/export and explicit realtime omissions from Postman export
+- redacted portable workspace JSON export and validate-before-write additive import, including optional disconnected open drafts
+- Data & Storage ownership summaries plus count, age, and response-body byte history retention
 - persisted settings
 - persisted history with detail inspection
 - restoring stored requests from history into new request tabs
@@ -159,6 +161,7 @@ This approach is mainly for native Windows verification such as drag-and-drop, w
 - Secret environment values are stored in the OS credential store, not SQLite.
 - History persists requests that use secret environment variables, but stores unresolved `{{variable}}` text instead of resolved secret values.
 - Single-request exports redact credential-looking values by default, including bearer tokens, OAuth2 access tokens, client secrets, API keys, cookies, and basic-auth passwords; the export dialog can include active non-secret environment variables while keeping secrets redacted.
+- Portable workspace exports clear credential-looking literals and secret environment values, report every redaction, and exclude history, response bodies, transcripts, run logs, and Agent Activity. They are not passworded backups.
 - Standalone realtime connection profiles and collection messages are selected independently on `/websockets`; each tab owns one live native session, message changes preserve it, and app restart restores drafts disconnected with empty transcripts.
 - Realtime transcripts are bounded, process-scoped, and never written to SQLite history. Payloads over 256 KiB use temporary opaque handles that are cleared on release or startup.
 - Realtime v1 does not run collection/folder/request scripts or Playbook steps and does not support durable history, legacy Socket.IO 2.x, custom CA/mTLS/proxy settings, `permessage-deflate`, server-requested ACK replies, or mixed binary placeholder arrays.

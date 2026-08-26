@@ -1,9 +1,28 @@
 <script lang="ts">
   import { onMount } from "svelte";
 
-  import { getSettings, updateSettings } from "$lib/api/commands";
-  import { createDefaultSettings, type AppSettings } from "$lib/api/types";
+  import {
+    applyHistoryRetention,
+    exportPortableWorkspace,
+    getSettings,
+    getStorageSummary,
+    importPortableWorkspace,
+    inspectPortableWorkspace,
+    updateSettings
+  } from "$lib/api/commands";
+  import {
+    createDefaultSettings,
+    type AppSettings,
+    type PortableWorkspaceExportResult,
+    type PortableWorkspaceDrafts,
+    type PortableWorkspaceImportPreview,
+    type PortableWorkspaceImportResult,
+    type StorageSummary
+  } from "$lib/api/types";
+  import { collections } from "$lib/stores/collections.svelte";
   import { notifications } from "$lib/stores/notifications.svelte";
+  import { realtimeWorkspace } from "$lib/stores/realtime-workspace.svelte";
+  import { requestWorkspace } from "$lib/stores/request-workspace.svelte";
   import { updater } from "$lib/stores/updater.svelte";
   import { applyTheme, applyUiScale } from "$lib/theme";
 
@@ -37,6 +56,18 @@
   let isLoading = $state(true);
   let isSaving = $state(false);
   let errorText = $state("");
+  let storageSummary: StorageSummary | null = $state(null);
+  let isLoadingStorage = $state(false);
+  let includeOpenDrafts = $state(true);
+  let includeImportedDrafts = $state(true);
+  let isExportingWorkspace = $state(false);
+  let isInspectingWorkspace = $state(false);
+  let isImportingWorkspace = $state(false);
+  let importSource = $state("");
+  let importFileName = $state("");
+  let importPreview: PortableWorkspaceImportPreview | null = $state(null);
+  let exportResult: PortableWorkspaceExportResult | null = $state(null);
+  let importResult: PortableWorkspaceImportResult | null = $state(null);
   type UpdateNoteToken =
     | { kind: "text"; value: string }
     | { kind: "strong"; value: string };
@@ -55,6 +86,26 @@
       dateStyle: "medium",
       timeStyle: "short"
     }).format(parsed);
+  }
+
+  function formatBytes(value: number) {
+    if (!Number.isFinite(value) || value <= 0) return "0 B";
+    const units = ["B", "KiB", "MiB", "GiB", "TiB"];
+    const exponent = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1);
+    const amount = value / 1024 ** exponent;
+    return `${amount >= 10 || exponent === 0 ? amount.toFixed(0) : amount.toFixed(1)} ${units[exponent]}`;
+  }
+
+  function portableCountLabel(preview: PortableWorkspaceImportPreview | null) {
+    if (!preview) return "";
+    const counts = preview.counts;
+    return [
+      `${counts.collections} collection${counts.collections === 1 ? "" : "s"}`,
+      `${counts.httpRequests} HTTP request${counts.httpRequests === 1 ? "" : "s"}`,
+      `${counts.realtimeConnections} realtime profile${counts.realtimeConnections === 1 ? "" : "s"}`,
+      `${counts.environments} environment${counts.environments === 1 ? "" : "s"}`,
+      `${counts.playbooks} playbook${counts.playbooks === 1 ? "" : "s"}`
+    ].join(" · ");
   }
 
   function parseUpdateNotes(body: string | null | undefined): UpdateNoteToken[][] {
@@ -191,8 +242,12 @@
     isLoading = true;
 
     try {
-      settings = await getSettings();
-      await updater.initialize();
+      const [nextSettings] = await Promise.all([
+        getSettings(),
+        updater.initialize(),
+        loadStorageSummary()
+      ]);
+      settings = nextSettings;
       applyTheme(settings.theme);
       applyUiScale(settings.uiScale);
       notifications.setDefaultDuration(settings.notificationTimeoutMs);
@@ -209,15 +264,116 @@
 
     try {
       settings = await updateSettings(settings);
+      const retentionResult = await applyHistoryRetention();
+      await loadStorageSummary();
       applyTheme(settings.theme);
       applyUiScale(settings.uiScale);
       notifications.setDefaultDuration(settings.notificationTimeoutMs);
       errorText = "";
-      notifications.success("Your preferences were saved.", "Settings saved");
+      const retentionMessage = retentionResult.removedEntryCount
+        ? ` Removed ${retentionResult.removedEntryCount} history entries and released ${formatBytes(retentionResult.releasedResponseBodyBytes)}.`
+        : "";
+      notifications.success(`Your preferences were saved.${retentionMessage}`, "Settings saved");
     } catch (error) {
       errorText = error instanceof Error ? error.message : String(error);
     } finally {
       isSaving = false;
+    }
+  }
+
+  async function loadStorageSummary() {
+    isLoadingStorage = true;
+    try {
+      storageSummary = await getStorageSummary();
+    } finally {
+      isLoadingStorage = false;
+    }
+  }
+
+  async function handleWorkspaceExport() {
+    isExportingWorkspace = true;
+    exportResult = null;
+    try {
+      let drafts: PortableWorkspaceDrafts = { requests: [], realtime: [] };
+      if (includeOpenDrafts) {
+        await Promise.all([requestWorkspace.ensureInitialized(), realtimeWorkspace.ensureInitialized()]);
+        drafts = {
+          requests: requestWorkspace.createPortableDrafts(),
+          realtime: realtimeWorkspace.createPortableDrafts()
+        };
+      }
+      exportResult = await exportPortableWorkspace(includeOpenDrafts, drafts);
+      if (exportResult) {
+        notifications.success(
+          `${exportResult.redactionCount} credential field${exportResult.redactionCount === 1 ? " was" : "s were"} cleared from the file.`,
+          "Portable workspace exported",
+          exportResult.warnings.length
+            ? { details: { title: "Export notes", warnings: exportResult.warnings } }
+            : {}
+        );
+      }
+    } catch (error) {
+      errorText = error instanceof Error ? error.message : String(error);
+    } finally {
+      isExportingWorkspace = false;
+    }
+  }
+
+  async function handleWorkspaceFile(event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    importPreview = null;
+    importResult = null;
+    importSource = "";
+    importFileName = file?.name ?? "";
+    if (!file) return;
+    isInspectingWorkspace = true;
+    try {
+      importSource = await file.text();
+      importPreview = await inspectPortableWorkspace(importSource);
+      errorText = "";
+    } catch (error) {
+      errorText = error instanceof Error ? error.message : String(error);
+      importSource = "";
+    } finally {
+      isInspectingWorkspace = false;
+    }
+  }
+
+  async function handleWorkspaceImport() {
+    if (!importSource || !importPreview) return;
+    isImportingWorkspace = true;
+    try {
+      importResult = await importPortableWorkspace(importSource, includeImportedDrafts);
+      if (includeImportedDrafts) {
+        await Promise.all([requestWorkspace.ensureInitialized(), realtimeWorkspace.ensureInitialized()]);
+        requestWorkspace.appendPortableDrafts(importResult.requestDrafts);
+        realtimeWorkspace.appendPortableDrafts(importResult.realtimeDrafts);
+      }
+      await Promise.all([collections.loadCollections(), loadStorageSummary()]);
+      notifications.success(
+        `${importResult.counts.collections} collections and ${importResult.counts.httpRequests} HTTP requests were added. Existing workspace data was not replaced.`,
+        "Portable workspace imported",
+        {
+          details: {
+            title: "Import details",
+            warnings: [
+              ...importResult.warnings,
+              ...(importResult.credentialFieldsRequiringInput.length
+                ? [`${importResult.credentialFieldsRequiringInput.length} credential fields require input on this device.`]
+                : [])
+            ]
+          }
+        }
+      );
+      importSource = "";
+      importPreview = null;
+      importFileName = "";
+      errorText = "";
+    } catch (error) {
+      errorText = error instanceof Error ? error.message : String(error);
+    } finally {
+      isImportingWorkspace = false;
     }
   }
 </script>
@@ -281,6 +437,150 @@
                 <input class="row-toggle settings-checkbox" type="checkbox" bind:checked={settings.environmentAutosave} />
                 <span>Autosave environment edits immediately</span>
               </label>
+            </section>
+
+            <section class="settings-section-card">
+              <div class="settings-section-heading">
+                <div class="panel-heading">
+                  <h2>Portable workspace</h2>
+                  <p class="settings-section-lede">Move authoring data between PostNot installations without replacing data already on the destination.</p>
+                </div>
+              </div>
+
+              <div class="feedback feedback-warning">
+                This is a portable JSON export, not an encrypted backup. Known credential literals and all secret environment values are cleared; history, response bodies, transcripts, playbook runs, and Agent Activity are excluded.
+              </div>
+
+              <label class="settings-toggle">
+                <input class="row-toggle settings-checkbox" type="checkbox" bind:checked={includeOpenDrafts} />
+                <span>Include open request and realtime drafts</span>
+              </label>
+
+              <div class="settings-inline-actions">
+                <button
+                  class="button-primary"
+                  type="button"
+                  disabled={isExportingWorkspace}
+                  onclick={handleWorkspaceExport}
+                >
+                  {isExportingWorkspace ? "Preparing export..." : "Export workspace"}
+                </button>
+              </div>
+
+              {#if exportResult}
+                <div class="feedback feedback-success" aria-live="polite">
+                  Exported to {exportResult.filePath}. {exportResult.redactionCount} credential field{exportResult.redactionCount === 1 ? "" : "s"} cleared.
+                </div>
+              {/if}
+
+              <div class="settings-section-heading settings-portable-import-heading">
+                <div class="panel-heading">
+                  <h3>Import additively</h3>
+                  <p class="settings-section-lede">The file is validated and summarized before anything is written.</p>
+                </div>
+              </div>
+
+              <label>
+                <span class="field-label">Portable workspace file</span>
+                <input
+                  class="text-input"
+                  type="file"
+                  accept=".json,.postnot_workspace.json,application/json"
+                  onchange={handleWorkspaceFile}
+                />
+              </label>
+
+              {#if isInspectingWorkspace}
+                <p class="field-help">Validating {importFileName}...</p>
+              {:else if importPreview}
+                <div class="settings-update-panel settings-update-panel-current" aria-live="polite">
+                  <div class="settings-update-state">
+                    <span class="settings-update-badge">Validated</span>
+                    <div>
+                      <strong>{importFileName}</strong>
+                      <p>{portableCountLabel(importPreview)}</p>
+                    </div>
+                  </div>
+                  <div class="settings-update-facts">
+                    <div class="settings-status-item">
+                      <span class="field-label">Exported</span>
+                      <strong>{formatDateTime(importPreview.exportedAt) || importPreview.exportedAt}</strong>
+                    </div>
+                    <div class="settings-status-item">
+                      <span class="field-label">Credential fields to fill</span>
+                      <strong>{importPreview.credentialFieldsRequiringInput}</strong>
+                    </div>
+                    <div class="settings-status-item">
+                      <span class="field-label">Open drafts</span>
+                      <strong>{importPreview.counts.requestDrafts + importPreview.counts.realtimeDrafts}</strong>
+                    </div>
+                  </div>
+                </div>
+
+                <label class="settings-toggle">
+                  <input class="row-toggle settings-checkbox" type="checkbox" bind:checked={includeImportedDrafts} />
+                  <span>Open drafts included in this file after import</span>
+                </label>
+
+                <p class="field-help">Import creates new collections, environments, and playbooks. Exact realtime profile matches are reused. Existing records are never overwritten.</p>
+                <div class="settings-inline-actions">
+                  <button
+                    class="button-primary"
+                    type="button"
+                    disabled={isImportingWorkspace}
+                    onclick={handleWorkspaceImport}
+                  >
+                    {isImportingWorkspace ? "Importing..." : "Import and add to workspace"}
+                  </button>
+                </div>
+              {/if}
+
+              {#if importResult}
+                <div class="feedback feedback-success">Import completed. Existing workspace data was preserved.</div>
+              {/if}
+            </section>
+
+            <section class="settings-section-card">
+              <div class="settings-section-heading">
+                <div class="panel-heading">
+                  <h2>Data &amp; storage</h2>
+                  <p class="settings-section-lede">See which data is durable, which files consume disk space, and where PostNot owns it.</p>
+                </div>
+                <button class="button-secondary button-compact" type="button" disabled={isLoadingStorage} onclick={loadStorageSummary}>
+                  {isLoadingStorage ? "Refreshing..." : "Refresh"}
+                </button>
+              </div>
+
+              {#if storageSummary}
+                <div class="settings-update-facts">
+                  <div class="settings-status-item">
+                    <span class="field-label">SQLite database</span>
+                    <strong>{formatBytes(storageSummary.databaseSizeBytes)}</strong>
+                  </div>
+                  <div class="settings-status-item">
+                    <span class="field-label">History response bodies</span>
+                    <strong>{formatBytes(storageSummary.historyResponseBodyBytes)}</strong>
+                  </div>
+                  <div class="settings-status-item">
+                    <span class="field-label">Temporary realtime payloads</span>
+                    <strong>{formatBytes(storageSummary.realtimeTemporaryBytes)}</strong>
+                  </div>
+                  <div class="settings-status-item">
+                    <span class="field-label">Workspace records</span>
+                    <strong>{storageSummary.collectionCount} collections · {storageSummary.collectionItemCount} items</strong>
+                  </div>
+                  <div class="settings-status-item">
+                    <span class="field-label">History</span>
+                    <strong>{storageSummary.historyEntryCount} entries</strong>
+                  </div>
+                  <div class="settings-status-item">
+                    <span class="field-label">Operational logs</span>
+                    <strong>{storageSummary.playbookRunCount} playbook runs · {storageSummary.agentActivityCount} agent events</strong>
+                  </div>
+                </div>
+                <p class="field-help settings-storage-path">Owned app-data directory: {storageSummary.dataDirectory}</p>
+                <p class="field-help">Collections, profiles, environments, playbooks, history metadata, playbook runs, and Agent Activity live in SQLite. Response bodies are separate durable files. Realtime transcripts are process-only; large payload files are temporary.</p>
+              {/if}
             </section>
 
             <section class="settings-section-card">
@@ -493,11 +793,32 @@
 
               <div class="settings-field-grid">
                 <label>
-                  <span class="field-label">History limit</span>
+                  <span class="field-label">Maximum entries</span>
                   <input class="text-input" type="number" min="1" step="1" bind:value={settings.historyLimit} />
                 </label>
+                <label>
+                  <span class="field-label">Maximum age (days)</span>
+                  <input class="text-input" type="number" min="0" max="3650" step="1" bind:value={settings.historyRetentionDays} />
+                  <span class="field-help">0 keeps entries regardless of age.</span>
+                </label>
+                <label>
+                  <span class="field-label">Response-body storage (MiB)</span>
+                  <input
+                    class="text-input"
+                    type="number"
+                    min="0"
+                    max="1048576"
+                    step="1"
+                    value={settings.historyStorageLimitBytes / (1024 * 1024)}
+                    oninput={(event) => (settings = {
+                      ...settings,
+                      historyStorageLimitBytes: Math.round(Math.max(0, event.currentTarget.valueAsNumber || 0) * 1024 * 1024)
+                    })}
+                  />
+                  <span class="field-help">0 disables the disk-size cap.</span>
+                </label>
               </div>
-
+              <p class="field-help">All enabled limits are enforced together, oldest first. Saving settings applies retention immediately; removed history cannot be restored from a portable workspace export.</p>
             </section>
 
             <section class="settings-section-card">

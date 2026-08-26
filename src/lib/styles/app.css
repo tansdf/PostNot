@@ -1550,12 +1550,12 @@ select option {
 
 .feedback-warning {
   background: color-mix(in srgb, var(--warning) 12%, transparent);
-  color: var(--warning);
+  color: var(--text-primary);
 }
 
 .feedback-success {
   background: var(--surface-success);
-  color: var(--success);
+  color: var(--text-primary);
 }
 
 .feedback-error strong {

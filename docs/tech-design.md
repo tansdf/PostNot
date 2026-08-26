@@ -383,6 +383,8 @@ Fields:
 - follow redirects flag
 - validate TLS flag
 - history limit
+- optional history age limit in days
+- optional history response-body storage limit in bytes
 - Requests-page history collapsed flag
 - environment autosave flag
 - notification timeout in milliseconds
@@ -441,6 +443,8 @@ Keys written by the app:
 - `follow_redirects`
 - `validate_tls`
 - `history_limit`
+- `history_retention_days`
+- `history_storage_limit_bytes`
 - `is_history_collapsed`
 - `environment_autosave`
 - `notification_timeout_ms`
@@ -454,7 +458,7 @@ Keys written by the app:
 - `request_workspace_state`
 - `realtime_workspace_state`
 
-Settings reads load the stored rows once and merge them over Rust defaults without rewriting defaults on the read path. A full settings save upserts all normalized values in one transaction, while history pruning reads only the `history_limit` key.
+Settings reads load the stored rows once and merge them over Rust defaults without rewriting defaults on the read path. A full settings save upserts all normalized values in one transaction. History pruning reads only the count, age, and response-body byte retention keys; age and byte limits default to disabled so existing installations keep their previous behavior.
 
 `realtime_workspace_state` stores each tab's independent selected profile/message IDs, connection/message drafts and baselines, plus active-tab selection. It does not store a durable session. The native save boundary normalizes status to disconnected, clears generation and sequence state, and removes transcript and error content. This guarantees that application restart never reconnects implicitly or resurrects received data.
 
@@ -485,7 +489,7 @@ Implementation notes:
 - successful responses persist exact response bytes to a file path referenced by `response_body_path`; file-backed responses use copy-insert-adopt ordering so a failed insert removes the staged history copy without invalidating the live response handle
 - file-backed bodies include content type, charset, presentation, actual byte size, and a sparse row index for bounded visible-range reads
 - failed requests are also persisted with `error_text`
-- history is pruned based on the persisted `history_limit` setting
+- history retention applies the persisted entry-count, optional age, and optional response-body byte limits together
 - clear and prune commit row deletion in a transaction before scheduling the corresponding files for lease-aware removal
 
 ### Other Tables
@@ -595,7 +599,7 @@ On successful request execution:
 - full response bodies are stored on disk for virtualized detail inspection, whole-document search, formatting, binary hex display, image preview, and streamed Save as
 - active tabs and history details lease body handles so pruning or clearing history cannot invalidate an open response
 - responses at or below 1 MiB remain inline; larger responses stream to disk and expose only bounded windows to the WebView
-- history is pruned to the configured limit
+- history is pruned against the configured entry-count, optional age, and optional response-body byte limits together
 
 History recording never moves the live response before persistence succeeds. It copies file-backed responses to the final history path, inserts the database row, then marks the copied file history-owned; insertion failure removes the copy and its sidecar while the live handle remains readable. Clear and prune first commit database deletion, then remove committed paths only when active leases permit it.
 
@@ -603,7 +607,7 @@ On failed request execution:
 
 - the request snapshot is stored
 - error text is stored
-- history is pruned to the configured limit
+- history is pruned against the configured entry-count, optional age, and optional response-body byte limits together
 
 On canceled request execution:
 
@@ -695,6 +699,11 @@ Commands exposed to the frontend:
 - `list_history`
 - `get_history_entry`
 - `clear_history`
+- `apply_history_retention`
+- `get_storage_summary`
+- `export_portable_workspace`
+- `inspect_portable_workspace`
+- `import_portable_workspace`
 - `list_collections`
 - `search_collection_entities`
 - `get_collection_sidebar_state`
@@ -774,6 +783,11 @@ Commands exposed to the frontend:
 - `list_history`: returns recent history entries ordered by execution time descending
 - `get_history_entry`: returns a stored request snapshot and response metadata for one history entry
 - `clear_history`: deletes all stored history entries
+- `apply_history_retention`: immediately applies count, age, and on-disk response-body limits, committing row deletion before releasing body files
+- `get_storage_summary`: reports the app-data directory, database and managed-file sizes, and durable entity counts without exposing record contents
+- `export_portable_workspace`: builds a versioned, redacted authoring-data document and writes it through a native save dialog
+- `inspect_portable_workspace`: parses and validates schema version, IDs, hierarchy, references, protocols, and secret invariants without mutating local state
+- `import_portable_workspace`: additively inserts a validated document in one immediate transaction, remaps internal references, reuses exact realtime-profile matches, and creates blank local secret placeholders
 - `list_collections`: returns saved request collections with request counts and collection-level scripts
 - `search_collection_entities`: searches collections, folders, and saved requests for sidebar quick navigation
 - `get_collection_sidebar_state`: loads persisted sidebar expansion state for collections and folders
@@ -852,7 +866,9 @@ UI responsibilities:
 - theme selector
 - interface zoom selector
 - request timeout input
-- history limit input
+- history count, age, and response-body storage inputs
+- portable workspace export, preflight inspection, and additive import controls
+- durable/temporary storage ownership summary
 - notification timeout input
 - follow redirects toggle
 - validate TLS toggle
@@ -935,6 +951,7 @@ Screenshot workflow note:
 - secret environment values are stored in the OS credential store, while SQLite keeps only non-secret environment metadata
 - history snapshots redact resolved values that came from secret environment variables
 - single-request cURL and PostNot JSON exports redact credential-looking literal values, including bearer tokens, OAuth2 access tokens, client secrets, API keys, cookies, and basic-auth passwords; the export dialog can inline active non-secret environment variables, while secret variables remain parameterized or are replaced with `***`
+- portable workspace exports clear credential-looking literals, never read secret values from the credential store, carry an explicit redaction list, and omit history, response bodies, transcripts, temporary payloads, playbook runs, Agent Activity, updater state, window state, and incidental UI state
 - resolved request preview masks credential-looking values and secret-derived environment substitutions before showing outgoing request data
 - realtime connection and composer templates resolve against the active environment natively; secret-derived outgoing transcript payloads, lifecycle labels, errors, transcript exports, and MCP reads are masked, while server-received payloads remain exactly as received
 - raw WebSocket callers cannot override transport-owned handshake headers such as `Host`, `Connection`, `Upgrade`, `Sec-WebSocket-Key`, `Sec-WebSocket-Version`, `Sec-WebSocket-Extensions`, or `Sec-WebSocket-Protocol`; explicit authentication/header conflicts are rejected
@@ -954,6 +971,12 @@ Environment-backed secrets are protected in storage and history, while single-re
 PostNot collection JSON v2 is the lossless mixed format. Its versioned document preserves collection/folder hierarchy and scripts, HTTP definitions and their scripts, and message-only WebSocket/Socket.IO entries. Version 1 combined entries remain importable and are split into standalone profiles plus collection messages. Connection profiles also have a separate versioned PostNot document; exports redact literal credentials by default.
 
 Postman Collection v2.1 export remains an HTTP interoperability format. Realtime messages are omitted rather than misrepresented; the export result returns a warning and exact omission count, and the Collections dialog explains the limitation before export.
+
+### Workspace Portability
+
+Portable workspace JSON v1 is a separate authoring-data boundary. It preserves collections/folders, HTTP requests, realtime messages and standalone profiles, scripts, inactive imported environments, playbooks and step references, plus optional request and realtime drafts. Export IDs exist only to preserve internal references; additive import generates new database IDs, remaps parents and playbook/draft links, and reuses a realtime profile only when its redacted configuration is an exact local match.
+
+The native inspector rejects unsupported schemas and versions, duplicate IDs, folder cycles, broken references, protocol/version mismatches, nonblank secret values, and invalid realtime drafts before opening a write transaction. Import never replaces existing data. Secret environment variables retain their key/enabled/secret metadata but receive blank credential-store placeholders, and the result reports which fields require input. The format is deliberately readable and is not a passworded complete backup.
 
 ## 11. Design Trade-Offs
 
@@ -983,9 +1006,7 @@ If scripting grows substantially, the runtime API, concurrency model, and isolat
 
 ### Response Body Persistence
 
-Persisting decoded response bodies as history body files keeps detail inspection available without inflating the main SQLite rows. The trade-off is an additional file-retention responsibility tied to history pruning and app-data storage size.
-
-Retention controls, migration behavior, and body-size policy should be revisited if response history becomes a storage-pressure source.
+Persisting decoded response bodies as history body files keeps detail inspection available without inflating the main SQLite rows. The trade-off is an additional file-retention responsibility. Settings makes that ownership visible and enforces count, age, and actual managed-file byte caps; deletion still commits database changes before leased body paths are released.
 
 ### Stable Updater Feed
 

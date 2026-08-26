@@ -7,13 +7,14 @@ use crate::error::{AppError, AppResult};
 
 pub const APP_IDENTIFIER: &str = "com.postnot.app";
 
-pub fn database_path(app: &AppHandle) -> AppResult<PathBuf> {
-    let app_dir = app
-        .path()
+pub fn app_data_dir(app: &AppHandle) -> AppResult<PathBuf> {
+    app.path()
         .app_data_dir()
-        .map_err(|error| AppError::Message(error.to_string()))?;
+        .map_err(|error| AppError::Message(error.to_string()))
+}
 
-    Ok(app_dir.join(DATABASE_FILE_NAME))
+pub fn database_path(app: &AppHandle) -> AppResult<PathBuf> {
+    Ok(app_data_dir(app)?.join(DATABASE_FILE_NAME))
 }
 
 pub fn headless_app_data_dir() -> AppResult<PathBuf> {
@@ -31,28 +32,13 @@ pub fn headless_database_path(data_dir: Option<PathBuf>) -> AppResult<PathBuf> {
 }
 
 pub fn response_bodies_dir(app: &AppHandle) -> AppResult<PathBuf> {
-    let app_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|error| AppError::Message(error.to_string()))?;
-
-    Ok(app_dir.join("history-response-bodies"))
+    Ok(app_data_dir(app)?.join("history-response-bodies"))
 }
 
 pub fn realtime_payloads_dir(app: &AppHandle) -> AppResult<PathBuf> {
-    let app_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|error| AppError::Message(error.to_string()))?;
-
-    Ok(app_dir.join("realtime-session-payloads"))
+    Ok(app_data_dir(app)?.join("realtime-session-payloads"))
 }
 
 pub fn window_state_path(app: &AppHandle) -> AppResult<PathBuf> {
-    let app_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|error| AppError::Message(error.to_string()))?;
-
-    Ok(app_dir.join("window-state.json"))
+    Ok(app_data_dir(app)?.join("window-state.json"))
 }

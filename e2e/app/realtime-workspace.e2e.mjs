@@ -428,6 +428,45 @@ test("settings expose bounded realtime controls and persist saved preferences", 
   await expect(page.getByLabel("Follow redirects automatically")).not.toBeChecked();
 });
 
+test("settings explain workspace ownership and preflight additive portability", async ({ page }) => {
+  await page.goto("/settings");
+
+  await expect(page.getByRole("heading", { name: "Portable workspace" })).toBeVisible();
+  await expect(page.getByText("This is a portable JSON export, not an encrypted backup.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Data & storage" })).toBeVisible();
+  await expect(page.getByText("SQLite database", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Maximum entries")).toHaveValue("200");
+  await expect(page.getByLabel("Maximum age (days)")).toHaveValue("0");
+  await expect(page.getByLabel("Response-body storage (MiB)")).toHaveValue("0");
+
+  const source = JSON.stringify({
+    $schema: "https://post-not.com/schemas/workspace.json",
+    version: 1,
+    exportedAt: "2026-08-24T00:00:00.000Z",
+    exportedBy: { application: "PostNot", version: "0.24.2" },
+    collections: [],
+    realtimeConnections: [],
+    environments: [],
+    playbooks: [],
+    drafts: { requests: [], realtime: [] },
+    redactions: [],
+    warnings: []
+  });
+  await page.getByLabel("Portable workspace file").setInputFiles({
+    name: "portable.postnot_workspace.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(source)
+  });
+  await expect(page.getByText("Validated", { exact: true })).toBeVisible();
+  await expect(page.getByText("Existing records are never overwritten.")).toBeVisible();
+  await page.getByRole("button", { name: "Import and add to workspace" }).click();
+  await expect(page.getByText("Import completed. Existing workspace data was preserved.")).toBeVisible();
+
+  await page.getByRole("button", { name: "Export workspace" }).click();
+  await expect(page.getByText(/Exported to postnot-workspace\.postnot_workspace\.json/)).toBeVisible();
+  await expectNoSeriousAccessibilityViolations(page);
+});
+
 test("collections explain lossless PostNot portability and Postman realtime omissions", async ({ page }, testInfo) => {
   await page.goto("/collections");
   await page.getByRole("button", { name: "Export", exact: true }).click();

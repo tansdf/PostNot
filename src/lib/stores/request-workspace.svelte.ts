@@ -3,6 +3,8 @@ import { browser } from "$app/environment";
 import { getRequestWorkspaceState, releaseResponseBody, saveRequestWorkspaceState } from "$lib/api/commands";
 import type {
   RequestDraft,
+  ImportedPortableRequestDraft,
+  PortableRequestDraft,
   RequestScriptExecution,
   RequestWorkspaceState,
   RequestWorkspaceTab,
@@ -235,6 +237,28 @@ class RequestWorkspaceStore {
     this.activeTabId = nextTab.id;
     void this.persistNow();
     return nextTab;
+  }
+
+  createPortableDrafts(): PortableRequestDraft[] {
+    return this.tabs.map((tab) => ({
+      savedRequestExportId: tab.savedRequestId,
+      request: cloneRequestDraft(tab.request)
+    }));
+  }
+
+  appendPortableDrafts(drafts: ImportedPortableRequestDraft[]) {
+    if (drafts.length === 0) return;
+    const nextTabs = drafts.map((draft) =>
+      createWorkspaceTab(draft.savedRequestId ? "saved" : "imported", draft.request, {
+        savedRequestId: draft.savedRequestId,
+        collectionId: draft.collectionId,
+        parentId: draft.parentId,
+        baselineRequest: null
+      })
+    );
+    this.tabs = [...this.tabs, ...nextTabs];
+    this.activeTabId = nextTabs[nextTabs.length - 1].id;
+    void this.persistNow();
   }
 
   openHistoryRequest(request: RequestDraft) {

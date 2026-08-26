@@ -15,6 +15,8 @@ const REQUEST_TIMEOUT_MS_KEY: &str = "request_timeout_ms";
 const FOLLOW_REDIRECTS_KEY: &str = "follow_redirects";
 const VALIDATE_TLS_KEY: &str = "validate_tls";
 const HISTORY_LIMIT_KEY: &str = "history_limit";
+const HISTORY_RETENTION_DAYS_KEY: &str = "history_retention_days";
+const HISTORY_STORAGE_LIMIT_BYTES_KEY: &str = "history_storage_limit_bytes";
 const IS_HISTORY_COLLAPSED_KEY: &str = "is_history_collapsed";
 const ENVIRONMENT_AUTOSAVE_KEY: &str = "environment_autosave";
 const NOTIFICATION_TIMEOUT_MS_KEY: &str = "notification_timeout_ms";
@@ -42,6 +44,9 @@ const MIN_REALTIME_TRANSCRIPT_MAX_ENTRIES: u32 = 1;
 const MAX_REALTIME_TRANSCRIPT_MAX_ENTRIES: u32 = 10_000;
 const MIN_REALTIME_TRANSCRIPT_MAX_BYTES: u64 = 64 * 1024;
 const MAX_REALTIME_TRANSCRIPT_MAX_BYTES: u64 = 512 * 1024 * 1024;
+const MAX_HISTORY_RETENTION_DAYS: u32 = 3_650;
+const MIN_HISTORY_STORAGE_LIMIT_BYTES: u64 = 1024 * 1024;
+const MAX_HISTORY_STORAGE_LIMIT_BYTES: u64 = 1024 * 1024 * 1024 * 1024;
 
 pub fn default_settings() -> AppSettings {
     AppSettings {
@@ -51,6 +56,8 @@ pub fn default_settings() -> AppSettings {
         follow_redirects: true,
         validate_tls: true,
         history_limit: 200,
+        history_retention_days: 0,
+        history_storage_limit_bytes: 0,
         is_history_collapsed: false,
         environment_autosave: true,
         notification_timeout_ms: 5_000,
@@ -96,6 +103,13 @@ pub async fn get_settings(pool: &SqlitePool) -> AppResult<AppSettings> {
             FOLLOW_REDIRECTS_KEY => settings.follow_redirects = parse_setting!(),
             VALIDATE_TLS_KEY => settings.validate_tls = parse_setting!(),
             HISTORY_LIMIT_KEY => settings.history_limit = parse_setting!(),
+            HISTORY_RETENTION_DAYS_KEY => {
+                settings.history_retention_days = normalize_history_retention_days(parse_setting!())
+            }
+            HISTORY_STORAGE_LIMIT_BYTES_KEY => {
+                settings.history_storage_limit_bytes =
+                    normalize_history_storage_limit_bytes(parse_setting!())
+            }
             IS_HISTORY_COLLAPSED_KEY => settings.is_history_collapsed = parse_setting!(),
             ENVIRONMENT_AUTOSAVE_KEY => settings.environment_autosave = parse_setting!(),
             NOTIFICATION_TIMEOUT_MS_KEY => {
@@ -268,6 +282,21 @@ pub async fn history_limit(pool: &SqlitePool) -> AppResult<u32> {
         .unwrap_or(default_settings().history_limit))
 }
 
+pub async fn history_retention(pool: &SqlitePool) -> AppResult<(u32, u32, u64)> {
+    let defaults = default_settings();
+    Ok((
+        get_setting(pool, HISTORY_LIMIT_KEY)
+            .await?
+            .unwrap_or(defaults.history_limit),
+        get_setting(pool, HISTORY_RETENTION_DAYS_KEY)
+            .await?
+            .unwrap_or(defaults.history_retention_days),
+        get_setting(pool, HISTORY_STORAGE_LIMIT_BYTES_KEY)
+            .await?
+            .unwrap_or(defaults.history_storage_limit_bytes),
+    ))
+}
+
 fn serialize_settings(settings: &AppSettings) -> AppResult<Vec<(&'static str, String)>> {
     macro_rules! setting {
         ($key:expr, $value:expr) => {
@@ -282,6 +311,11 @@ fn serialize_settings(settings: &AppSettings) -> AppResult<Vec<(&'static str, St
         setting!(FOLLOW_REDIRECTS_KEY, settings.follow_redirects),
         setting!(VALIDATE_TLS_KEY, settings.validate_tls),
         setting!(HISTORY_LIMIT_KEY, settings.history_limit),
+        setting!(HISTORY_RETENTION_DAYS_KEY, settings.history_retention_days),
+        setting!(
+            HISTORY_STORAGE_LIMIT_BYTES_KEY,
+            settings.history_storage_limit_bytes
+        ),
         setting!(IS_HISTORY_COLLAPSED_KEY, settings.is_history_collapsed),
         setting!(ENVIRONMENT_AUTOSAVE_KEY, settings.environment_autosave),
         setting!(
@@ -317,6 +351,10 @@ fn normalize_settings(settings: &AppSettings) -> AppSettings {
     normalized.ui_scale = normalize_ui_scale(normalized.ui_scale);
     normalized.notification_timeout_ms =
         normalize_notification_timeout_ms(normalized.notification_timeout_ms);
+    normalized.history_retention_days =
+        normalize_history_retention_days(normalized.history_retention_days);
+    normalized.history_storage_limit_bytes =
+        normalize_history_storage_limit_bytes(normalized.history_storage_limit_bytes);
     normalized.realtime_connect_timeout_ms =
         normalize_realtime_connect_timeout_ms(normalized.realtime_connect_timeout_ms);
     normalized.realtime_max_concurrent_sessions =
@@ -336,6 +374,21 @@ fn normalize_ui_scale(value: f64) -> f64 {
 
 fn normalize_notification_timeout_ms(value: u64) -> u64 {
     value.clamp(MIN_NOTIFICATION_TIMEOUT_MS, MAX_NOTIFICATION_TIMEOUT_MS)
+}
+
+fn normalize_history_retention_days(value: u32) -> u32 {
+    value.min(MAX_HISTORY_RETENTION_DAYS)
+}
+
+fn normalize_history_storage_limit_bytes(value: u64) -> u64 {
+    if value == 0 {
+        0
+    } else {
+        value.clamp(
+            MIN_HISTORY_STORAGE_LIMIT_BYTES,
+            MAX_HISTORY_STORAGE_LIMIT_BYTES,
+        )
+    }
 }
 
 fn normalize_realtime_connect_timeout_ms(value: u64) -> u64 {

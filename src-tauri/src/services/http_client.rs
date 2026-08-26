@@ -880,6 +880,8 @@ mod tests {
             follow_redirects: true,
             validate_tls: true,
             history_limit: 200,
+            history_retention_days: 0,
+            history_storage_limit_bytes: 0,
             is_history_collapsed: false,
             environment_autosave: true,
             notification_timeout_ms: 5_000,
